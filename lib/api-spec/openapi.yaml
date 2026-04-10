@@ -21,6 +21,14 @@ tags:
     description: Activity logs
   - name: dashboard
     description: Dashboard summaries
+  - name: production
+    description: Egg production tracking
+  - name: sales
+    description: Sales and revenue
+  - name: health-records
+    description: Flock health records
+  - name: expenses
+    description: Expense tracking
 paths:
   /healthz:
     get:
