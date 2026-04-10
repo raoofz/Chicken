@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Poultry farm management API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: flocks
+    description: Chicken flock management
+  - name: hatching
+    description: Hatching cycle management
+  - name: tasks
+    description: Daily task management
+  - name: goals
+    description: Goal tracking
+  - name: logs
+    description: Activity logs
+  - name: dashboard
+    description: Dashboard summaries
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,400 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /flocks:
+    get:
+      operationId: listFlocks
+      tags: [flocks]
+      summary: List all flocks
+      responses:
+        "200":
+          description: List of flocks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Flock"
+    post:
+      operationId: createFlock
+      tags: [flocks]
+      summary: Create a flock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlockBody"
+      responses:
+        "201":
+          description: Created flock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flock"
+
+  /flocks/{id}:
+    get:
+      operationId: getFlock
+      tags: [flocks]
+      summary: Get a flock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Flock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flock"
+    put:
+      operationId: updateFlock
+      tags: [flocks]
+      summary: Update a flock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFlockBody"
+      responses:
+        "200":
+          description: Updated flock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flock"
+    delete:
+      operationId: deleteFlock
+      tags: [flocks]
+      summary: Delete a flock
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /hatching-cycles:
+    get:
+      operationId: listHatchingCycles
+      tags: [hatching]
+      summary: List hatching cycles
+      responses:
+        "200":
+          description: List of hatching cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HatchingCycle"
+    post:
+      operationId: createHatchingCycle
+      tags: [hatching]
+      summary: Create a hatching cycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHatchingCycleBody"
+      responses:
+        "201":
+          description: Created cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HatchingCycle"
+
+  /hatching-cycles/{id}:
+    get:
+      operationId: getHatchingCycle
+      tags: [hatching]
+      summary: Get a hatching cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Hatching cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HatchingCycle"
+    put:
+      operationId: updateHatchingCycle
+      tags: [hatching]
+      summary: Update a hatching cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHatchingCycleBody"
+      responses:
+        "200":
+          description: Updated cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HatchingCycle"
+    delete:
+      operationId: deleteHatchingCycle
+      tags: [hatching]
+      summary: Delete a hatching cycle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            description: Filter by date (YYYY-MM-DD)
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskBody"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    put:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskBody"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: List goals
+      responses:
+        "200":
+          description: List of goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Goal"
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Create a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoalBody"
+      responses:
+        "201":
+          description: Created goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+
+  /goals/{id}:
+    put:
+      operationId: updateGoal
+      tags: [goals]
+      summary: Update a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGoalBody"
+      responses:
+        "200":
+          description: Updated goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+    delete:
+      operationId: deleteGoal
+      tags: [goals]
+      summary: Delete a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /activity-logs:
+    get:
+      operationId: listActivityLogs
+      tags: [logs]
+      summary: List activity logs
+      responses:
+        "200":
+          description: List of activity logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityLog"
+    post:
+      operationId: createActivityLog
+      tags: [logs]
+      summary: Create an activity log
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActivityLogBody"
+      responses:
+        "201":
+          description: Created log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityLog"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/hatch-stats:
+    get:
+      operationId: getHatchStats
+      tags: [dashboard]
+      summary: Get hatching statistics
+      responses:
+        "200":
+          description: Hatch stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HatchStats"
+
+  /tasks/today:
+    get:
+      operationId: getTodayTasks
+      tags: [tasks]
+      summary: Get today's tasks
+      responses:
+        "200":
+          description: Today's tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +438,395 @@ components:
       required:
         - status
 
+    Flock:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        breed:
+          type: string
+        count:
+          type: integer
+        ageWeeks:
+          type: integer
+        purpose:
+          type: string
+          enum: [eggs, meat, hatching, mixed]
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - breed
+        - count
+        - ageWeeks
+        - purpose
+        - createdAt
+
+    CreateFlockBody:
+      type: object
+      properties:
+        name:
+          type: string
+        breed:
+          type: string
+        count:
+          type: integer
+        ageWeeks:
+          type: integer
+        purpose:
+          type: string
+          enum: [eggs, meat, hatching, mixed]
+        notes:
+          type: string
+          nullable: true
+      required:
+        - name
+        - breed
+        - count
+        - ageWeeks
+        - purpose
+
+    HatchingCycle:
+      type: object
+      properties:
+        id:
+          type: integer
+        batchName:
+          type: string
+        eggsSet:
+          type: integer
+        eggsHatched:
+          type: integer
+          nullable: true
+        startDate:
+          type: string
+        expectedHatchDate:
+          type: string
+        actualHatchDate:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [incubating, hatching, completed, failed]
+        temperature:
+          type: number
+          nullable: true
+        humidity:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - batchName
+        - eggsSet
+        - startDate
+        - expectedHatchDate
+        - status
+        - createdAt
+
+    CreateHatchingCycleBody:
+      type: object
+      properties:
+        batchName:
+          type: string
+        eggsSet:
+          type: integer
+        eggsHatched:
+          type: integer
+          nullable: true
+        startDate:
+          type: string
+        expectedHatchDate:
+          type: string
+        actualHatchDate:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [incubating, hatching, completed, failed]
+        temperature:
+          type: number
+          nullable: true
+        humidity:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required:
+        - batchName
+        - eggsSet
+        - startDate
+        - expectedHatchDate
+        - status
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          enum: [feeding, health, cleaning, hatching, other]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        completed:
+          type: boolean
+        dueDate:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required:
+        - id
+        - title
+        - category
+        - priority
+        - completed
+        - createdAt
+
+    CreateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          enum: [feeding, health, cleaning, hatching, other]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueDate:
+          type: string
+          nullable: true
+      required:
+        - title
+        - category
+        - priority
+
+    UpdateTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          enum: [feeding, health, cleaning, hatching, other]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        completed:
+          type: boolean
+        dueDate:
+          type: string
+          nullable: true
+
+    Goal:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        targetValue:
+          type: number
+        currentValue:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+          enum: [production, health, growth, financial, other]
+        deadline:
+          type: string
+          nullable: true
+        completed:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - title
+        - targetValue
+        - currentValue
+        - unit
+        - category
+        - completed
+        - createdAt
+
+    CreateGoalBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        targetValue:
+          type: number
+        currentValue:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+          enum: [production, health, growth, financial, other]
+        deadline:
+          type: string
+          nullable: true
+      required:
+        - title
+        - targetValue
+        - currentValue
+        - unit
+        - category
+
+    UpdateGoalBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        targetValue:
+          type: number
+        currentValue:
+          type: number
+        unit:
+          type: string
+        category:
+          type: string
+          enum: [production, health, growth, financial, other]
+        deadline:
+          type: string
+          nullable: true
+        completed:
+          type: boolean
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          enum: [feeding, health, hatching, cleaning, observation, other]
+        date:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - title
+        - category
+        - date
+        - createdAt
+
+    CreateActivityLogBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          enum: [feeding, health, hatching, cleaning, observation, other]
+        date:
+          type: string
+      required:
+        - title
+        - category
+        - date
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalFlocks:
+          type: integer
+        totalChickens:
+          type: integer
+        activeHatchingCycles:
+          type: integer
+        totalEggsIncubating:
+          type: integer
+        tasksDueToday:
+          type: integer
+        tasksCompletedToday:
+          type: integer
+        goalsCompleted:
+          type: integer
+        totalGoals:
+          type: integer
+        overallHatchRate:
+          type: number
+      required:
+        - totalFlocks
+        - totalChickens
+        - activeHatchingCycles
+        - totalEggsIncubating
+        - tasksDueToday
+        - tasksCompletedToday
+        - goalsCompleted
+        - totalGoals
+        - overallHatchRate
+
+    HatchStats:
+      type: object
+      properties:
+        totalCycles:
+          type: integer
+        completedCycles:
+          type: integer
+        totalEggsSet:
+          type: integer
+        totalEggsHatched:
+          type: integer
+        averageHatchRate:
+          type: number
+        bestHatchRate:
+          type: number
+        recentCycles:
+          type: array
+          items:
+            $ref: "#/components/schemas/HatchingCycle"
+      required:
+        - totalCycles
+        - completedCycles
+        - totalEggsSet
+        - totalEggsHatched
+        - averageHatchRate
+        - bestHatchRate
+        - recentCycles

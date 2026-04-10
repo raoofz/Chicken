@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "مدير مشروع الدجاج والتفقيس"
+version = "1.0.0"
+id = "artifacts/poultry-manager"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25263
+
+[services.development]
+run = "pnpm --filter @workspace/poultry-manager run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/poultry-manager", "run", "build" ]
+publicDir = "artifacts/poultry-manager/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25263"
+BASE_PATH = "/"
