@@ -1,70 +1,24 @@
 import { useState } from "react";
 import {
-  useListFlocks,
-  getListFlocksQueryKey,
-  useCreateFlock,
-  useDeleteFlock,
-  useUpdateFlock,
+  useListFlocks, getListFlocksQueryKey,
+  useCreateFlock, useDeleteFlock, useUpdateFlock,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Bird, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const PURPOSE_LABELS: Record<string, string> = {
-  eggs: "بيض",
-  meat: "لحم",
-  hatching: "تفقيس",
-  mixed: "مختلط",
-};
-
-const PURPOSE_COLORS: Record<string, string> = {
-  eggs: "bg-amber-100 text-amber-700 border border-amber-200",
-  meat: "bg-red-100 text-red-700 border border-red-200",
-  hatching: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-  mixed: "bg-blue-100 text-blue-700 border border-blue-200",
-};
-
-function FlockForm({
-  initial,
-  onSubmit,
-  onClose,
-  isEdit,
-}: {
-  initial?: any;
-  onSubmit: (data: any) => void;
-  onClose: () => void;
-  isEdit?: boolean;
-}) {
+function FlockForm({ initial, onSubmit, onClose, isEdit }: { initial?: any; onSubmit: (data: any) => void; onClose: () => void; isEdit?: boolean }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     name: initial?.name ?? "",
     breed: initial?.breed ?? "",
@@ -78,73 +32,41 @@ function FlockForm({
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2 space-y-1.5">
-          <Label>اسم المجموعة *</Label>
-          <Input
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="مثل: دجاج بياض — المزرعة الرئيسية"
-            required
-            autoFocus
-          />
+          <Label>{t("flocks.groupName")}</Label>
+          <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={t("flocks.groupName.placeholder")} required autoFocus />
         </div>
         <div className="space-y-1.5">
-          <Label>السلالة *</Label>
-          <Input
-            value={form.breed}
-            onChange={(e) => setForm((f) => ({ ...f, breed: e.target.value }))}
-            placeholder="مثل: عرب بلدي"
-            required
-          />
+          <Label>{t("flocks.breed")}</Label>
+          <Input value={form.breed} onChange={(e) => setForm((f) => ({ ...f, breed: e.target.value }))} placeholder={t("flocks.breed.placeholder")} required />
         </div>
         <div className="space-y-1.5">
-          <Label>العدد *</Label>
-          <Input
-            type="number"
-            min={1}
-            value={form.count}
-            onChange={(e) => setForm((f) => ({ ...f, count: Number(e.target.value) }))}
-            required
-          />
+          <Label>{t("flocks.count")}</Label>
+          <Input type="number" min={1} value={form.count} onChange={(e) => setForm((f) => ({ ...f, count: Number(e.target.value) }))} required />
         </div>
         <div className="space-y-1.5">
-          <Label>العمر (أيام) *</Label>
-          <Input
-            type="number"
-            min={1}
-            value={form.ageDays}
-            onChange={(e) => setForm((f) => ({ ...f, ageDays: Number(e.target.value) }))}
-            required
-          />
+          <Label>{t("flocks.ageDays")}</Label>
+          <Input type="number" min={1} value={form.ageDays} onChange={(e) => setForm((f) => ({ ...f, ageDays: Number(e.target.value) }))} required />
         </div>
         <div className="space-y-1.5">
-          <Label>الغرض</Label>
-          <Select
-            value={form.purpose}
-            onValueChange={(v) => setForm((f) => ({ ...f, purpose: v }))}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+          <Label>{t("flocks.purpose")}</Label>
+          <Select value={form.purpose} onValueChange={(v) => setForm((f) => ({ ...f, purpose: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="eggs">🥚 بيض</SelectItem>
-              <SelectItem value="meat">🍗 لحم</SelectItem>
-              <SelectItem value="hatching">🐣 تفقيس</SelectItem>
-              <SelectItem value="mixed">🔄 مختلط</SelectItem>
+              <SelectItem value="eggs">🥚 {t("purpose.eggs")}</SelectItem>
+              <SelectItem value="meat">🍗 {t("purpose.meat")}</SelectItem>
+              <SelectItem value="hatching">🐣 {t("purpose.hatching")}</SelectItem>
+              <SelectItem value="mixed">🔄 {t("purpose.mixed")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="col-span-2 space-y-1.5">
-          <Label>ملاحظات</Label>
-          <Input
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="ملاحظات إضافية..."
-          />
+          <Label>{t("flocks.notes")}</Label>
+          <Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder={t("flocks.notes.placeholder")} />
         </div>
       </div>
       <div className="flex gap-2 justify-end pt-2">
-        <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-        <Button type="submit">{isEdit ? "تحديث البيانات" : "إضافة"}</Button>
+        <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button type="submit">{isEdit ? t("flocks.updateData") : t("common.add")}</Button>
       </div>
     </form>
   );
@@ -152,6 +74,7 @@ function FlockForm({
 
 export default function Flocks() {
   const { isAdmin } = useAuth();
+  const { t } = useLanguage();
   const { data: flocks, isLoading } = useListFlocks();
   const createFlock = useCreateFlock();
   const updateFlock = useUpdateFlock();
@@ -162,27 +85,37 @@ export default function Flocks() {
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
+  const PURPOSE_LABELS: Record<string, string> = {
+    eggs: t("purpose.eggs"), meat: t("purpose.meat"), hatching: t("purpose.hatching"), mixed: t("purpose.mixed"),
+  };
+  const PURPOSE_COLORS: Record<string, string> = {
+    eggs: "bg-amber-100 text-amber-700 border border-amber-200",
+    meat: "bg-red-100 text-red-700 border border-red-200",
+    hatching: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+    mixed: "bg-blue-100 text-blue-700 border border-blue-200",
+  };
+
   const refresh = () => qc.invalidateQueries({ queryKey: getListFlocksQueryKey() });
 
   const handleCreate = async (data: any) => {
     try {
       await createFlock.mutateAsync({ data });
-      toast({ title: "✓ تمت إضافة المجموعة بنجاح" });
+      toast({ title: t("flocks.added") });
       setOpen(false);
       refresh();
     } catch (err: any) {
-      toast({ title: "خطأ في الإضافة", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+      toast({ title: t("common.addError"), description: err?.message ?? t("common.addErrorDesc"), variant: "destructive" });
     }
   };
 
   const handleUpdate = async (data: any) => {
     try {
       await updateFlock.mutateAsync({ id: editItem.id, data });
-      toast({ title: "✓ تم تحديث البيانات بنجاح" });
+      toast({ title: t("flocks.updated") });
       setEditItem(null);
       refresh();
     } catch (err: any) {
-      toast({ title: "خطأ في التحديث", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+      toast({ title: t("common.updateError"), description: err?.message ?? t("common.addErrorDesc"), variant: "destructive" });
     }
   };
 
@@ -190,11 +123,11 @@ export default function Flocks() {
     if (deleteId == null) return;
     try {
       await deleteFlock.mutateAsync({ id: deleteId });
-      toast({ title: "تم حذف المجموعة" });
+      toast({ title: t("flocks.deleted") });
       setDeleteId(null);
       refresh();
     } catch (err: any) {
-      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+      toast({ title: t("common.deleteError"), description: err?.message, variant: "destructive" });
     }
   };
 
@@ -204,22 +137,18 @@ export default function Flocks() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">الدجاجات</h1>
+          <h1 className="text-2xl font-bold">{t("flocks.title")}</h1>
           <p className="text-muted-foreground text-sm">
-            {flocks?.length ?? 0} مجموعة — {totalChickens} طير إجمالاً
+            {flocks?.length ?? 0} {t("flocks.groups")} — {totalChickens} {t("flocks.totalBirds")}
           </p>
         </div>
         {isAdmin && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />إضافة مجموعة
-              </Button>
+              <Button className="gap-2"><Plus className="w-4 h-4" />{t("flocks.addGroup")}</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader>
-                <DialogTitle>إضافة مجموعة دجاجات جديدة</DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle>{t("flocks.addGroupTitle")}</DialogTitle></DialogHeader>
               <FlockForm onSubmit={handleCreate} onClose={() => setOpen(false)} />
             </DialogContent>
           </Dialog>
@@ -228,31 +157,22 @@ export default function Flocks() {
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <Skeleton className="h-24 w-full" />
-              </CardContent>
-            </Card>
-          ))}
+          {[1, 2, 3].map((i) => (<Card key={i}><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>))}
         </div>
       ) : flocks?.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Bird className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="font-semibold text-lg mb-1">لا توجد مجموعات بعد</h3>
+            <h3 className="font-semibold text-lg mb-1">{t("flocks.noFlocks")}</h3>
             <p className="text-muted-foreground text-sm">
-              {isAdmin ? "أضف أول مجموعة دجاجات لبدء المتابعة" : "لم تُضف أي مجموعات بعد"}
+              {isAdmin ? t("flocks.noFlocks.admin") : t("flocks.noFlocks.worker")}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {flocks?.map((flock) => (
-            <Card
-              key={flock.id}
-              className="hover:shadow-md transition-all duration-200 border-border/60 group"
-            >
+            <Card key={flock.id} className="hover:shadow-md transition-all duration-200 border-border/60 group">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
@@ -268,35 +188,23 @@ export default function Flocks() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="bg-muted/50 rounded-xl p-3 text-center">
                     <div className="font-bold text-xl text-primary">{flock.count}</div>
-                    <div className="text-muted-foreground text-xs mt-0.5">طير</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">{t("flocks.bird")}</div>
                   </div>
                   <div className="bg-muted/50 rounded-xl p-3 text-center">
                     <div className="font-bold text-xl text-primary">{flock.ageDays}</div>
-                    <div className="text-muted-foreground text-xs mt-0.5">يوم</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">{t("flocks.day")}</div>
                   </div>
                 </div>
                 {flock.notes && (
-                  <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-2.5 leading-relaxed">
-                    {flock.notes}
-                  </p>
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded-lg p-2.5 leading-relaxed">{flock.notes}</p>
                 )}
                 {isAdmin && (
                   <div className="flex gap-2 justify-end pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setEditItem(flock)}
-                      className="gap-1.5 h-8"
-                    >
-                      <Pencil className="w-3 h-3" />تعديل
+                    <Button size="sm" variant="outline" onClick={() => setEditItem(flock)} className="gap-1.5 h-8">
+                      <Pencil className="w-3 h-3" />{t("common.edit")}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setDeleteId(flock.id)}
-                      className="gap-1.5 h-8"
-                    >
-                      <Trash2 className="w-3 h-3" />حذف
+                    <Button size="sm" variant="destructive" onClick={() => setDeleteId(flock.id)} className="gap-1.5 h-8">
+                      <Trash2 className="w-3 h-3" />{t("common.delete")}
                     </Button>
                   </div>
                 )}
@@ -306,37 +214,22 @@ export default function Flocks() {
         </div>
       )}
 
-      {/* Edit Dialog */}
       <Dialog open={!!editItem} onOpenChange={(v) => !v && setEditItem(null)}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>تعديل بيانات المجموعة</DialogTitle>
-          </DialogHeader>
-          {editItem && (
-            <FlockForm
-              initial={editItem}
-              onSubmit={handleUpdate}
-              onClose={() => setEditItem(null)}
-              isEdit
-            />
-          )}
+          <DialogHeader><DialogTitle>{t("flocks.editGroupTitle")}</DialogTitle></DialogHeader>
+          {editItem && <FlockForm initial={editItem} onSubmit={handleUpdate} onClose={() => setEditItem(null)} isEdit />}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteId != null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
-            <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه المجموعة؟ لا يمكن التراجع عن هذا الإجراء.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("common.confirmDelete")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("common.confirmDeleteFlock")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-              نعم، احذف
-            </AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t("common.yesDelete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -12,47 +12,59 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, BookOpen, Utensils, Heart, Egg, Sparkles, Eye, Brush } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const CAT_CONFIG: Record<string, { label: string; Icon: any; color: string; bg: string }> = {
-  feeding: { label: "تغذية", Icon: Utensils, color: "text-amber-600", bg: "bg-amber-100" },
-  health: { label: "صحة", Icon: Heart, color: "text-red-500", bg: "bg-red-100" },
-  hatching: { label: "تفقيس", Icon: Egg, color: "text-emerald-600", bg: "bg-emerald-100" },
-  cleaning: { label: "نظافة", Icon: Brush, color: "text-blue-500", bg: "bg-blue-100" },
-  observation: { label: "ملاحظة", Icon: Eye, color: "text-violet-500", bg: "bg-violet-100" },
-  other: { label: "أخرى", Icon: Sparkles, color: "text-gray-500", bg: "bg-gray-100" },
+const CAT_ICONS: Record<string, any> = {
+  feeding: Utensils, health: Heart, hatching: Egg,
+  cleaning: Brush, observation: Eye, other: Sparkles,
+};
+const CAT_STYLES: Record<string, { color: string; bg: string }> = {
+  feeding: { color: "text-amber-600", bg: "bg-amber-100" },
+  health: { color: "text-red-500", bg: "bg-red-100" },
+  hatching: { color: "text-emerald-600", bg: "bg-emerald-100" },
+  cleaning: { color: "text-blue-500", bg: "bg-blue-100" },
+  observation: { color: "text-violet-500", bg: "bg-violet-100" },
+  other: { color: "text-gray-500", bg: "bg-gray-100" },
 };
 
 function LogForm({ onSubmit, onClose }: { onSubmit: (d: any) => void; onClose: () => void }) {
+  const { t } = useLanguage();
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState({ title: "", description: "", category: "observation", date: today });
+
+  const CAT_LABELS: Record<string, string> = {
+    feeding: t("logCat.feeding"), health: t("logCat.health"), hatching: t("logCat.hatching"),
+    cleaning: t("logCat.cleaning"), observation: t("logCat.observation"), other: t("logCat.other"),
+  };
+
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
       <div className="space-y-1.5">
-        <Label>العنوان</Label>
-        <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="مثل: لاحظت أعراض زكام على 3 طيور" required />
+        <Label>{t("logs.eventTitle")}</Label>
+        <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder={t("logs.eventTitle.placeholder")} required />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>التصنيف</Label>
+          <Label>{t("logs.categoryLabel")}</Label>
           <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Object.entries(CAT_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+              {Object.entries(CAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>التاريخ</Label>
+          <Label>{t("logs.date")}</Label>
           <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required />
         </div>
       </div>
       <div className="space-y-1.5">
-        <Label>التفاصيل (اختياري)</Label>
-        <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="تفاصيل إضافية..." rows={3} />
+        <Label>{t("logs.details")}</Label>
+        <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t("logs.details.placeholder")} rows={3} />
       </div>
       <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-        <Button type="submit">تسجيل</Button>
+        <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button type="submit">{t("logs.register")}</Button>
       </div>
     </form>
   );
@@ -64,7 +76,13 @@ export default function Logs() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+
+  const CAT_LABELS: Record<string, string> = {
+    feeding: t("logCat.feeding"), health: t("logCat.health"), hatching: t("logCat.hatching"),
+    cleaning: t("logCat.cleaning"), observation: t("logCat.observation"), other: t("logCat.other"),
+  };
 
   const refresh = () => qc.invalidateQueries({ queryKey: getListActivityLogsQueryKey() });
 
@@ -80,17 +98,17 @@ export default function Logs() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">سجل النشاط</h1>
-          <p className="text-muted-foreground text-sm">توثيق أحداث وملاحظات المزرعة اليومية</p>
+          <h1 className="text-2xl font-bold">{t("logs.title")}</h1>
+          <p className="text-muted-foreground text-sm">{t("logs.subtitle")}</p>
         </div>
         {isAdmin && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="w-4 h-4" />تسجيل حدث</Button>
+              <Button className="gap-2"><Plus className="w-4 h-4" />{t("logs.newEvent")}</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>تسجيل حدث جديد</DialogTitle></DialogHeader>
-              <LogForm onSubmit={async d => { try { await createLog.mutateAsync({ data: d }); toast({ title: "✓ تم التسجيل" }); setOpen(false); refresh(); } catch (e: any) { toast({ title: "خطأ في التسجيل", description: e?.message, variant: "destructive" }); } }} onClose={() => setOpen(false)} />
+              <DialogHeader><DialogTitle>{t("logs.addEventTitle")}</DialogTitle></DialogHeader>
+              <LogForm onSubmit={async d => { try { await createLog.mutateAsync({ data: d }); toast({ title: t("logs.added") }); setOpen(false); refresh(); } catch (e: any) { toast({ title: t("common.registerError"), description: e?.message, variant: "destructive" }); } }} onClose={() => setOpen(false)} />
             </DialogContent>
           </Dialog>
         )}
@@ -102,8 +120,8 @@ export default function Logs() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="font-semibold text-lg mb-1">السجل فارغ</h3>
-            <p className="text-muted-foreground text-sm">ابدأ بتسجيل أحداث مزرعتك اليومية</p>
+            <h3 className="font-semibold text-lg mb-1">{t("logs.empty")}</h3>
+            <p className="text-muted-foreground text-sm">{t("logs.empty.desc")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -117,18 +135,18 @@ export default function Logs() {
               </h2>
               <div className="space-y-2">
                 {grouped[date].map(log => {
-                  const cfg = CAT_CONFIG[log.category];
-                  const Icon = cfg.Icon;
+                  const style = CAT_STYLES[log.category];
+                  const Icon = CAT_ICONS[log.category];
                   return (
                     <Card key={log.id} className="border-border/60">
                       <CardContent className="p-4 flex items-start gap-3">
-                        <div className={`p-2 rounded-lg shrink-0 ${cfg.bg}`}>
-                          <Icon className={`w-4 h-4 ${cfg.color}`} />
+                        <div className={`p-2 rounded-lg shrink-0 ${style.bg}`}>
+                          <Icon className={`w-4 h-4 ${style.color}`} />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <p className="font-medium">{log.title}</p>
-                            <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
+                            <span className={`text-xs font-medium ${style.color}`}>{CAT_LABELS[log.category]}</span>
                           </div>
                           {log.description && <p className="text-sm text-muted-foreground mt-1">{log.description}</p>}
                         </div>

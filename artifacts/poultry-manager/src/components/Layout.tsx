@@ -2,82 +2,93 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
+  Languages,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/XXXXXXXXXX";
 
-const NAV_ITEMS = [
-  { href: "/", label: "لوحة المتابعة", icon: LayoutDashboard, adminOnly: false },
-  { href: "/flocks", label: "الدجاجات", icon: Bird, adminOnly: false },
-  { href: "/hatching", label: "التفقيس", icon: Egg, adminOnly: false },
-  { href: "/tasks", label: "المهام اليومية", icon: CheckSquare, adminOnly: false },
-  { href: "/goals", label: "الأهداف", icon: Target, adminOnly: false },
-  { href: "/notes", label: "المذكرات", icon: FileText, adminOnly: true },
-  { href: "/logs", label: "سجل النشاط", icon: BookOpen, adminOnly: false },
-  { href: "/ai", label: "تحليل ذكي", icon: Brain, adminOnly: true },
-  { href: "/settings", label: "الإعدادات", icon: Settings, adminOnly: false },
+const NAV_KEYS = [
+  { href: "/", key: "nav.dashboard", icon: LayoutDashboard, adminOnly: false },
+  { href: "/flocks", key: "nav.flocks", icon: Bird, adminOnly: false },
+  { href: "/hatching", key: "nav.hatching", icon: Egg, adminOnly: false },
+  { href: "/tasks", key: "nav.tasks", icon: CheckSquare, adminOnly: false },
+  { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
+  { href: "/notes", key: "nav.notes", icon: FileText, adminOnly: true },
+  { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
+  { href: "/ai", key: "nav.ai", icon: Brain, adminOnly: true },
+  { href: "/settings", key: "nav.settings", icon: Settings, adminOnly: false },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout, isAdmin } = useAuth();
+  const { t, dir, lang, toggleLang } = useLanguage();
   const { toast } = useToast();
 
-  const visibleNav = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
+  const isRtl = dir === "rtl";
+  const visibleNav = NAV_KEYS.filter(item => !item.adminOnly || isAdmin);
 
   const handleLogout = async () => {
     await logout();
-    toast({ title: "تم تسجيل الخروج بنجاح" });
+    toast({ title: t("sidebar.loggedOut") });
   };
 
   return (
-    <div className="min-h-screen bg-background flex" dir="rtl">
+    <div className="min-h-screen bg-background flex" dir={dir}>
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-20 md:hidden backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={cn(
-        "fixed top-0 right-0 h-full z-30 w-64 flex flex-col transition-transform duration-300",
-        "bg-[#1A1208] border-l border-white/8",
+        "fixed top-0 h-full z-30 w-64 flex flex-col transition-transform duration-300",
+        "bg-[#1A1208]",
+        isRtl ? "right-0 border-l border-white/8" : "left-0 border-r border-white/8",
         "md:translate-x-0 md:static md:z-auto",
-        sidebarOpen ? "translate-x-0" : "translate-x-full md:translate-x-0"
+        sidebarOpen
+          ? "translate-x-0"
+          : isRtl ? "translate-x-full md:translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        {/* Logo header */}
         <div className="h-16 flex items-center px-5 border-b border-white/8">
           <div className="flex items-center gap-3">
             <Logo size={38} />
             <div>
-              <h1 className="font-bold text-white text-sm leading-tight">مدير المزرعة</h1>
-              <p className="text-xs text-white/50">نظام إدارة الدواجن</p>
+              <h1 className="font-bold text-white text-sm leading-tight">{t("app.name")}</h1>
+              <p className="text-xs text-white/50">{t("app.subtitle")}</p>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="mr-auto md:hidden text-white/50 hover:text-white transition-colors p-1">
+          <button onClick={() => setSidebarOpen(false)} className={cn("md:hidden text-white/50 hover:text-white transition-colors p-1", isRtl ? "mr-auto" : "ml-auto")}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Role badge */}
-        <div className="px-4 py-3 border-b border-white/8">
+        <div className="px-4 py-3 border-b border-white/8 space-y-2">
           <div className={cn(
             "flex items-center gap-2 text-xs px-3 py-2 rounded-lg",
             isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
           )}>
             {isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
-            <span className="font-medium">{isAdmin ? "حساب مدير" : "حساب عامل"}</span>
+            <span className="font-medium">{isAdmin ? t("role.admin.account") : t("role.worker.account")}</span>
           </div>
+
+          <button
+            onClick={toggleLang}
+            className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200"
+          >
+            <Languages className="w-3.5 h-3.5" />
+            <span className="font-medium">{t("lang.switch")}</span>
+          </button>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {visibleNav.map(({ href, label, icon: Icon, adminOnly }) => {
+          {visibleNav.map(({ href, key, icon: Icon, adminOnly }) => {
             const active = location === href;
             return (
               <Link
@@ -93,16 +104,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Icon className={cn("w-4 h-4 shrink-0", active ? "text-white" : "text-white/50")} />
-                <span>{label}</span>
+                <span>{t(key)}</span>
                 {adminOnly && (
-                  <span className="mr-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">مدير</span>
+                  <span className={cn("text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded", isRtl ? "mr-auto" : "ml-auto")}>{t("role.admin.badge")}</span>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* User card + actions */}
         <div className="p-3 border-t border-white/8 space-y-2">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
             <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
@@ -114,7 +124,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* WhatsApp Group Button */}
           <a
             href={WHATSAPP_GROUP_URL}
             target="_blank"
@@ -122,7 +131,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
           >
             <MessageCircle className="w-4 h-4" />
-            مجموعة الواتساب
+            {t("sidebar.whatsapp")}
           </a>
 
           <button
@@ -130,28 +139,28 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
           >
             <LogOut className="w-4 h-4" />
-            تسجيل الخروج
+            {t("sidebar.logout")}
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar */}
         <header className="h-14 bg-card border-b border-border flex items-center px-4 gap-3 md:hidden sticky top-0 z-10 shadow-sm">
           <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-accent transition-colors">
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
             <Logo size={28} />
-            <span className="font-bold text-sm">مدير المزرعة</span>
+            <span className="font-bold text-sm">{t("app.name")}</span>
           </div>
-          <div className="mr-auto flex items-center gap-2">
+          <div className={cn("flex items-center gap-2", isRtl ? "mr-auto" : "ml-auto")}>
+            <button onClick={toggleLang} className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded bg-muted">
+              {t("lang.switch")}
+            </button>
             <span className="text-xs text-muted-foreground">{user?.name}</span>
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-6xl mx-auto">
             {children}

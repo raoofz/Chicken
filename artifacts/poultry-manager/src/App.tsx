@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { LanguageProvider, useLanguage } from "@/contexts/LanguageContext";
 import Layout from "@/components/Layout";
 import Dashboard from "@/pages/dashboard";
 import Flocks from "@/pages/flocks";
@@ -20,13 +21,14 @@ const queryClient = new QueryClient();
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const { dir, t } = useLanguage();
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+      <div className="min-h-screen bg-background flex items-center justify-center" dir={dir}>
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground text-sm">جارٍ التحميل...</p>
+          <p className="text-muted-foreground text-sm">{t("loading")}</p>
         </div>
       </div>
     );
@@ -55,14 +57,16 @@ function AppRoutes() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppRoutes />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <AppRoutes />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

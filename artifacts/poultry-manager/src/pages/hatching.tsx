@@ -16,22 +16,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-
-const STATUS_LABELS: Record<string, string> = {
-  incubating: "قيد التحضين",
-  hatching: "يفقس الآن",
-  completed: "مكتمل",
-  failed: "فشل",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  incubating: "bg-blue-100 text-blue-700",
-  hatching: "bg-amber-100 text-amber-700",
-  completed: "bg-emerald-100 text-emerald-700",
-  failed: "bg-red-100 text-red-700",
-};
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function CycleForm({ initial, onSubmit, onClose }: { initial?: any; onSubmit: (d: any) => void; onClose: () => void }) {
+  const { t } = useLanguage();
   const today = new Date().toISOString().split("T")[0];
   const in18 = new Date(Date.now() + 18 * 86400000).toISOString().split("T")[0];
   const in21 = new Date(Date.now() + 21 * 86400000).toISOString().split("T")[0];
@@ -75,123 +63,118 @@ function CycleForm({ initial, onSubmit, onClose }: { initial?: any; onSubmit: (d
       }}
       className="space-y-5 max-h-[70vh] overflow-y-auto pr-1"
     >
-      {/* Basic info */}
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label>اسم الدفعة</Label>
-          <Input value={form.batchName} onChange={e => setForm(f => ({ ...f, batchName: e.target.value }))} placeholder="مثل: الدفعة الثالثة" required />
+          <Label>{t("hatching.batchName")}</Label>
+          <Input value={form.batchName} onChange={e => setForm(f => ({ ...f, batchName: e.target.value }))} placeholder={t("hatching.batchName.placeholder")} required />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>عدد البيض المحضّن</Label>
+            <Label>{t("hatching.eggsSet")}</Label>
             <Input type="number" min={1} value={form.eggsSet} onChange={e => setForm(f => ({ ...f, eggsSet: Number(e.target.value) }))} required />
           </div>
           <div className="space-y-1.5">
-            <Label>الحالة</Label>
+            <Label>{t("hatching.status")}</Label>
             <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="incubating">قيد التحضين</SelectItem>
-                <SelectItem value="hatching">يفقس الآن</SelectItem>
-                <SelectItem value="completed">مكتمل</SelectItem>
-                <SelectItem value="failed">فشل</SelectItem>
+                <SelectItem value="incubating">{t("status.incubating")}</SelectItem>
+                <SelectItem value="hatching">{t("status.hatching")}</SelectItem>
+                <SelectItem value="completed">{t("status.completed")}</SelectItem>
+                <SelectItem value="failed">{t("status.failed")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      {/* Phase 1: Incubation (days 1-18) */}
       <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-3">
         <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
           <Thermometer className="w-4 h-4" />
-          المرحلة الأولى — التحضين (اليوم 1 → 18)
+          {t("hatching.phase1.title")}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>تاريخ وضع البيض</Label>
+            <Label>{t("hatching.eggDate")}</Label>
             <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} required />
           </div>
           <div className="space-y-1.5">
-            <Label>ساعة ودقيقة الوضع</Label>
-            <Input type="time" value={form.setTime} onChange={e => setForm(f => ({ ...f, setTime: e.target.value }))} placeholder="مثل: 08:30" />
+            <Label>{t("hatching.setTime")}</Label>
+            <Input type="time" value={form.setTime} onChange={e => setForm(f => ({ ...f, setTime: e.target.value }))} />
           </div>
           <div className="space-y-1.5">
-            <Label>درجة الحرارة (°م)</Label>
+            <Label>{t("hatching.temperature")}</Label>
             <Input type="number" step="0.1" value={form.temperature} onChange={e => setForm(f => ({ ...f, temperature: e.target.value }))} placeholder="37.8" />
           </div>
           <div className="space-y-1.5">
-            <Label>الرطوبة (%)</Label>
+            <Label>{t("hatching.humidity")}</Label>
             <Input type="number" step="0.1" value={form.humidity} onChange={e => setForm(f => ({ ...f, humidity: e.target.value }))} placeholder="56" />
           </div>
         </div>
         <p className="text-xs text-blue-600/70">
           <Info className="w-3 h-3 inline ml-1" />
-          الموصى به: 37.5–38°م، رطوبة 50–60%
+          {t("hatching.phase1.recommend")}
         </p>
       </div>
 
-      {/* Phase 2: Lockdown (days 18-21) */}
       <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
         <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
           <ArrowLeftRight className="w-4 h-4" />
-          المرحلة الثانية — الإقفال والفقس (اليوم 18 → 21)
+          {t("hatching.phase2.title")}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>تاريخ نقل البيض (اليوم 18)</Label>
+            <Label>{t("hatching.transferDate")}</Label>
             <Input type="date" value={form.lockdownDate} onChange={e => setForm(f => ({ ...f, lockdownDate: e.target.value }))} />
           </div>
           <div className="space-y-1.5">
-            <Label>ساعة ودقيقة النقل</Label>
-            <Input type="time" value={form.lockdownTime} onChange={e => setForm(f => ({ ...f, lockdownTime: e.target.value }))} placeholder="مثل: 14:00" />
+            <Label>{t("hatching.transferTime")}</Label>
+            <Input type="time" value={form.lockdownTime} onChange={e => setForm(f => ({ ...f, lockdownTime: e.target.value }))} />
           </div>
           <div className="space-y-1.5">
-            <Label>درجة الحرارة (°م)</Label>
+            <Label>{t("hatching.temperature")}</Label>
             <Input type="number" step="0.1" value={form.lockdownTemperature} onChange={e => setForm(f => ({ ...f, lockdownTemperature: e.target.value }))} placeholder="37.2" />
           </div>
           <div className="space-y-1.5">
-            <Label>الرطوبة (%)</Label>
+            <Label>{t("hatching.humidity")}</Label>
             <Input type="number" step="0.1" value={form.lockdownHumidity} onChange={e => setForm(f => ({ ...f, lockdownHumidity: e.target.value }))} placeholder="70" />
           </div>
         </div>
         <p className="text-xs text-amber-600/70">
           <Info className="w-3 h-3 inline ml-1" />
-          الموصى به: 37.0–37.5°م، رطوبة 65–75%
+          {t("hatching.phase2.recommend")}
         </p>
       </div>
 
-      {/* Hatch results */}
       <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
         <div className="flex items-center gap-2 text-muted-foreground font-semibold text-sm">
           <Egg className="w-4 h-4" />
-          نتائج الفقس
+          {t("hatching.results")}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label>تاريخ الفقس المتوقع</Label>
+            <Label>{t("hatching.expectedDate")}</Label>
             <Input type="date" value={form.expectedHatchDate} onChange={e => setForm(f => ({ ...f, expectedHatchDate: e.target.value }))} required />
           </div>
           <div className="space-y-1.5">
-            <Label>تاريخ الفقس الفعلي</Label>
+            <Label>{t("hatching.actualDate")}</Label>
             <Input type="date" value={form.actualHatchDate} onChange={e => setForm(f => ({ ...f, actualHatchDate: e.target.value }))} />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <Label>عدد الفقس الفعلي (اختياري)</Label>
-            <Input type="number" min={0} value={form.eggsHatched} onChange={e => setForm(f => ({ ...f, eggsHatched: e.target.value }))} placeholder="يُدخل بعد اكتمال الدفعة" />
+            <Label>{t("hatching.actualHatched")}</Label>
+            <Input type="number" min={0} value={form.eggsHatched} onChange={e => setForm(f => ({ ...f, eggsHatched: e.target.value }))} placeholder={t("hatching.actualHatched.placeholder")} />
           </div>
         </div>
       </div>
 
-      {/* Notes */}
       <div className="space-y-1.5">
-        <Label>ملاحظات إضافية</Label>
-        <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات اختيارية..." />
+        <Label>{t("hatching.additionalNotes")}</Label>
+        <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder={t("hatching.optionalNotes")} />
       </div>
 
       <div className="flex gap-2 justify-end pt-1">
-        <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-        <Button type="submit">حفظ الدفعة</Button>
+        <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button type="submit">{t("hatching.saveBatch")}</Button>
       </div>
     </form>
   );
@@ -205,9 +188,19 @@ export default function Hatching() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const STATUS_LABELS: Record<string, string> = {
+    incubating: t("status.incubating"), hatching: t("status.hatching"),
+    completed: t("status.completed"), failed: t("status.failed"),
+  };
+  const STATUS_COLORS: Record<string, string> = {
+    incubating: "bg-blue-100 text-blue-700", hatching: "bg-amber-100 text-amber-700",
+    completed: "bg-emerald-100 text-emerald-700", failed: "bg-red-100 text-red-700",
+  };
 
   const refresh = () => qc.invalidateQueries({ queryKey: getListHatchingCyclesQueryKey() });
 
@@ -215,11 +208,11 @@ export default function Hatching() {
     if (deleteId == null) return;
     try {
       await deleteCycle.mutateAsync({ id: deleteId });
-      toast({ title: "تم حذف الدفعة" });
+      toast({ title: t("hatching.deleted") });
       setDeleteId(null);
       refresh();
     } catch (err: any) {
-      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+      toast({ title: t("common.deleteError"), description: err?.message, variant: "destructive" });
     }
   };
 
@@ -227,25 +220,25 @@ export default function Hatching() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">دورات التفقيس</h1>
-          <p className="text-muted-foreground text-sm">الدورة 21 يوم — تحضين 18 يوم ثم إقفال وفقس 3 أيام</p>
+          <h1 className="text-2xl font-bold">{t("hatching.title")}</h1>
+          <p className="text-muted-foreground text-sm">{t("hatching.subtitle")}</p>
         </div>
         {isAdmin && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="w-4 h-4" />دفعة جديدة</Button>
+            <Button className="gap-2"><Plus className="w-4 h-4" />{t("hatching.newBatch")}</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>إضافة دفعة تفقيس جديدة</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("hatching.addBatchTitle")}</DialogTitle></DialogHeader>
             <CycleForm
               onSubmit={async d => {
                 try {
                   await createCycle.mutateAsync({ data: d });
-                  toast({ title: "✓ تم إضافة الدفعة بنجاح" });
+                  toast({ title: t("hatching.added") });
                   setOpen(false);
                   refresh();
                 } catch (err: any) {
-                  toast({ title: "خطأ في الإضافة", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+                  toast({ title: t("common.addError"), description: err?.message ?? t("common.addErrorDesc"), variant: "destructive" });
                 }
               }}
               onClose={() => setOpen(false)}
@@ -255,15 +248,14 @@ export default function Hatching() {
         )}
       </div>
 
-      {/* Legend */}
       <div className="flex flex-wrap gap-3 text-xs">
         <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200">
           <Thermometer className="w-3.5 h-3.5" />
-          اليوم 1–18: تحضين — 37.5–38°م / رطوبة 50–60%
+          {t("hatching.legend.incubation")}
         </div>
         <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200">
           <ArrowLeftRight className="w-3.5 h-3.5" />
-          اليوم 18–21: إقفال — 37.0–37.5°م / رطوبة 65–75%
+          {t("hatching.legend.lockdown")}
         </div>
       </div>
 
@@ -273,8 +265,8 @@ export default function Hatching() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Egg className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="font-semibold text-lg mb-1">لا توجد دفعات بعد</h3>
-            <p className="text-muted-foreground text-sm">أضف أول دفعة تفقيس لبدء المتابعة</p>
+            <h3 className="font-semibold text-lg mb-1">{t("hatching.noBatches")}</h3>
+            <p className="text-muted-foreground text-sm">{t("hatching.noBatches.desc")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -286,7 +278,6 @@ export default function Hatching() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
-                      {/* Header */}
                       <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="font-semibold">{cycle.batchName}</h3>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[cycle.status]}`}>
@@ -294,20 +285,19 @@ export default function Hatching() {
                         </span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Egg className="w-3.5 h-3.5" />
-                          {cycle.eggsSet} بيضة {cycle.eggsHatched != null && `← ${cycle.eggsHatched} فقست (${hatchRate}%)`}
+                          {cycle.eggsSet} {t("hatching.egg")} {cycle.eggsHatched != null && `← ${cycle.eggsHatched} ${t("hatching.hatched")} (${hatchRate}%)`}
                         </span>
                       </div>
 
-                      {/* Phase 1 */}
                       <div className="flex flex-wrap gap-3 bg-blue-50/60 rounded-lg px-3 py-2 border border-blue-100">
-                        <span className="text-xs font-medium text-blue-700">تحضين (1–18):</span>
+                        <span className="text-xs font-medium text-blue-700">{t("hatching.phase1.label")}</span>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           📅 {cycle.startDate}
-                          {cycle.setTime && <span className="flex items-center gap-0.5 mr-1"><Clock className="w-3 h-3" />{cycle.setTime}</span>}
+                          {cycle.setTime && <span className="flex items-center gap-0.5 mx-1"><Clock className="w-3 h-3" />{cycle.setTime}</span>}
                         </span>
                         {cycle.temperature != null && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Thermometer className="w-3 h-3" />{cycle.temperature}°م
+                            <Thermometer className="w-3 h-3" />{cycle.temperature}°C
                           </span>
                         )}
                         {cycle.humidity != null && (
@@ -317,20 +307,19 @@ export default function Hatching() {
                         )}
                       </div>
 
-                      {/* Phase 2 */}
                       <div className="flex flex-wrap gap-3 bg-amber-50/60 rounded-lg px-3 py-2 border border-amber-100">
-                        <span className="text-xs font-medium text-amber-700">إقفال (18–21):</span>
+                        <span className="text-xs font-medium text-amber-700">{t("hatching.phase2.label")}</span>
                         {cycle.lockdownDate ? (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             📅 {cycle.lockdownDate}
-                            {cycle.lockdownTime && <span className="flex items-center gap-0.5 mr-1"><Clock className="w-3 h-3" />{cycle.lockdownTime}</span>}
+                            {cycle.lockdownTime && <span className="flex items-center gap-0.5 mx-1"><Clock className="w-3 h-3" />{cycle.lockdownTime}</span>}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground/50">لم يُنقل بعد</span>
+                          <span className="text-xs text-muted-foreground/50">{t("hatching.notTransferred")}</span>
                         )}
                         {cycle.lockdownTemperature != null && (
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Thermometer className="w-3 h-3" />{cycle.lockdownTemperature}°م
+                            <Thermometer className="w-3 h-3" />{cycle.lockdownTemperature}°C
                           </span>
                         )}
                         {cycle.lockdownHumidity != null && (
@@ -338,8 +327,8 @@ export default function Hatching() {
                             <Droplets className="w-3 h-3" />{cycle.lockdownHumidity}%
                           </span>
                         )}
-                        <span className="text-xs text-muted-foreground">متوقع: {cycle.expectedHatchDate}</span>
-                        {cycle.actualHatchDate && <span className="text-xs text-emerald-600">فعلي: {cycle.actualHatchDate}</span>}
+                        <span className="text-xs text-muted-foreground">{t("hatching.expected")} {cycle.expectedHatchDate}</span>
+                        {cycle.actualHatchDate && <span className="text-xs text-emerald-600">{t("hatching.actual")} {cycle.actualHatchDate}</span>}
                       </div>
 
                       {cycle.notes && (
@@ -347,7 +336,6 @@ export default function Hatching() {
                       )}
                     </div>
 
-                    {/* Actions */}
                     {isAdmin && (
                     <div className="flex gap-2 shrink-0">
                       <Button size="sm" variant="outline" onClick={() => setEditItem(cycle)}><Pencil className="w-3.5 h-3.5" /></Button>
@@ -362,21 +350,20 @@ export default function Hatching() {
         </div>
       )}
 
-      {/* Edit Dialog */}
       <Dialog open={!!editItem} onOpenChange={v => !v && setEditItem(null)}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>تعديل الدفعة</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("hatching.editBatchTitle")}</DialogTitle></DialogHeader>
           {editItem && (
             <CycleForm
               initial={editItem}
               onSubmit={async d => {
                 try {
                   await updateCycle.mutateAsync({ id: editItem.id, data: d });
-                  toast({ title: "✓ تم التحديث بنجاح" });
+                  toast({ title: t("hatching.updated") });
                   setEditItem(null);
                   refresh();
                 } catch (err: any) {
-                  toast({ title: "خطأ في التحديث", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+                  toast({ title: t("common.updateError"), description: err?.message ?? t("common.addErrorDesc"), variant: "destructive" });
                 }
               }}
               onClose={() => setEditItem(null)}
@@ -385,16 +372,15 @@ export default function Hatching() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
       <AlertDialog open={deleteId != null} onOpenChange={v => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
-            <AlertDialogDescription>هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
+            <AlertDialogTitle>{t("common.confirmDelete")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("common.confirmDeleteBatch")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">نعم، احذف</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t("common.yesDelete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
