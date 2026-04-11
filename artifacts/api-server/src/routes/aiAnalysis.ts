@@ -23,6 +23,7 @@ function getTodayStr(): string {
 
 router.post("/ai/analyze", async (req, res) => {
   try {
+    const lang = req.body?.lang === "sv" ? "sv" : "ar";
     const today = getTodayStr();
     const [flocks, hatchingCycles, allTasks, goals, notes, logs] = await Promise.all([
       db.select().from(flocksTable),
@@ -56,13 +57,17 @@ router.post("/ai/analyze", async (req, res) => {
       const days = getDaysSince(c.startDate);
       const daysLeft = getDaysUntil(c.expectedHatchDate);
       const isLockdown = days >= 18;
-      const alert = daysLeft <= 0 ? "⚠️ تجاوز موعد الفقس" : daysLeft <= 3 ? "🔥 قريب جداً من الفقس" : isLockdown ? "🔒 مرحلة الإقفال" : "✅ تحضين";
+      const alert = lang === "sv"
+        ? (daysLeft <= 0 ? "⚠️ Försenad kläckning" : daysLeft <= 3 ? "🔥 Mycket nära kläckning" : isLockdown ? "🔒 Låsningsfas" : "✅ Inkubation")
+        : (daysLeft <= 0 ? "⚠️ تجاوز موعد الفقس" : daysLeft <= 3 ? "🔥 قريب جداً من الفقس" : isLockdown ? "🔒 مرحلة الإقفال" : "✅ تحضين");
       return {
         batch: c.batchName,
         eggsSet: c.eggsSet,
         dayNumber: days,
         daysLeft,
-        phase: isLockdown ? "إقفال (18-21)" : "تحضين (1-18)",
+        phase: lang === "sv"
+          ? (isLockdown ? "Låsning (18-21)" : "Inkubation (1-18)")
+          : (isLockdown ? "إقفال (18-21)" : "تحضين (1-18)"),
         alertLevel: alert,
         temp1: c.temperature ? Number(c.temperature) : null,
         humidity1: c.humidity ? Number(c.humidity) : null,
@@ -92,7 +97,9 @@ router.post("/ai/analyze", async (req, res) => {
       ageDays: f.ageDays,
       purpose: f.purpose,
       notes: f.notes,
-      ageCategory: f.ageDays <= 7 ? "كتاكيت" : f.ageDays <= 21 ? "صغار" : f.ageDays <= 35 ? "متوسطة" : "كبار",
+      ageCategory: lang === "sv"
+        ? (f.ageDays <= 7 ? "Kycklingar" : f.ageDays <= 21 ? "Unga" : f.ageDays <= 35 ? "Mellanstora" : "Vuxna")
+        : (f.ageDays <= 7 ? "كتاكيت" : f.ageDays <= 21 ? "صغار" : f.ageDays <= 35 ? "متوسطة" : "كبار"),
     }));
 
     const notesSummary = notes.slice(0, 20).map(n => ({
@@ -138,7 +145,7 @@ router.post("/ai/analyze", async (req, res) => {
       recentActivity: recentLogs,
     };
 
-    const systemPrompt = `أنت خبير متخصص في علم الدواجن وإدارة مزارع الدجاج والفقاسات. 
+    const systemPromptAr = `أنت خبير متخصص في علم الدواجن وإدارة مزارع الدجاج والفقاسات. 
 لديك معرفة عميقة بـ:
 - أمراض الدواجن وأعراضها وطرق الوقاية
 - درجات الحرارة والرطوبة المثالية للتفقيس
@@ -189,8 +196,62 @@ router.post("/ai/analyze", async (req, res) => {
 
 كن محدداً جداً، استشهد بأرقام من البيانات، لا تكن عاماً.`;
 
+    const systemPromptSv = `Du är en expert inom fjäderfävetenskap och hantering av höns- och kläckningsanläggningar.
+Du har djup kunskap om:
+- Fjäderfäsjukdomar, symtom och förebyggande åtgärder
+- Optimala temperaturer och luftfuktighet för kläckning
+- Utfodring och vaccinationsscheman
+- Gårdens prestationsindikatorer och förbättringsstrategier
+- Förutsägelse av problem innan de uppstår
+
+Din uppgift: Analysera denna gårds data med hög vetenskaplig precision på svenska.
+Läs de dagliga anteckningarna noggrant — de innehåller mycket viktig information.
+Leta efter mönster: Vilka framgångsrika rutiner upprepas? Vad ledde till goda resultat?
+
+Presentera din analys i detta obligatoriska format (använd exakt dessa rubriker):
+
+## 🚨 تنبيهات عاجلة
+Lista alla problem som kräver omedelbar åtgärd (om sådana finns). Om inga finns, skriv "Inga brådskande varningar".
+
+## 🌡️ تحليل الفقاسة
+Detaljerad analys av varje aktiv cykel: temperatur, luftfuktighet, antal dagar, är parametrarna optimala?
+
+## 🐔 تحليل القطعان
+Utvärdering av varje flocks hälsa och prestation. Hur gamla är hönsen? Behöver någon flock uppmärksamhet?
+
+## 📊 تحليل الأداء العام
+Kläckningsfrekvenser, uppgiftsslutförande, målframsteg. Är siffrorna bra eller behöver de förbättras?
+
+## 🔮 توقعات الأسبوعين القادمين
+Vad kommer att hända? När kläcks batcherna? Vad behöver förberedas?
+
+## 📅 خطة الغد — ماذا تفعل غداً؟
+Den viktigaste sektionen. Baserat på:
+1. Schemalagda uppgifter för imorgon
+2. Inkubationscykeldagar (närmar sig låsning eller kläckning?)
+3. Framgångsrika mönster från anteckningar (om något fungerade tidigare, föreslå att upprepa det)
+Ge en prioriterad lista med allt som ska göras imorgon, med anledning och föreslagen tid.
+
+## ⚡ خطة العمل الفورية (أولويات الأسبوع)
+Prioriterad lista för denna vecka.
+
+## 🔄 الأنماط الناجحة — كرر هذا الأسلوب!
+Baserat på dagliga anteckningar, vilka steg eller åtgärder ledde till goda resultat?
+Om det finns en framgångsrik rutin (som en specifik utfodringstid, specifik temperatur, åtgärd som ledde till hög kläckningsfrekvens) — nämn den tydligt och föreslå att fortsätta med den.
+
+## 💰 نصائح لزيادة الربحية
+Praktiska och genomförbara förslag för att förbättra gårdens produktivitet och lönsamhet.
+
+## ❤️ الصحة الوقائية
+Vilka sjukdomar och problem bör man vara uppmärksam på baserat på nuvarande situation?
+
+Var mycket specifik, hänvisa till siffror från datan, var inte allmän.`;
+
+    const systemPrompt = lang === "sv" ? systemPromptSv : systemPromptAr;
+
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-    const userPrompt = `اليوم: ${today}
+
+    const userPromptAr = `اليوم: ${today}
 غداً: ${tomorrow}
 بيانات المزرعة الكاملة:
 ${JSON.stringify(dataSnapshot, null, 2)}
@@ -202,6 +263,20 @@ ${JSON.stringify(dataSnapshot, null, 2)}
 - إذا كانت أي دفعة في مرحلة الإقفال (اليوم 18-21)، أنبه بشكل خاص في خطة الغد
 - إذا كانت درجة الحرارة أو الرطوبة خارج النطاق المثالي، أنبه بشكل واضح.`;
 
+    const userPromptSv = `Idag: ${today}
+Imorgon: ${tomorrow}
+Komplett gårdsdata:
+${JSON.stringify(dataSnapshot, null, 2)}
+
+Särskilda instruktioner:
+- I avsnittet "Morgondagens plan": Ange exakt vad som ska göras den ${tomorrow}, med hänsyn till batcher som närmar sig låsning eller kläckning
+- I avsnittet "Framgångsmönster": Läs anteckningarna noggrant och leta efter vad som fungerade tidigare, särskilt om kläckningsfrekvenserna var bra eller hönsen var friska
+- Om anteckningarna är få: Föreslå vad som bör dokumenteras för att bygga framgångsrika mönster
+- Om någon batch är i låsningsfas (dag 18-21), varna särskilt i morgondagens plan
+- Om temperatur eller luftfuktighet är utanför optimalt intervall, varna tydligt.`;
+
+    const userPrompt = lang === "sv" ? userPromptSv : userPromptAr;
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       max_tokens: 4000,
@@ -211,7 +286,8 @@ ${JSON.stringify(dataSnapshot, null, 2)}
       ],
     });
 
-    const analysis = completion.choices[0]?.message?.content ?? "لم يتمكن النظام من إجراء التحليل";
+    const fallbackMsg = lang === "sv" ? "Systemet kunde inte genomföra analysen" : "لم يتمكن النظام من إجراء التحليل";
+    const analysis = completion.choices[0]?.message?.content ?? fallbackMsg;
 
     const urgentAlerts = cycleAlerts.filter(c => c.daysLeft <= 3 || c.daysLeft <= 0 || c.tempOk === false || c.humidityOk === false);
     const summary = {

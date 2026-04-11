@@ -2,10 +2,11 @@
 
 ## Overview
 
-Full-stack Arabic RTL poultry farm management system. pnpm workspace monorepo with:
-- **Web App** (react-vite) at `/` — Arabic RTL dashboard for desktop/browser
+Full-stack poultry farm management system with two web frontends sharing one API backend. pnpm workspace monorepo with:
+- **Arabic Web App** (react-vite) at `/` — Arabic RTL dashboard (`artifacts/poultry-manager`)
+- **Swedish Web App** (react-vite) at `/poultry-manager-sv/` — Swedish LTR dashboard (`artifacts/poultry-manager-sv`)
 - **Mobile App** (expo) at `/mobile/` — Arabic RTL native mobile app (iOS/Android via Expo Go)
-- **API Server** (express) — shared backend for both web and mobile
+- **API Server** (express) — shared backend for all apps
 
 ## Stack
 
@@ -77,12 +78,20 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - Pull-to-refresh on all screens
 - WhatsApp button (`WHATSAPP_GROUP_URL` constant in `app/(tabs)/index.tsx`)
 
+### Swedish Web App (artifacts/poultry-manager-sv)
+- **Login page** — Swedish LTR, same chicken logo, "Gårdsförvaltare" title
+- **Dashboard** — Swedish labels, same clickable stat cards
+- **All pages translated**: Flockar, Kläckning, Uppgifter, Mål, Anteckningar, Smart rådgivare, Aktivitetslogg, Inställningar
+- **AI Insights** sends `lang: "sv"` to get Swedish AI analysis (same 10-section format)
+- **Auth errors** show Swedish messages (not Arabic backend errors)
+- **Layout**: Sidebar on LEFT (LTR), Inter font, same warm earthy palette
+
 ## Design
 
 - **Color palette**: primary `#B85C2A` (terracotta), background `#F7F0E6` (cream), sidebar `#1A1208` (dark brown)
-- **RTL throughout**: all layouts use `dir="rtl"`, flexDirection row-reverse
-- **Fonts**: Tajawal/Cairo (web), Inter (mobile)
-- **Language**: Arabic UI with English field names in DB
+- **Arabic app**: RTL, `dir="rtl"`, fonts Tajawal/Cairo
+- **Swedish app**: LTR, `dir="ltr"`, font Inter
+- **Shared**: Same color palette, same component library (shadcn/ui), same API backend
 
 ## DB Schema
 
@@ -107,7 +116,7 @@ Tables:
 - `GET/POST /api/hatching-cycles`, `GET/PUT/DELETE /api/hatching-cycles/:id`
 - `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
 - `GET/POST /api/notes` — daily journal (admin-only, requireAdmin middleware)
-- `POST /api/ai/analyze` — admin-only AI analysis (OpenAI)
+- `POST /api/ai/analyze` — AI analysis (OpenAI); accepts `{ lang: "sv" }` for Swedish output, defaults to Arabic
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
 

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/poultry-manager-sv/"
+title = "Gårdsförvaltare - Fjäderfähantering"
+version = "1.0.0"
+id = "artifacts/poultry-manager-sv"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/poultry-manager-sv/" ]
+localPort = 25964
+
+[services.development]
+run = "pnpm --filter @workspace/poultry-manager-sv run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/poultry-manager-sv", "run", "build" ]
+publicDir = "artifacts/poultry-manager-sv/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25964"
+BASE_PATH = "/poultry-manager-sv/"
