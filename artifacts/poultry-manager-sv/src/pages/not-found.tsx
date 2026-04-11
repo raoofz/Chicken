@@ -10,7 +10,7 @@ export default function NotFound() {
           <h1 className="text-6xl font-bold text-primary mb-4">404</h1>
           <h2 className="text-xl font-semibold mb-2">Sidan hittades inte</h2>
           <p className="text-muted-foreground mb-6">Sidan du letar efter finns inte eller har flyttats.</p>
-          <Link href="/"><Button>Tillbaka till kontrollpanelen</Button></Link>
+          <Link href="/"><Button>Tillbaka till översikten</Button></Link>
         </CardContent>
       </Card>
     </div>

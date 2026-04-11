@@ -13,15 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/XXXXXXXXXX";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Kontrollpanel", icon: LayoutDashboard, adminOnly: false },
+  { href: "/", label: "Översikt", icon: LayoutDashboard, adminOnly: false },
   { href: "/flocks", label: "Flockar", icon: Bird, adminOnly: false },
-  { href: "/hatching", label: "Kl\u00e4ckning", icon: Egg, adminOnly: false },
-  { href: "/tasks", label: "Dagliga uppgifter", icon: CheckSquare, adminOnly: false },
-  { href: "/goals", label: "M\u00e5l", icon: Target, adminOnly: false },
+  { href: "/hatching", label: "Kläckning", icon: Egg, adminOnly: false },
+  { href: "/tasks", label: "Uppgifter", icon: CheckSquare, adminOnly: false },
+  { href: "/goals", label: "Mål", icon: Target, adminOnly: false },
   { href: "/notes", label: "Anteckningar", icon: FileText, adminOnly: true },
-  { href: "/logs", label: "Aktivitetslogg", icon: BookOpen, adminOnly: false },
-  { href: "/ai", label: "Smart analys", icon: Brain, adminOnly: true },
-  { href: "/settings", label: "Inst\u00e4llningar", icon: Settings, adminOnly: false },
+  { href: "/logs", label: "Logg", icon: BookOpen, adminOnly: false },
+  { href: "/ai", label: "AI-analys", icon: Brain, adminOnly: true },
+  { href: "/settings", label: "Inställningar", icon: Settings, adminOnly: false },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -53,8 +53,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3">
             <Logo size={38} />
             <div>
-              <h1 className="font-bold text-white text-sm leading-tight">G\u00e5rdsf\u00f6rvaltare</h1>
-              <p className="text-xs text-white/50">Fj\u00e4derf\u00e4hantering</p>
+              <h1 className="font-bold text-white text-sm leading-tight">Gårdsförvaltare</h1>
+              <p className="text-xs text-white/50">Fjäderfähantering</p>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="ml-auto md:hidden text-white/50 hover:text-white transition-colors p-1">
@@ -68,7 +68,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
           )}>
             {isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
-            <span className="font-medium">{isAdmin ? "Administrat\u00f6r" : "Arbetare"}</span>
+            <span className="font-medium">{isAdmin ? "Administratör" : "Arbetare"}</span>
           </div>
         </div>
 
@@ -136,7 +136,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex items-center gap-2">
             <Logo size={28} />
-            <span className="font-bold text-sm">G\u00e5rdsf\u00f6rvaltare</span>
+            <span className="font-bold text-sm">Gårdsförvaltare</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{user?.name}</span>

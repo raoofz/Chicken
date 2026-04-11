@@ -22,7 +22,7 @@ export default function Login() {
     try {
       await login(username, password);
     } catch (err: any) {
-      setError(err.message ?? "Inloggningsfel");
+      setError(err.message ?? "Inloggningen misslyckades");
     } finally {
       setLoading(false);
     }
@@ -43,30 +43,30 @@ export default function Login() {
               <Logo size={64} />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-foreground">G&aring;rdsf&ouml;rvaltare</h1>
-          <p className="text-muted-foreground mt-1">Smart fj&auml;derf&auml;hanteringssystem</p>
+          <h1 className="text-3xl font-bold text-foreground">Gårdsförvaltare</h1>
+          <p className="text-muted-foreground mt-1">Smart fjäderfähantering</p>
         </div>
 
         <Card className="shadow-2xl border-border/50 backdrop-blur-sm bg-card/95">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl text-center">Logga in</CardTitle>
-            <CardDescription className="text-center">Ange dina kontouppgifter f&ouml;r att f&aring; &aring;tkomst</CardDescription>
+            <CardDescription className="text-center">Ange dina uppgifter för att logga in</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="username">Anv&auml;ndarnamn</Label>
+                <Label htmlFor="username">Användarnamn</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="Ange anv&auml;ndarnamn" className="pl-10" required autoFocus />
+                  <Input id="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="Skriv användarnamn" className="pl-10" required autoFocus />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">L&ouml;senord</Label>
+                <Label htmlFor="password">Lösenord</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Ange l&ouml;senord" className="pl-10 pr-10" required />
+                  <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Skriv lösenord" className="pl-10 pr-10" required />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -81,7 +81,7 @@ export default function Login() {
                 {loading ? (
                   <span className="flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Verifierar...
+                    Loggar in...
                   </span>
                 ) : "Logga in"}
               </Button>
@@ -90,7 +90,7 @@ export default function Login() {
         </Card>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Komplett system f&ouml;r fj&auml;derf&auml;g&aring;rdshantering med AI-teknik
+          Komplett system för fjäderfägårdshantering med AI-teknik
         </p>
       </div>
     </div>

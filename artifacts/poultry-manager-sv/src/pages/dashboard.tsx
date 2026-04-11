@@ -10,7 +10,7 @@ export default function Dashboard() {
   if (isLoading || !summary) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-foreground">Kontrollpanel</h1>
+        <h1 className="text-3xl font-bold text-foreground">Översikt</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}><CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader><CardContent><Skeleton className="h-8 w-16 mb-1" /><Skeleton className="h-3 w-32" /></CardContent></Card>
@@ -21,17 +21,17 @@ export default function Dashboard() {
   }
 
   const STATS = [
-    { title: "Totalt h\u00f6ns", value: summary.totalChickens, sub: `${summary.totalFlocks} registrerade flockar`, icon: Bird, color: "text-amber-600", bg: "bg-amber-100", href: "/flocks" },
-    { title: "\u00c4gg i kl\u00e4ckmaskin", value: summary.totalEggsIncubating, sub: `${summary.activeHatchingCycles} aktiva cykler`, icon: Egg, color: "text-emerald-600", bg: "bg-emerald-100", href: "/hatching" },
-    { title: "Dagens uppgifter", value: `${summary.tasksCompletedToday} / ${summary.tasksDueToday}`, sub: "slutf\u00f6rda", icon: CheckCircle2, color: "text-blue-600", bg: "bg-blue-100", href: "/tasks" },
-    { title: "Kl\u00e4ckningsfrekvens", value: `${Math.round(summary.overallHatchRate)}%`, sub: "\u00f6ver alla cykler", icon: TrendingUp, color: "text-primary", bg: "bg-primary/10", href: "/hatching" },
+    { title: "Antal höns", value: summary.totalChickens, sub: `${summary.totalFlocks} flockar`, icon: Bird, color: "text-amber-600", bg: "bg-amber-100", href: "/flocks" },
+    { title: "Ägg i kläckmaskin", value: summary.totalEggsIncubating, sub: `${summary.activeHatchingCycles} aktiva cykler`, icon: Egg, color: "text-emerald-600", bg: "bg-emerald-100", href: "/hatching" },
+    { title: "Dagens uppgifter", value: `${summary.tasksCompletedToday} / ${summary.tasksDueToday}`, sub: "klara", icon: CheckCircle2, color: "text-blue-600", bg: "bg-blue-100", href: "/tasks" },
+    { title: "Kläckningsgrad", value: `${Math.round(summary.overallHatchRate)}%`, sub: "genomsnitt", icon: TrendingUp, color: "text-primary", bg: "bg-primary/10", href: "/hatching" },
   ];
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">V\u00e4lkommen till din g\u00e5rd</h1>
-        <p className="text-muted-foreground">\u00d6versikt \u00f6ver flockar, kl\u00e4ckning och dagliga uppgifter.</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Välkommen till din gård</h1>
+        <p className="text-muted-foreground">Översikt av flockar, kläckning och dagliga uppgifter.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -62,14 +62,14 @@ export default function Dashboard() {
         <Link href="/goals">
           <Card className="border-border/50 shadow-sm cursor-pointer hover:shadow-md hover:border-primary/30 transition-all duration-300 group">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Target className="w-5 h-5 text-primary" />M\u00e5l</CardTitle>
-              <CardDescription>Dina framsteg mot aktuella m\u00e5l</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Target className="w-5 h-5 text-primary" />Mål</CardTitle>
+              <CardDescription>Framsteg mot uppsatta mål</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border border-border/50">
                 <div>
-                  <p className="font-medium text-foreground">Uppn\u00e5dda m\u00e5l</p>
-                  <p className="text-sm text-muted-foreground">{summary.goalsCompleted} av {summary.totalGoals} m\u00e5l</p>
+                  <p className="font-medium text-foreground">Uppnådda mål</p>
+                  <p className="text-sm text-muted-foreground">{summary.goalsCompleted} av {summary.totalGoals} mål</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-2xl font-bold text-primary">{summary.totalGoals > 0 ? Math.round((summary.goalsCompleted / summary.totalGoals) * 100) : 0}%</div>
@@ -83,10 +83,10 @@ export default function Dashboard() {
         <Link href="/hatching">
           <Card className="border-border/50 shadow-sm bg-primary/5 border-primary/20 flex flex-col items-center justify-center min-h-[200px] text-center p-6 cursor-pointer hover:shadow-md hover:bg-primary/10 transition-all duration-300 group">
             <Egg className="w-12 h-12 text-primary/40 mb-4 group-hover:text-primary/60 transition-colors" />
-            <h3 className="font-semibold text-primary mb-2">Kl\u00e4ckningscykler</h3>
-            <p className="text-sm text-primary/70">Klicka f\u00f6r att f\u00f6lja kl\u00e4ckningsomg\u00e5ngar och detaljer</p>
+            <h3 className="font-semibold text-primary mb-2">Kläckningscykler</h3>
+            <p className="text-sm text-primary/70">Se alla kläckningsomgångar och detaljer</p>
             <div className="mt-3 flex items-center gap-1 text-xs text-primary/60 group-hover:text-primary transition-colors">
-              <span>\u00d6ppna kl\u00e4ckning</span>
+              <span>Visa kläckning</span>
               <ArrowRight className="w-3 h-3" />
             </div>
           </Card>

@@ -18,11 +18,11 @@ export default function Settings() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      toast({ title: "Nya l\u00f6senord matchar inte", variant: "destructive" });
+      toast({ title: "Lösenorden matchar inte", variant: "destructive" });
       return;
     }
     if (newPassword.length < 4) {
-      toast({ title: "L\u00f6senordet m\u00e5ste vara minst 4 tecken", variant: "destructive" });
+      toast({ title: "Lösenordet måste vara minst 4 tecken", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -35,16 +35,16 @@ export default function Settings() {
       });
       const data = await res.json();
       if (!res.ok) {
-        const pwdError = res.status === 401 ? "Fel nuvarande l\u00f6senord" : "Fel vid byte av l\u00f6senord";
+        const pwdError = res.status === 401 ? "Fel nuvarande lösenord" : "Kunde inte ändra lösenord";
         toast({ title: pwdError, variant: "destructive" });
         return;
       }
-      toast({ title: "L\u00f6senordet har \u00e4ndrats" });
+      toast({ title: "Lösenordet har ändrats" });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch {
-      toast({ title: "Serveranslutningsfel", variant: "destructive" });
+      toast({ title: "Kunde inte ansluta till servern", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -52,7 +52,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Inst\u00e4llningar</h1>
+      <h1 className="text-2xl font-bold">Inställningar</h1>
 
       <Card>
         <CardHeader>
@@ -64,14 +64,14 @@ export default function Settings() {
             <span className="font-semibold">{user?.name}</span>
           </div>
           <div className="flex items-center justify-between py-2 border-b">
-            <span className="text-muted-foreground">Anv\u00e4ndarnamn</span>
+            <span className="text-muted-foreground">Användarnamn</span>
             <span className="font-semibold">{user?.username}</span>
           </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-muted-foreground">Roll</span>
             <span className="flex items-center gap-1.5">
               <Shield className="w-4 h-4 text-primary" />
-              <span className="font-semibold">{user?.role === "admin" ? "Administrat\u00f6r" : "Arbetare"}</span>
+              <span className="font-semibold">{user?.role === "admin" ? "Administratör" : "Arbetare"}</span>
             </span>
           </div>
         </CardContent>
@@ -79,23 +79,23 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" />\u00c4ndra l\u00f6senord</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" />Ändra lösenord</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="current">Nuvarande l\u00f6senord</Label>
-              <Input id="current" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Ange nuvarande l\u00f6senord" required />
+              <Label htmlFor="current">Nuvarande lösenord</Label>
+              <Input id="current" type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Ange nuvarande lösenord" required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new">Nytt l\u00f6senord</Label>
-              <Input id="new" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Ange nytt l\u00f6senord" required />
+              <Label htmlFor="new">Nytt lösenord</Label>
+              <Input id="new" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Ange nytt lösenord" required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm">Bekr\u00e4fta nytt l\u00f6senord</Label>
-              <Input id="confirm" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="\u00c5terange nytt l\u00f6senord" required />
+              <Label htmlFor="confirm">Bekräfta nytt lösenord</Label>
+              <Input id="confirm" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Ange nytt lösenord igen" required />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>{loading ? "\u00c4ndrar..." : "\u00c4ndra l\u00f6senord"}</Button>
+            <Button type="submit" className="w-full" disabled={loading}>{loading ? "Ändrar..." : "Ändra lösenord"}</Button>
           </form>
         </CardContent>
       </Card>
