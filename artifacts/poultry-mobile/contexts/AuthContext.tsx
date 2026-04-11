@@ -20,7 +20,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const STORAGE_KEY = "farm_auth_user";
-const BASE = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "";
+const BASE =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
 
 async function apiFetch(path: string, opts: RequestInit = {}) {
   return fetch(`${BASE}${path}`, { ...opts, credentials: "include" });

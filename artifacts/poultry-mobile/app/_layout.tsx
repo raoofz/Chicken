@@ -17,8 +17,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-if (process.env.EXPO_PUBLIC_DOMAIN) {
-  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+// Production: set EXPO_PUBLIC_API_URL to deployed server (e.g. https://my-app.replit.app)
+// Development: uses EXPO_PUBLIC_DOMAIN (Replit dev domain)
+const apiUrl =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
+
+if (apiUrl) {
+  setBaseUrl(apiUrl);
 }
 
 I18nManager.allowRTL(true);
