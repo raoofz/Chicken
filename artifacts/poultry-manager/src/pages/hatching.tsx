@@ -213,10 +213,14 @@ export default function Hatching() {
 
   const handleDelete = async () => {
     if (deleteId == null) return;
-    await deleteCycle.mutateAsync({ id: deleteId });
-    toast({ title: "تم حذف الدفعة" });
-    setDeleteId(null);
-    refresh();
+    try {
+      await deleteCycle.mutateAsync({ id: deleteId });
+      toast({ title: "تم حذف الدفعة" });
+      setDeleteId(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+    }
   };
 
   return (
@@ -235,10 +239,14 @@ export default function Hatching() {
             <DialogHeader><DialogTitle>إضافة دفعة تفقيس جديدة</DialogTitle></DialogHeader>
             <CycleForm
               onSubmit={async d => {
-                await createCycle.mutateAsync({ data: d });
-                toast({ title: "تم إضافة الدفعة بنجاح" });
-                setOpen(false);
-                refresh();
+                try {
+                  await createCycle.mutateAsync({ data: d });
+                  toast({ title: "✓ تم إضافة الدفعة بنجاح" });
+                  setOpen(false);
+                  refresh();
+                } catch (err: any) {
+                  toast({ title: "خطأ في الإضافة", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+                }
               }}
               onClose={() => setOpen(false)}
             />
@@ -362,10 +370,14 @@ export default function Hatching() {
             <CycleForm
               initial={editItem}
               onSubmit={async d => {
-                await updateCycle.mutateAsync({ id: editItem.id, data: d });
-                toast({ title: "تم التحديث بنجاح" });
-                setEditItem(null);
-                refresh();
+                try {
+                  await updateCycle.mutateAsync({ id: editItem.id, data: d });
+                  toast({ title: "✓ تم التحديث بنجاح" });
+                  setEditItem(null);
+                  refresh();
+                } catch (err: any) {
+                  toast({ title: "خطأ في التحديث", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+                }
               }}
               onClose={() => setEditItem(null)}
             />

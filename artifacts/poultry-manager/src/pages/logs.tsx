@@ -90,7 +90,7 @@ export default function Logs() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>تسجيل حدث جديد</DialogTitle></DialogHeader>
-              <LogForm onSubmit={async d => { await createLog.mutateAsync({ data: d }); toast({ title: "تم التسجيل" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
+              <LogForm onSubmit={async d => { try { await createLog.mutateAsync({ data: d }); toast({ title: "✓ تم التسجيل" }); setOpen(false); refresh(); } catch (e: any) { toast({ title: "خطأ في التسجيل", description: e?.message, variant: "destructive" }); } }} onClose={() => setOpen(false)} />
             </DialogContent>
           </Dialog>
         )}

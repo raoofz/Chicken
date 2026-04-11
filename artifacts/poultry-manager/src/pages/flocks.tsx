@@ -165,25 +165,37 @@ export default function Flocks() {
   const refresh = () => qc.invalidateQueries({ queryKey: getListFlocksQueryKey() });
 
   const handleCreate = async (data: any) => {
-    await createFlock.mutateAsync({ data });
-    toast({ title: "✓ تمت إضافة المجموعة بنجاح" });
-    setOpen(false);
-    refresh();
+    try {
+      await createFlock.mutateAsync({ data });
+      toast({ title: "✓ تمت إضافة المجموعة بنجاح" });
+      setOpen(false);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الإضافة", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+    }
   };
 
   const handleUpdate = async (data: any) => {
-    await updateFlock.mutateAsync({ id: editItem.id, data });
-    toast({ title: "✓ تم تحديث البيانات بنجاح" });
-    setEditItem(null);
-    refresh();
+    try {
+      await updateFlock.mutateAsync({ id: editItem.id, data });
+      toast({ title: "✓ تم تحديث البيانات بنجاح" });
+      setEditItem(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في التحديث", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+    }
   };
 
   const handleDelete = async () => {
     if (deleteId == null) return;
-    await deleteFlock.mutateAsync({ id: deleteId });
-    toast({ title: "تم حذف المجموعة" });
-    setDeleteId(null);
-    refresh();
+    try {
+      await deleteFlock.mutateAsync({ id: deleteId });
+      toast({ title: "تم حذف المجموعة" });
+      setDeleteId(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+    }
   };
 
   const totalChickens = flocks?.reduce((s, f) => s + f.count, 0) ?? 0;

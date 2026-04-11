@@ -76,12 +76,16 @@ function UpdateProgressDialog({ goal, onClose }: { goal: any; onClose: () => voi
   return (
     <form onSubmit={async e => {
       e.preventDefault();
-      const newVal = Number(value);
-      const completed = newVal >= Number(goal.targetValue);
-      await updateGoal.mutateAsync({ id: goal.id, data: { currentValue: newVal, completed } });
-      toast({ title: completed ? "تهانينا! تم تحقيق الهدف" : "تم تحديث التقدم" });
-      qc.invalidateQueries({ queryKey: getListGoalsQueryKey() });
-      onClose();
+      try {
+        const newVal = Number(value);
+        const completed = newVal >= Number(goal.targetValue);
+        await updateGoal.mutateAsync({ id: goal.id, data: { currentValue: newVal, completed } });
+        toast({ title: completed ? "🎉 تهانينا! تم تحقيق الهدف" : "✓ تم تحديث التقدم" });
+        qc.invalidateQueries({ queryKey: getListGoalsQueryKey() });
+        onClose();
+      } catch (err: any) {
+        toast({ title: "خطأ في التحديث", description: err?.message, variant: "destructive" });
+      }
     }} className="space-y-4">
       <div className="space-y-1.5">
         <Label>القيمة الحالية ({goal.unit})</Label>
@@ -112,10 +116,14 @@ export default function Goals() {
 
   const handleDelete = async () => {
     if (deleteId == null) return;
-    await deleteGoal.mutateAsync({ id: deleteId });
-    toast({ title: "تم حذف الهدف" });
-    setDeleteId(null);
-    refresh();
+    try {
+      await deleteGoal.mutateAsync({ id: deleteId });
+      toast({ title: "تم حذف الهدف" });
+      setDeleteId(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+    }
   };
 
   const { isAdmin } = useAuth();
@@ -136,7 +144,7 @@ export default function Goals() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>إضافة هدف جديد</DialogTitle></DialogHeader>
-              <GoalForm onSubmit={async d => { await createGoal.mutateAsync({ data: d }); toast({ title: "تم إضافة الهدف" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
+              <GoalForm onSubmit={async d => { try { await createGoal.mutateAsync({ data: d }); toast({ title: "✓ تم إضافة الهدف" }); setOpen(false); refresh(); } catch (e: any) { toast({ title: "خطأ في الإضافة", description: e?.message, variant: "destructive" }); } }} onClose={() => setOpen(false)} />
             </DialogContent>
           </Dialog>
         )}
@@ -218,7 +226,7 @@ export default function Goals() {
       <Dialog open={!!editItem} onOpenChange={v => !v && setEditItem(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>تعديل الهدف</DialogTitle></DialogHeader>
-          {editItem && <GoalForm initial={editItem} onSubmit={async d => { await updateGoal.mutateAsync({ id: editItem.id, data: d }); toast({ title: "تم التحديث" }); setEditItem(null); refresh(); }} onClose={() => setEditItem(null)} />}
+          {editItem && <GoalForm initial={editItem} onSubmit={async d => { try { await updateGoal.mutateAsync({ id: editItem.id, data: d }); toast({ title: "✓ تم التحديث" }); setEditItem(null); refresh(); } catch (e: any) { toast({ title: "خطأ في التحديث", description: e?.message, variant: "destructive" }); } }} onClose={() => setEditItem(null)} />}
         </DialogContent>
       </Dialog>
 

@@ -175,33 +175,46 @@ export default function Tasks() {
     qc.invalidateQueries({ queryKey: getListTasksQueryKey({ date: today }) });
 
   const handleCreate = async (data: any) => {
-    await createTask.mutateAsync({ data });
-    toast({ title: "تمت إضافة المهمة" });
-    setOpen(false);
-    refresh();
+    try {
+      await createTask.mutateAsync({ data });
+      toast({ title: "✓ تمت إضافة المهمة" });
+      setOpen(false);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الإضافة", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+    }
   };
 
   const handleUpdate = async (data: any) => {
-    await updateTask.mutateAsync({ id: editItem.id, data });
-    toast({ title: "تم تحديث المهمة" });
-    setEditItem(null);
-    refresh();
+    try {
+      await updateTask.mutateAsync({ id: editItem.id, data });
+      toast({ title: "✓ تم تحديث المهمة" });
+      setEditItem(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في التحديث", description: err?.message ?? "تحقق من البيانات وحاول مجدداً", variant: "destructive" });
+    }
   };
 
   const handleDelete = async () => {
     if (deleteId == null) return;
-    await deleteTask.mutateAsync({ id: deleteId });
-    toast({ title: "تم حذف المهمة" });
-    setDeleteId(null);
-    refresh();
+    try {
+      await deleteTask.mutateAsync({ id: deleteId });
+      toast({ title: "تم حذف المهمة" });
+      setDeleteId(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: "خطأ في الحذف", description: err?.message, variant: "destructive" });
+    }
   };
 
   const toggleComplete = async (task: any) => {
-    await updateTask.mutateAsync({
-      id: task.id,
-      data: { completed: !task.completed },
-    });
-    refresh();
+    try {
+      await updateTask.mutateAsync({ id: task.id, data: { completed: !task.completed } });
+      refresh();
+    } catch {
+      toast({ title: "خطأ في تحديث الحالة", variant: "destructive" });
+    }
   };
 
   const pending = tasks?.filter((t) => !t.completed) ?? [];
