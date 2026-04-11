@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { href: "/hatching", label: "التفقيس", icon: Egg, adminOnly: false },
   { href: "/tasks", label: "المهام اليومية", icon: CheckSquare, adminOnly: false },
   { href: "/goals", label: "الأهداف", icon: Target, adminOnly: false },
-  { href: "/notes", label: "المذكرات", icon: FileText, adminOnly: false },
+  { href: "/notes", label: "المذكرات", icon: FileText, adminOnly: true },
   { href: "/logs", label: "سجل النشاط", icon: BookOpen, adminOnly: false },
   { href: "/ai", label: "تحليل ذكي", icon: Brain, adminOnly: true },
 ];

@@ -11,7 +11,7 @@ export interface CreateFlockBody {
   name: string;
   breed: string;
   count: number;
-  ageWeeks: number;
+  ageDays: number;
   purpose: CreateFlockBodyPurpose;
   notes?: string | null;
 }

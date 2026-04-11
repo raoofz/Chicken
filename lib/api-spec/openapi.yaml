@@ -457,7 +457,7 @@ components:
           type: string
         count:
           type: integer
-        ageWeeks:
+        ageDays:
           type: integer
         purpose:
           type: string
@@ -472,7 +472,7 @@ components:
         - name
         - breed
         - count
-        - ageWeeks
+        - ageDays
         - purpose
         - createdAt
 
@@ -485,7 +485,7 @@ components:
           type: string
         count:
           type: integer
-        ageWeeks:
+        ageDays:
           type: integer
         purpose:
           type: string
@@ -497,7 +497,7 @@ components:
         - name
         - breed
         - count
-        - ageWeeks
+        - ageDays
         - purpose
 
     HatchingCycle:

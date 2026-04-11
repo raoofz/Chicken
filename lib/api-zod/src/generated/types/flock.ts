@@ -12,7 +12,7 @@ export interface Flock {
   name: string;
   breed: string;
   count: number;
-  ageWeeks: number;
+  ageDays: number;
   purpose: FlockPurpose;
   notes?: string | null;
   createdAt: string;

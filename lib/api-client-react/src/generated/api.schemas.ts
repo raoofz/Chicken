@@ -23,7 +23,7 @@ export interface Flock {
   name: string;
   breed: string;
   count: number;
-  ageWeeks: number;
+  ageDays: number;
   purpose: FlockPurpose;
   notes?: string | null;
   createdAt: string;
@@ -43,7 +43,7 @@ export interface CreateFlockBody {
   name: string;
   breed: string;
   count: number;
-  ageWeeks: number;
+  ageDays: number;
   purpose: CreateFlockBodyPurpose;
   notes?: string | null;
 }

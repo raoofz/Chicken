@@ -108,17 +108,6 @@ export default function Login() {
                 ) : "دخول"}
               </Button>
 
-              <div className="bg-muted/50 rounded-xl p-4 space-y-1.5 text-sm">
-                <p className="font-semibold text-center text-muted-foreground mb-2">بيانات الدخول الافتراضية</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">مدير:</span>
-                  <code className="bg-card px-2 py-0.5 rounded text-primary font-mono">admin / admin123</code>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">عامل:</span>
-                  <code className="bg-card px-2 py-0.5 rounded text-primary font-mono">worker / worker123</code>
-                </div>
-              </div>
             </form>
           </CardContent>
         </Card>

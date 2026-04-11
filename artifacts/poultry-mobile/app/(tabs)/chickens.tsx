@@ -62,7 +62,7 @@ function FlockCard({ flock, onDelete, isAdmin }: { flock: any; onDelete: (id: nu
         </View>
         <View style={[styles.statChip, { backgroundColor: colors.secondary }]}>
           <Feather name="calendar" size={14} color={colors.accent} />
-          <Text style={[styles.chipText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>{flock.ageWeeks} أسبوع</Text>
+          <Text style={[styles.chipText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>{flock.ageDays} يوم</Text>
         </View>
         <View style={[styles.statChip, { backgroundColor: badgeColor + "20" }]}>
           <Text style={[styles.chipText, { color: badgeColor, fontFamily: "Inter_600SemiBold" }]}>{PURPOSE_AR[flock.purpose]}</Text>
@@ -82,19 +82,19 @@ function AddFlockModal({ visible, onClose }: { visible: boolean; onClose: () => 
   const [name, setName] = useState("");
   const [breed, setBreed] = useState("");
   const [count, setCount] = useState("");
-  const [age, setAge] = useState("");
+  const [ageDays, setAgeDays] = useState("");
   const [purpose, setPurpose] = useState<"eggs" | "meat" | "hatching" | "mixed">("eggs");
   const [notes, setNotes] = useState("");
 
-  const reset = () => { setName(""); setBreed(""); setCount(""); setAge(""); setPurpose("eggs"); setNotes(""); };
+  const reset = () => { setName(""); setBreed(""); setCount(""); setAgeDays(""); setPurpose("eggs"); setNotes(""); };
 
   const submit = () => {
-    if (!name.trim() || !breed.trim() || !count || !age) {
+    if (!name.trim() || !breed.trim() || !count || !ageDays) {
       Alert.alert("تنبيه", "يرجى ملء جميع الحقول المطلوبة");
       return;
     }
     createFlock.mutate(
-      { data: { name: name.trim(), breed: breed.trim(), count: parseInt(count), ageWeeks: parseInt(age), purpose, notes: notes.trim() || undefined } },
+      { data: { name: name.trim(), breed: breed.trim(), count: parseInt(count), ageDays: parseInt(ageDays), purpose, notes: notes.trim() || undefined } },
       {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -133,9 +133,9 @@ function AddFlockModal({ visible, onClose }: { visible: boolean; onClose: () => 
                   placeholder="127" placeholderTextColor={colors.mutedForeground} value={count} onChangeText={setCount} keyboardType="number-pad" textAlign="right" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>العمر (أسابيع) *</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>العمر (أيام) *</Text>
                 <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-                  placeholder="22" placeholderTextColor={colors.mutedForeground} value={age} onChangeText={setAge} keyboardType="number-pad" textAlign="right" />
+                  placeholder="35" placeholderTextColor={colors.mutedForeground} value={ageDays} onChangeText={setAgeDays} keyboardType="number-pad" textAlign="right" />
               </View>
             </View>
 

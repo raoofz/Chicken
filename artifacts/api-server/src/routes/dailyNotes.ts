@@ -4,7 +4,19 @@ import { eq, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/notes", async (req, res) => {
+function requireAdmin(req: any, res: any, next: any) {
+  if (!req.session.userId) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+  if (req.session.role !== "admin") {
+    res.status(403).json({ error: "هذه الميزة للمديرين فقط" });
+    return;
+  }
+  next();
+}
+
+router.get("/notes", requireAdmin, async (req, res) => {
   const { date } = req.query as { date?: string };
   let notes;
   if (date) {
@@ -19,7 +31,7 @@ router.get("/notes", async (req, res) => {
   res.json(notes.map(n => ({ ...n, createdAt: n.createdAt.toISOString() })));
 });
 
-router.post("/notes", async (req, res) => {
+router.post("/notes", requireAdmin, async (req, res) => {
   const { content, date, category, authorName } = req.body as {
     content: string;
     date: string;
@@ -40,7 +52,7 @@ router.post("/notes", async (req, res) => {
   res.status(201).json({ ...note, createdAt: note.createdAt.toISOString() });
 });
 
-router.delete("/notes/:id", async (req, res) => {
+router.delete("/notes/:id", requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   await db.delete(dailyNotesTable).where(eq(dailyNotesTable.id, id));
   res.status(204).send();

@@ -69,7 +69,7 @@ function FlockForm({
     name: initial?.name ?? "",
     breed: initial?.breed ?? "",
     count: initial?.count ?? 1,
-    ageWeeks: initial?.ageWeeks ?? 1,
+    ageDays: initial?.ageDays ?? 1,
     purpose: initial?.purpose ?? "eggs",
     notes: initial?.notes ?? "",
   });
@@ -107,12 +107,12 @@ function FlockForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label>العمر (أسابيع) *</Label>
+          <Label>العمر (أيام) *</Label>
           <Input
             type="number"
             min={1}
-            value={form.ageWeeks}
-            onChange={(e) => setForm((f) => ({ ...f, ageWeeks: Number(e.target.value) }))}
+            value={form.ageDays}
+            onChange={(e) => setForm((f) => ({ ...f, ageDays: Number(e.target.value) }))}
             required
           />
         </div>
@@ -259,8 +259,8 @@ export default function Flocks() {
                     <div className="text-muted-foreground text-xs mt-0.5">طير</div>
                   </div>
                   <div className="bg-muted/50 rounded-xl p-3 text-center">
-                    <div className="font-bold text-xl text-primary">{flock.ageWeeks}</div>
-                    <div className="text-muted-foreground text-xs mt-0.5">أسبوع</div>
+                    <div className="font-bold text-xl text-primary">{flock.ageDays}</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">يوم</div>
                   </div>
                 </div>
                 {flock.notes && (

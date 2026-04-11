@@ -7,7 +7,7 @@ export const flocksTable = pgTable("flocks", {
   name: text("name").notNull(),
   breed: text("breed").notNull(),
   count: integer("count").notNull(),
-  ageWeeks: integer("age_weeks").notNull(),
+  ageDays: integer("age_days").notNull(),
   purpose: text("purpose").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
