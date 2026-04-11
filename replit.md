@@ -1,8 +1,12 @@
-# Workspace
+# Workspace — مدير المزرعة (Poultry Farm Manager)
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Full-stack Arabic RTL poultry farm management system. pnpm workspace monorepo with:
+- **Web App** (react-vite) at `/` — Arabic RTL dashboard for desktop/browser
+- **Mobile App** (expo) at `/mobile/` — Arabic RTL native mobile app (iOS/Android via Expo Go)
+- **API Server** (express) — shared backend for both web and mobile
+- User's farm: 127 chickens in 2 groups (10 at 40 weeks, 117 at 22 weeks), 400 eggs in hatching cycle day 21
 
 ## Stack
 

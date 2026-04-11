@@ -43,8 +43,8 @@ function FlockForm({ initial, onSubmit, onClose }: {
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2 space-y-1.5">
-          <Label>اسم القطيع</Label>
-          <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="مثل: القطيع الرئيسي" required />
+          <Label>اسم المجموعة</Label>
+          <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="مثل: الدجاجات الرئيسية" required />
         </div>
         <div className="space-y-1.5">
           <Label>السلالة</Label>
@@ -97,22 +97,22 @@ export default function Flocks() {
 
   const handleCreate = async (data: any) => {
     await createFlock.mutateAsync({ data });
-    toast({ title: "تم إضافة القطيع بنجاح" });
+    toast({ title: "تمت إضافة الدجاجات بنجاح" });
     setOpen(false);
     refresh();
   };
 
   const handleUpdate = async (data: any) => {
     await updateFlock.mutateAsync({ id: editItem.id, data });
-    toast({ title: "تم تحديث القطيع" });
+    toast({ title: "تم تحديث الدجاجات" });
     setEditItem(null);
     refresh();
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("هل أنت متأكد من حذف هذا القطيع؟")) return;
+    if (!confirm("هل أنت متأكد من حذف هذه المجموعة؟")) return;
     await deleteFlock.mutateAsync({ id });
-    toast({ title: "تم حذف القطيع" });
+    toast({ title: "تم حذف المجموعة" });
     refresh();
   };
 
@@ -120,15 +120,15 @@ export default function Flocks() {
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">القطعان</h1>
-          <p className="text-muted-foreground text-sm">إدارة قطعان الدواجن وبياناتها</p>
+          <h1 className="text-2xl font-bold">الدجاجات</h1>
+          <p className="text-muted-foreground text-sm">إدارة مجموعات الدجاجات وبياناتها</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="w-4 h-4" />إضافة قطيع</Button>
+            <Button className="gap-2"><Plus className="w-4 h-4" />إضافة مجموعة</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>إضافة قطيع جديد</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>إضافة مجموعة دجاجات جديدة</DialogTitle></DialogHeader>
             <FlockForm onSubmit={handleCreate} onClose={() => setOpen(false)} />
           </DialogContent>
         </Dialog>
@@ -142,8 +142,8 @@ export default function Flocks() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Bird className="w-12 h-12 text-muted-foreground/40 mb-4" />
-            <h3 className="font-semibold text-lg mb-1">لا توجد قطعان بعد</h3>
-            <p className="text-muted-foreground text-sm">أضف أول قطيع لبدء المتابعة</p>
+            <h3 className="font-semibold text-lg mb-1">لا توجد دجاجات بعد</h3>
+            <p className="text-muted-foreground text-sm">أضف أول مجموعة دجاجات لبدء المتابعة</p>
           </CardContent>
         </Card>
       ) : (
@@ -189,7 +189,7 @@ export default function Flocks() {
 
       <Dialog open={!!editItem} onOpenChange={v => !v && setEditItem(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>تعديل القطيع</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>تعديل مجموعة الدجاجات</DialogTitle></DialogHeader>
           {editItem && <FlockForm initial={editItem} onSubmit={handleUpdate} onClose={() => setEditItem(null)} />}
         </DialogContent>
       </Dialog>

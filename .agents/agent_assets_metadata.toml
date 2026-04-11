@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "vYuPDVrWZp9d1xENGa29-"
+uri = "file://artifacts/poultry-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"

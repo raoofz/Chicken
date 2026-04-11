@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "لوحة المتابعة", icon: LayoutDashboard },
-  { href: "/flocks", label: "القطعان", icon: Bird },
+  { href: "/flocks", label: "الدجاجات", icon: Bird },
   { href: "/hatching", label: "التفقيس", icon: Egg },
   { href: "/tasks", label: "المهام اليومية", icon: CheckSquare },
   { href: "/goals", label: "الأهداف", icon: Target },
