@@ -12,10 +12,22 @@ export interface CreateHatchingCycleBody {
   eggsSet: number;
   eggsHatched?: number | null;
   startDate: string;
+  /** Time eggs were set (HH:MM) */
+  setTime?: string | null;
   expectedHatchDate: string;
   actualHatchDate?: string | null;
+  /** Date eggs moved to lockdown (day 18) */
+  lockdownDate?: string | null;
+  /** Time eggs moved to lockdown (HH:MM) */
+  lockdownTime?: string | null;
   status: CreateHatchingCycleBodyStatus;
+  /** Incubation temperature days 1-18 (°C) */
   temperature?: number | null;
+  /** Incubation humidity days 1-18 (%) */
   humidity?: number | null;
+  /** Lockdown temperature days 18-21 (°C) */
+  lockdownTemperature?: number | null;
+  /** Lockdown humidity days 18-21 (%) */
+  lockdownHumidity?: number | null;
   notes?: string | null;
 }

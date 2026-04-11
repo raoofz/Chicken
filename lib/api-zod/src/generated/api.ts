@@ -102,11 +102,34 @@ export const ListHatchingCyclesResponseItem = zod.object({
   eggsSet: zod.number(),
   eggsHatched: zod.number().nullish(),
   startDate: zod.string(),
+  setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
   expectedHatchDate: zod.string(),
   actualHatchDate: zod.string().nullish(),
+  lockdownDate: zod
+    .string()
+    .nullish()
+    .describe("Date eggs moved to lockdown (day 18)"),
+  lockdownTime: zod
+    .string()
+    .nullish()
+    .describe("Time eggs moved to lockdown (HH:MM)"),
   status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-  temperature: zod.number().nullish(),
-  humidity: zod.number().nullish(),
+  temperature: zod
+    .number()
+    .nullish()
+    .describe("Incubation temperature days 1-18 (°C)"),
+  humidity: zod
+    .number()
+    .nullish()
+    .describe("Incubation humidity days 1-18 (%)"),
+  lockdownTemperature: zod
+    .number()
+    .nullish()
+    .describe("Lockdown temperature days 18-21 (°C)"),
+  lockdownHumidity: zod
+    .number()
+    .nullish()
+    .describe("Lockdown humidity days 18-21 (%)"),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
 });
@@ -122,11 +145,34 @@ export const CreateHatchingCycleBody = zod.object({
   eggsSet: zod.number(),
   eggsHatched: zod.number().nullish(),
   startDate: zod.string(),
+  setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
   expectedHatchDate: zod.string(),
   actualHatchDate: zod.string().nullish(),
+  lockdownDate: zod
+    .string()
+    .nullish()
+    .describe("Date eggs moved to lockdown (day 18)"),
+  lockdownTime: zod
+    .string()
+    .nullish()
+    .describe("Time eggs moved to lockdown (HH:MM)"),
   status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-  temperature: zod.number().nullish(),
-  humidity: zod.number().nullish(),
+  temperature: zod
+    .number()
+    .nullish()
+    .describe("Incubation temperature days 1-18 (°C)"),
+  humidity: zod
+    .number()
+    .nullish()
+    .describe("Incubation humidity days 1-18 (%)"),
+  lockdownTemperature: zod
+    .number()
+    .nullish()
+    .describe("Lockdown temperature days 18-21 (°C)"),
+  lockdownHumidity: zod
+    .number()
+    .nullish()
+    .describe("Lockdown humidity days 18-21 (%)"),
   notes: zod.string().nullish(),
 });
 
@@ -143,11 +189,34 @@ export const GetHatchingCycleResponse = zod.object({
   eggsSet: zod.number(),
   eggsHatched: zod.number().nullish(),
   startDate: zod.string(),
+  setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
   expectedHatchDate: zod.string(),
   actualHatchDate: zod.string().nullish(),
+  lockdownDate: zod
+    .string()
+    .nullish()
+    .describe("Date eggs moved to lockdown (day 18)"),
+  lockdownTime: zod
+    .string()
+    .nullish()
+    .describe("Time eggs moved to lockdown (HH:MM)"),
   status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-  temperature: zod.number().nullish(),
-  humidity: zod.number().nullish(),
+  temperature: zod
+    .number()
+    .nullish()
+    .describe("Incubation temperature days 1-18 (°C)"),
+  humidity: zod
+    .number()
+    .nullish()
+    .describe("Incubation humidity days 1-18 (%)"),
+  lockdownTemperature: zod
+    .number()
+    .nullish()
+    .describe("Lockdown temperature days 18-21 (°C)"),
+  lockdownHumidity: zod
+    .number()
+    .nullish()
+    .describe("Lockdown humidity days 18-21 (%)"),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
 });
@@ -164,11 +233,34 @@ export const UpdateHatchingCycleBody = zod.object({
   eggsSet: zod.number(),
   eggsHatched: zod.number().nullish(),
   startDate: zod.string(),
+  setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
   expectedHatchDate: zod.string(),
   actualHatchDate: zod.string().nullish(),
+  lockdownDate: zod
+    .string()
+    .nullish()
+    .describe("Date eggs moved to lockdown (day 18)"),
+  lockdownTime: zod
+    .string()
+    .nullish()
+    .describe("Time eggs moved to lockdown (HH:MM)"),
   status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-  temperature: zod.number().nullish(),
-  humidity: zod.number().nullish(),
+  temperature: zod
+    .number()
+    .nullish()
+    .describe("Incubation temperature days 1-18 (°C)"),
+  humidity: zod
+    .number()
+    .nullish()
+    .describe("Incubation humidity days 1-18 (%)"),
+  lockdownTemperature: zod
+    .number()
+    .nullish()
+    .describe("Lockdown temperature days 18-21 (°C)"),
+  lockdownHumidity: zod
+    .number()
+    .nullish()
+    .describe("Lockdown humidity days 18-21 (%)"),
   notes: zod.string().nullish(),
 });
 
@@ -178,11 +270,34 @@ export const UpdateHatchingCycleResponse = zod.object({
   eggsSet: zod.number(),
   eggsHatched: zod.number().nullish(),
   startDate: zod.string(),
+  setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
   expectedHatchDate: zod.string(),
   actualHatchDate: zod.string().nullish(),
+  lockdownDate: zod
+    .string()
+    .nullish()
+    .describe("Date eggs moved to lockdown (day 18)"),
+  lockdownTime: zod
+    .string()
+    .nullish()
+    .describe("Time eggs moved to lockdown (HH:MM)"),
   status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-  temperature: zod.number().nullish(),
-  humidity: zod.number().nullish(),
+  temperature: zod
+    .number()
+    .nullish()
+    .describe("Incubation temperature days 1-18 (°C)"),
+  humidity: zod
+    .number()
+    .nullish()
+    .describe("Incubation humidity days 1-18 (%)"),
+  lockdownTemperature: zod
+    .number()
+    .nullish()
+    .describe("Lockdown temperature days 18-21 (°C)"),
+  lockdownHumidity: zod
+    .number()
+    .nullish()
+    .describe("Lockdown humidity days 18-21 (%)"),
   notes: zod.string().nullish(),
   createdAt: zod.string(),
 });
@@ -399,11 +514,34 @@ export const GetHatchStatsResponse = zod.object({
       eggsSet: zod.number(),
       eggsHatched: zod.number().nullish(),
       startDate: zod.string(),
+      setTime: zod.string().nullish().describe("Time eggs were set (HH:MM)"),
       expectedHatchDate: zod.string(),
       actualHatchDate: zod.string().nullish(),
+      lockdownDate: zod
+        .string()
+        .nullish()
+        .describe("Date eggs moved to lockdown (day 18)"),
+      lockdownTime: zod
+        .string()
+        .nullish()
+        .describe("Time eggs moved to lockdown (HH:MM)"),
       status: zod.enum(["incubating", "hatching", "completed", "failed"]),
-      temperature: zod.number().nullish(),
-      humidity: zod.number().nullish(),
+      temperature: zod
+        .number()
+        .nullish()
+        .describe("Incubation temperature days 1-18 (°C)"),
+      humidity: zod
+        .number()
+        .nullish()
+        .describe("Incubation humidity days 1-18 (%)"),
+      lockdownTemperature: zod
+        .number()
+        .nullish()
+        .describe("Lockdown temperature days 18-21 (°C)"),
+      lockdownHumidity: zod
+        .number()
+        .nullish()
+        .describe("Lockdown humidity days 18-21 (%)"),
       notes: zod.string().nullish(),
       createdAt: zod.string(),
     }),

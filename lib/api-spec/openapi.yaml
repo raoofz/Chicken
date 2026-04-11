@@ -514,20 +514,42 @@ components:
           nullable: true
         startDate:
           type: string
+        setTime:
+          type: string
+          nullable: true
+          description: "Time eggs were set (HH:MM)"
         expectedHatchDate:
           type: string
         actualHatchDate:
           type: string
           nullable: true
+        lockdownDate:
+          type: string
+          nullable: true
+          description: "Date eggs moved to lockdown (day 18)"
+        lockdownTime:
+          type: string
+          nullable: true
+          description: "Time eggs moved to lockdown (HH:MM)"
         status:
           type: string
           enum: [incubating, hatching, completed, failed]
         temperature:
           type: number
           nullable: true
+          description: "Incubation temperature days 1-18 (°C)"
         humidity:
           type: number
           nullable: true
+          description: "Incubation humidity days 1-18 (%)"
+        lockdownTemperature:
+          type: number
+          nullable: true
+          description: "Lockdown temperature days 18-21 (°C)"
+        lockdownHumidity:
+          type: number
+          nullable: true
+          description: "Lockdown humidity days 18-21 (%)"
         notes:
           type: string
           nullable: true
@@ -554,20 +576,42 @@ components:
           nullable: true
         startDate:
           type: string
+        setTime:
+          type: string
+          nullable: true
+          description: "Time eggs were set (HH:MM)"
         expectedHatchDate:
           type: string
         actualHatchDate:
           type: string
           nullable: true
+        lockdownDate:
+          type: string
+          nullable: true
+          description: "Date eggs moved to lockdown (day 18)"
+        lockdownTime:
+          type: string
+          nullable: true
+          description: "Time eggs moved to lockdown (HH:MM)"
         status:
           type: string
           enum: [incubating, hatching, completed, failed]
         temperature:
           type: number
           nullable: true
+          description: "Incubation temperature days 1-18 (°C)"
         humidity:
           type: number
           nullable: true
+          description: "Incubation humidity days 1-18 (%)"
+        lockdownTemperature:
+          type: number
+          nullable: true
+          description: "Lockdown temperature days 18-21 (°C)"
+        lockdownHumidity:
+          type: number
+          nullable: true
+          description: "Lockdown humidity days 18-21 (%)"
         notes:
           type: string
           nullable: true

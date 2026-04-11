@@ -45,6 +45,36 @@ function getDaysSince(dateStr: string) {
   return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function PhaseRow({ label, temp, humidity, date, time, color }: { label: string; temp?: number | null; humidity?: number | null; date?: string | null; time?: string | null; color: string }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.phaseRow, { backgroundColor: color + "18", borderColor: color + "40" }]}>
+      <Text style={[styles.phaseLabel, { color, fontFamily: "Inter_600SemiBold" }]}>{label}</Text>
+      <View style={{ flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+        {date && (
+          <View style={styles.phasePill}>
+            <Feather name="calendar" size={11} color={colors.mutedForeground} />
+            <Text style={[styles.pillText, { color: colors.mutedForeground }]}>{date}</Text>
+            {time && <Text style={[styles.pillText, { color: colors.mutedForeground }]}>{time}</Text>}
+          </View>
+        )}
+        {temp != null && (
+          <View style={styles.phasePill}>
+            <Feather name="thermometer" size={11} color="#E74C3C" />
+            <Text style={[styles.pillText, { color: colors.text }]}>{temp}°م</Text>
+          </View>
+        )}
+        {humidity != null && (
+          <View style={styles.phasePill}>
+            <Feather name="droplet" size={11} color="#3498DB" />
+            <Text style={[styles.pillText, { color: colors.text }]}>{humidity}%</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function CycleCard({ cycle, onDelete, isAdmin }: { cycle: any; onDelete: (id: number) => void; isAdmin: boolean }) {
   const colors = useColors();
   const qc = useQueryClient();
@@ -53,6 +83,7 @@ function CycleCard({ cycle, onDelete, isAdmin }: { cycle: any; onDelete: (id: nu
   const days = getDaysSince(cycle.startDate);
   const progress = Math.min(days / 21, 1);
   const hatchRate = cycle.eggsHatched != null ? Math.round((cycle.eggsHatched / cycle.eggsSet) * 100) : null;
+  const isLockdown = days >= 18 && (cycle.status === "incubating" || cycle.status === "hatching");
 
   const markCompleted = () => {
     Alert.prompt("نتيجة التفقيس", "كم عدد البيض الذي فقس؟", [
@@ -87,9 +118,16 @@ function CycleCard({ cycle, onDelete, isAdmin }: { cycle: any; onDelete: (id: nu
         )}
         <View style={{ flex: 1, alignItems: "flex-end" }}>
           <Text style={[styles.cycleName, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{cycle.batchName}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: badgeColor + "20" }]}>
-            <View style={[styles.statusDot, { backgroundColor: badgeColor }]} />
-            <Text style={[styles.statusText, { color: badgeColor, fontFamily: "Inter_600SemiBold" }]}>{STATUS_AR[cycle.status]}</Text>
+          <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <View style={[styles.statusBadge, { backgroundColor: badgeColor + "20" }]}>
+              <View style={[styles.statusDot, { backgroundColor: badgeColor }]} />
+              <Text style={[styles.statusText, { color: badgeColor, fontFamily: "Inter_600SemiBold" }]}>{STATUS_AR[cycle.status]}</Text>
+            </View>
+            {isLockdown && (
+              <View style={[styles.statusBadge, { backgroundColor: "#FF6B3520" }]}>
+                <Text style={[styles.statusText, { color: "#FF6B35", fontFamily: "Inter_600SemiBold" }]}>مرحلة الإقفال</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -116,23 +154,61 @@ function CycleCard({ cycle, onDelete, isAdmin }: { cycle: any; onDelete: (id: nu
         )}
       </View>
 
+      {/* Phase 1 */}
+      <PhaseRow
+        label="التحضين (1–18)"
+        temp={cycle.temperature}
+        humidity={cycle.humidity}
+        date={cycle.startDate}
+        time={cycle.setTime}
+        color="#3498DB"
+      />
+
+      {/* Phase 2 */}
+      <PhaseRow
+        label="الإقفال (18–21)"
+        temp={cycle.lockdownTemperature}
+        humidity={cycle.lockdownHumidity}
+        date={cycle.lockdownDate}
+        time={cycle.lockdownTime}
+        color="#E67E22"
+      />
+
       {cycle.status !== "completed" && cycle.status !== "failed" && (
         <View style={{ marginTop: 12 }}>
           <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", marginBottom: 6 }}>
-            <Text style={[styles.progressLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>اليوم {days} من 21</Text>
+            <Text style={[styles.progressLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              اليوم {days} من 21 {days >= 18 ? "🔒" : ""}
+            </Text>
             <Text style={[styles.progressLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               متبقي {Math.max(0, 21 - days)} يوم
             </Text>
           </View>
           <View style={[styles.progressTrack, { backgroundColor: colors.secondary }]}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: badgeColor }]} />
+            <View style={[
+              styles.progressFill,
+              {
+                width: `${Math.min((days / 18) * 100, 100)}%` as any,
+                backgroundColor: days >= 18 ? "#E67E22" : "#3498DB"
+              }
+            ]} />
+          </View>
+          <View style={{ flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 4 }}>
+            <Text style={{ fontSize: 10, color: "#3498DB", fontFamily: "Inter_400Regular" }}>تحضين</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+              <Text style={{ fontSize: 10, color: "#E67E22", fontFamily: "Inter_400Regular" }}>إقفال</Text>
+              <View style={{ width: 1, height: 8, backgroundColor: colors.border, marginHorizontal: 4 }} />
+              <Text style={{ fontSize: 10, color: colors.mutedForeground }}>اليوم 18</Text>
+            </View>
           </View>
         </View>
       )}
 
-      <Text style={[styles.dateInfo, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        بدأ: {cycle.startDate} · موعد التفقيس: {cycle.expectedHatchDate}
-      </Text>
+      {cycle.actualHatchDate && (
+        <Text style={[styles.dateInfo, { color: colors.success, fontFamily: "Inter_400Regular" }]}>
+          ✓ فقس فعلياً: {cycle.actualHatchDate}
+        </Text>
+      )}
     </View>
   );
 }
@@ -144,23 +220,42 @@ function AddCycleModal({ visible, onClose }: { visible: boolean; onClose: () => 
   const [name, setName] = useState("");
   const [eggs, setEggs] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [setTime, setSetTime] = useState("");
+  const [temp1, setTemp1] = useState("37.8");
+  const [humidity1, setHumidity1] = useState("56");
+  const [temp2, setTemp2] = useState("37.2");
+  const [humidity2, setHumidity2] = useState("70");
   const insets = useSafeAreaInsets();
 
-  const expectedDate = () => {
+  const getDate = (offset: number) => {
     const d = new Date(startDate);
-    d.setDate(d.getDate() + 21);
+    d.setDate(d.getDate() + offset);
     return d.toISOString().split("T")[0];
   };
 
   const submit = () => {
-    if (!name.trim() || !eggs) { Alert.alert("تنبيه", "يرجى ملء جميع الحقول"); return; }
+    if (!name.trim() || !eggs) { Alert.alert("تنبيه", "يرجى ملء اسم الدفعة وعدد البيض"); return; }
     createCycle.mutate(
-      { data: { batchName: name.trim(), eggsSet: parseInt(eggs), startDate, expectedHatchDate: expectedDate(), status: "incubating" } },
+      {
+        data: {
+          batchName: name.trim(),
+          eggsSet: parseInt(eggs),
+          startDate,
+          setTime: setTime || undefined,
+          expectedHatchDate: getDate(21),
+          lockdownDate: getDate(18),
+          status: "incubating",
+          temperature: temp1 ? parseFloat(temp1) : undefined,
+          humidity: humidity1 ? parseFloat(humidity1) : undefined,
+          lockdownTemperature: temp2 ? parseFloat(temp2) : undefined,
+          lockdownHumidity: humidity2 ? parseFloat(humidity2) : undefined,
+        }
+      },
       {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           qc.invalidateQueries({ queryKey: getListHatchingCyclesQueryKey() });
-          setName(""); setEggs("");
+          setName(""); setEggs(""); setSetTime("");
           onClose();
         },
         onError: () => Alert.alert("خطأ", "فشل في إضافة دورة التفقيس"),
@@ -173,38 +268,83 @@ function AddCycleModal({ visible, onClose }: { visible: boolean; onClose: () => 
       <View style={styles.modalOverlay}>
         <View style={[styles.modalSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 }]}>
           <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.modalTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>دورة تفقيس جديدة</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={[styles.modalTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>دورة تفقيس جديدة</Text>
 
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>اسم الدفعة *</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            placeholder="مثال: الدفعة الثالثة" placeholderTextColor={colors.mutedForeground} value={name} onChangeText={setName} textAlign="right" />
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>اسم الدفعة *</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              placeholder="مثال: الدفعة الثالثة" placeholderTextColor={colors.mutedForeground} value={name} onChangeText={setName} textAlign="right" />
 
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>عدد البيض *</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            placeholder="400" placeholderTextColor={colors.mutedForeground} value={eggs} onChangeText={setEggs} keyboardType="number-pad" textAlign="right" />
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>عدد البيض *</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+              placeholder="مثال: 400" placeholderTextColor={colors.mutedForeground} value={eggs} onChangeText={setEggs} keyboardType="number-pad" textAlign="right" />
 
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>تاريخ البدء</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+            {/* Phase 1 */}
+            <View style={[styles.phaseSection, { borderColor: "#3498DB40", backgroundColor: "#3498DB08" }]}>
+              <Text style={[styles.phaseSectionTitle, { color: "#3498DB" }]}>المرحلة الأولى — تحضين (1–18)</Text>
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>تاريخ الوضع</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>الساعة</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={setTime} onChangeText={setSetTime} placeholder="08:30" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+              </View>
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>درجة الحرارة °م</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={temp1} onChangeText={setTemp1} keyboardType="decimal-pad" placeholder="37.8" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>الرطوبة %</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={humidity1} onChangeText={setHumidity1} keyboardType="decimal-pad" placeholder="56" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+              </View>
+            </View>
 
-          {eggs && startDate && (
+            {/* Phase 2 */}
+            <View style={[styles.phaseSection, { borderColor: "#E67E2240", backgroundColor: "#E67E2208" }]}>
+              <Text style={[styles.phaseSectionTitle, { color: "#E67E22" }]}>المرحلة الثانية — إقفال وفقس (18–21)</Text>
+              <Text style={[styles.phaseAutoNote, { color: colors.mutedForeground }]}>
+                موعد الإقفال تلقائي: {startDate ? (() => { const d = new Date(startDate); d.setDate(d.getDate() + 18); return d.toISOString().split("T")[0]; })() : "--"}
+              </Text>
+              <View style={{ flexDirection: "row-reverse", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>درجة الحرارة °م</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={temp2} onChangeText={setTemp2} keyboardType="decimal-pad" placeholder="37.2" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.label, { color: colors.mutedForeground }]}>الرطوبة %</Text>
+                  <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+                    value={humidity2} onChangeText={setHumidity2} keyboardType="decimal-pad" placeholder="70" placeholderTextColor={colors.mutedForeground} textAlign="right" />
+                </View>
+              </View>
+            </View>
+
             <View style={[styles.infoBox, { backgroundColor: colors.secondary }]}>
               <Feather name="info" size={14} color={colors.primary} />
               <Text style={[styles.infoText, { color: colors.text, fontFamily: "Inter_400Regular" }]}>
-                موعد التفقيس المتوقع: {expectedDate()}
+                الدورة 21 يوم — تحضين 18 يوم ثم إقفال وفقس
               </Text>
             </View>
-          )}
 
-          <View style={{ flexDirection: "row-reverse", gap: 12, marginTop: 16 }}>
-            <Pressable onPress={onClose} style={[styles.btn, { backgroundColor: colors.secondary, flex: 1 }]}>
-              <Text style={[styles.btnText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>إلغاء</Text>
-            </Pressable>
-            <Pressable onPress={submit} style={[styles.btn, { backgroundColor: colors.primary, flex: 2 }]}>
-              {createCycle.isPending ? <ActivityIndicator color="#fff" /> :
-                <Text style={[styles.btnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>إضافة</Text>}
-            </Pressable>
-          </View>
+            <View style={{ flexDirection: "row-reverse", gap: 12, marginTop: 16 }}>
+              <Pressable onPress={onClose} style={[styles.btn, { backgroundColor: colors.secondary, flex: 1 }]}>
+                <Text style={[styles.btnText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>إلغاء</Text>
+              </Pressable>
+              <Pressable onPress={submit} style={[styles.btn, { backgroundColor: colors.primary, flex: 2 }]}>
+                {createCycle.isPending ? <ActivityIndicator color="#fff" /> :
+                  <Text style={[styles.btnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>إضافة</Text>}
+              </Pressable>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -235,6 +375,7 @@ export default function HatchingScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.topBar, { paddingTop: topPad + 8 }]}>
         <Text style={[styles.pageTitle, { color: colors.text, fontFamily: "Inter_700Bold" }]}>الفقاسة</Text>
+        <Text style={[styles.pageSubtitle, { color: colors.mutedForeground }]}>دورة 21 يوم | تحضين ثم إقفال</Text>
       </View>
 
       {isLoading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} /> : (
@@ -278,6 +419,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   topBar: { paddingHorizontal: 16, paddingBottom: 12 },
   pageTitle: { fontSize: 26, textAlign: "right" },
+  pageSubtitle: { fontSize: 13, textAlign: "right", marginTop: 2 },
   groupLabel: { fontSize: 13, textAlign: "right", marginBottom: 8, marginTop: 4 },
   card: {
     borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12,
@@ -289,10 +431,14 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: "flex-end" },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 12 },
-  eggsRow: { flexDirection: "row-reverse", gap: 8 },
+  eggsRow: { flexDirection: "row-reverse", gap: 8, marginBottom: 10 },
   eggStat: { flex: 1, alignItems: "center", padding: 10, borderRadius: 12, gap: 2 },
   eggNum: { fontSize: 18 },
   eggLabel: { fontSize: 11 },
+  phaseRow: { borderRadius: 10, borderWidth: 1, padding: 10, marginBottom: 8 },
+  phaseLabel: { fontSize: 12, textAlign: "right" },
+  phasePill: { flexDirection: "row-reverse", alignItems: "center", gap: 4, backgroundColor: "rgba(0,0,0,0.05)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 },
+  pillText: { fontSize: 11 },
   progressLabel: { fontSize: 12 },
   progressTrack: { height: 8, borderRadius: 4, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 4 },
@@ -306,11 +452,14 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
   },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
-  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  modalSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: "90%" },
   modalHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
   modalTitle: { fontSize: 20, textAlign: "right", marginBottom: 20 },
   label: { fontSize: 13, textAlign: "right", marginBottom: 6, fontFamily: "Inter_500Medium" },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, fontSize: 15, marginBottom: 14 },
+  phaseSection: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  phaseSectionTitle: { fontSize: 13, fontFamily: "Inter_700Bold", textAlign: "right", marginBottom: 10 },
+  phaseAutoNote: { fontSize: 12, textAlign: "right", marginBottom: 8 },
   infoBox: { flexDirection: "row-reverse", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, marginBottom: 8 },
   infoText: { fontSize: 13 },
   btn: { paddingVertical: 14, borderRadius: 12, alignItems: "center" },

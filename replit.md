@@ -6,7 +6,6 @@ Full-stack Arabic RTL poultry farm management system. pnpm workspace monorepo wi
 - **Web App** (react-vite) at `/` — Arabic RTL dashboard for desktop/browser
 - **Mobile App** (expo) at `/mobile/` — Arabic RTL native mobile app (iOS/Android via Expo Go)
 - **API Server** (express) — shared backend for both web and mobile
-- User's farm: 127 chickens in 2 groups (10 at 40 weeks, 117 at 22 weeks), 400 eggs in hatching cycle day 21
 
 ## Stack
 
@@ -17,7 +16,7 @@ Full-stack Arabic RTL poultry farm management system. pnpm workspace monorepo wi
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
+- **API codegen**: Orval (from OpenAPI spec at `lib/api-spec/openapi.yaml`)
 - **Build**: esbuild (CJS bundle)
 
 ## Key Commands
@@ -33,8 +32,9 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ## Authentication
 
 - **Session-based** via express-session + bcrypt
-- **Default admin**: `admin` / `admin123`  
-- **Default worker**: `worker` / `worker123`
+- **User accounts** (all password: `1234`):
+  - Admins: `yones` (يونس), `raoof` (رؤوف), `nassar` (ناصر)
+  - Workers: `hoobi` (هوبي), `abood` (عبود)
 - Session stored in DB, session secret in `SESSION_SECRET` env var
 - Auth routes: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
 - Web app: `AuthContext.tsx` wraps all pages; login redirects to dashboard
@@ -47,25 +47,28 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 | View all data | ✅ | ✅ |
 | Add/Edit/Delete records | ✅ | ❌ (read-only) |
 | AI Analysis page | ✅ | ❌ (hidden) |
-| Daily Notes | ✅ | ✅ |
+| Daily Notes | ✅ | ❌ (hidden + API protected) |
 
 ## Features
 
 ### Web App (artifacts/poultry-manager)
-- **Login page** — Arabic RTL, chicken logo, shows default credentials
-- **Dashboard** — stats cards (chickens, flocks, hatching rate), today's tasks
-- **Flocks** (الدجاجات) — CRUD for chicken groups, AlertDialog for delete confirmation
-- **Hatching** (دورات التفقيس) — manage incubation cycles with progress tracking
+- **Login page** — Arabic RTL, chicken logo, no default credentials shown
+- **Dashboard** — clickable stat cards (navigate to /flocks, /hatching, /tasks, /goals)
+- **Flocks** (الدجاجات) — CRUD for chicken groups, age in days (ageDays), AlertDialog for delete
+- **Hatching** (دورات التفقيس) — 21-day cycle with 2-phase system:
+  - Phase 1 (days 1-18): incubation temp/humidity + time eggs placed (HH:MM)
+  - Phase 2 (days 18-21): lockdown temp/humidity + time eggs transferred (HH:MM)
 - **Tasks** (مهام اليوم) — daily task management with categories & priorities
 - **Goals** (الأهداف) — progress tracking with progress bars
-- **Notes** (المذكرات) — daily journal with date navigation
+- **Notes** (المذكرات) — daily journal, admin-only
 - **AI Insights** (تحليل AI) — admin-only, uses OpenAI gpt-4o for farm analysis
-- **Role-based UI** — admin sees full CRUD; worker sees read-only views
+- **Logs** (سجل النشاط) — activity log
 
 ### Mobile App (artifacts/poultry-mobile)
 - Login screen with username/password fields in Arabic
 - All tabs: الرئيسية, الدجاجات, الفقاسة, المهام, الأهداف
 - Dashboard shows user name, role badge (مدير/عامل), logout button
+- Hatching tab: shows 2-phase system (blue=incubation, orange=lockdown) with progress bar
 - Role-based: workers see read-only (no FAB, no delete/edit buttons)
 - Pull-to-refresh on all screens
 
@@ -76,29 +79,32 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Fonts**: Tajawal/Cairo (web), Inter (mobile)
 - **Language**: Arabic UI with English field names in DB
 
-## DB Schema (packages/db/src/schema.ts)
+## DB Schema
 
 Tables:
-- `flocks` — chicken groups (name, breed, count, ageWeeks, purpose, notes)
+- `flocks` — chicken groups (name, breed, count, ageDays, purpose, notes)
 - `tasks` — daily tasks (title, category, priority, dueDate, completed)
-- `hatchingCycles` — incubation cycles (batchName, eggsSet, eggsHatched, startDate, status)
+- `hatching_cycles` — incubation cycles:
+  - Phase 1: startDate, setTime (HH:MM), temperature, humidity (days 1-18)
+  - Phase 2: lockdownDate, lockdownTime (HH:MM), lockdownTemperature, lockdownHumidity (days 18-21)
 - `goals` — farm goals (title, targetValue, currentValue, unit, category)
 - `users` — auth users (username, passwordHash, name, role)
-- `dailyNotes` — daily journal (date, content, authorId)
+- `daily_notes` — daily journal (date, content, authorId, category)
+- `activity_logs` — activity history
 
 ## API Routes
 
 - `GET /api/auth/me` — current user session
 - `POST /api/auth/login` — login with username/password
 - `POST /api/auth/logout` — logout
-- `GET/POST /api/flocks`, `GET/PATCH/DELETE /api/flocks/:id`
-- `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/:id`
-- `GET/POST /api/hatching-cycles`, `GET/PATCH/DELETE /api/hatching-cycles/:id`
-- `GET/POST /api/goals`, `GET/PATCH/DELETE /api/goals/:id`
-- `GET/POST /api/daily-notes` — journal by date
+- `GET/POST /api/flocks`, `GET/PUT/DELETE /api/flocks/:id`
+- `GET/POST /api/tasks`, `PUT/DELETE /api/tasks/:id`
+- `GET/POST /api/hatching-cycles`, `GET/PUT/DELETE /api/hatching-cycles/:id`
+- `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
+- `GET/POST /api/notes` — daily journal (admin-only, requireAdmin middleware)
 - `POST /api/ai/analyze` — admin-only AI analysis (OpenAI)
 - `GET /api/dashboard/summary` — stats for dashboard
-- `GET /api/dashboard/today-tasks` — tasks for today
+- `GET /api/tasks/today` — tasks for today
 
 ## Important Notes
 
@@ -107,3 +113,5 @@ Tables:
 - Mobile auth stored in AsyncStorage with key `farm_auth_user`
 - API base URL for mobile: `EXPO_PUBLIC_DOMAIN` env var via `setBaseUrl()`
 - Web app proxies `/api/*` to port 8080 (API server) automatically
+- Age for chickens is in days (ageDays), max ~40 days
+- Hatching cycle is 21 days total: 18 incubation + 3 lockdown/hatching

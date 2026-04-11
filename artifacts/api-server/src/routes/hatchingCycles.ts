@@ -16,6 +16,8 @@ function formatCycle(c: typeof hatchingCyclesTable.$inferSelect) {
     ...c,
     temperature: c.temperature ? Number(c.temperature) : null,
     humidity: c.humidity ? Number(c.humidity) : null,
+    lockdownTemperature: c.lockdownTemperature ? Number(c.lockdownTemperature) : null,
+    lockdownHumidity: c.lockdownHumidity ? Number(c.lockdownHumidity) : null,
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -31,6 +33,8 @@ router.post("/hatching-cycles", async (req, res) => {
     ...body,
     temperature: body.temperature != null ? String(body.temperature) : null,
     humidity: body.humidity != null ? String(body.humidity) : null,
+    lockdownTemperature: body.lockdownTemperature != null ? String(body.lockdownTemperature) : null,
+    lockdownHumidity: body.lockdownHumidity != null ? String(body.lockdownHumidity) : null,
   }).returning();
   res.status(201).json(formatCycle(cycle));
 });
@@ -49,6 +53,8 @@ router.put("/hatching-cycles/:id", async (req, res) => {
     ...body,
     temperature: body.temperature != null ? String(body.temperature) : null,
     humidity: body.humidity != null ? String(body.humidity) : null,
+    lockdownTemperature: body.lockdownTemperature != null ? String(body.lockdownTemperature) : null,
+    lockdownHumidity: body.lockdownHumidity != null ? String(body.lockdownHumidity) : null,
   }).where(eq(hatchingCyclesTable.id, id)).returning();
   if (!cycle) { res.status(404).json({ error: "Not found" }); return; }
   res.json(formatCycle(cycle));
