@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, BookOpen, Utensils, Heart, Egg, Sparkles, Eye, Brush } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CAT_CONFIG: Record<string, { label: string; Icon: any; color: string; bg: string }> = {
   feeding: { label: "تغذية", Icon: Utensils, color: "text-amber-600", bg: "bg-amber-100" },
@@ -62,6 +63,7 @@ export default function Logs() {
   const createLog = useCreateActivityLog();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: getListActivityLogsQueryKey() });
@@ -81,15 +83,17 @@ export default function Logs() {
           <h1 className="text-2xl font-bold">سجل النشاط</h1>
           <p className="text-muted-foreground text-sm">توثيق أحداث وملاحظات المزرعة اليومية</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="w-4 h-4" />تسجيل حدث</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>تسجيل حدث جديد</DialogTitle></DialogHeader>
-            <LogForm onSubmit={async d => { await createLog.mutateAsync({ data: d }); toast({ title: "تم التسجيل" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        {isAdmin && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2"><Plus className="w-4 h-4" />تسجيل حدث</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>تسجيل حدث جديد</DialogTitle></DialogHeader>
+              <LogForm onSubmit={async d => { await createLog.mutateAsync({ data: d }); toast({ title: "تم التسجيل" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {isLoading ? (

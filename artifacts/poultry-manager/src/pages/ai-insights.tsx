@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
   Brain, Sparkles, RefreshCw, TrendingUp, AlertTriangle,
-  Lightbulb, Calendar, ChevronDown, ChevronUp,
+  Calendar, ChevronDown, ChevronUp,
   Thermometer, ShieldCheck, Target, Egg, Bird,
   Zap, DollarSign, Clock, CheckCircle2, AlertCircle
 } from "lucide-react";
@@ -21,11 +21,13 @@ interface AnalysisResult {
 
 const SECTIONS = [
   { key: "🚨 تنبيهات عاجلة", icon: AlertCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", title: "تنبيهات عاجلة" },
+  { key: "📅 خطة الغد — ماذا تفعل غداً؟", icon: Clock, color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-300", title: "خطة الغد 📅", highlight: true },
+  { key: "🔄 الأنماط الناجحة — كرر هذا الأسلوب!", icon: RefreshCw, color: "text-teal-700", bg: "bg-teal-50 border-teal-200", title: "الأنماط الناجحة 🔄" },
   { key: "🌡️ تحليل الفقاسة", icon: Thermometer, color: "text-blue-600", bg: "bg-blue-50 border-blue-200", title: "تحليل الفقاسة" },
   { key: "🐔 تحليل القطعان", icon: Bird, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", title: "تحليل القطعان" },
   { key: "📊 تحليل الأداء العام", icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", title: "الأداء العام" },
   { key: "🔮 توقعات الأسبوعين القادمين", icon: Sparkles, color: "text-purple-600", bg: "bg-purple-50 border-purple-200", title: "التوقعات" },
-  { key: "⚡ خطة العمل الفورية", icon: Zap, color: "text-orange-600", bg: "bg-orange-50 border-orange-200", title: "خطة العمل" },
+  { key: "⚡ خطة العمل الفورية (أولويات الأسبوع)", icon: Zap, color: "text-orange-600", bg: "bg-orange-50 border-orange-200", title: "خطة الأسبوع" },
   { key: "💰 نصائح لزيادة الربحية", icon: DollarSign, color: "text-green-600", bg: "bg-green-50 border-green-200", title: "الربحية" },
   { key: "❤️ الصحة الوقائية", icon: ShieldCheck, color: "text-pink-600", bg: "bg-pink-50 border-pink-200", title: "الصحة الوقائية" },
 ];
@@ -86,20 +88,30 @@ function SectionContent({ text }: { text: string }) {
 }
 
 function SectionCard({ sectionKey, content }: { sectionKey: string; content: string }) {
-  const [collapsed, setCollapsed] = useState(false);
   const def = SECTIONS.find(s => s.key === sectionKey);
   if (!def) return null;
+  const isHighlight = (def as any).highlight;
+  // "خطة الغد" starts expanded by default; others can be collapsed
+  const [collapsed, setCollapsed] = useState(!isHighlight);
   const Icon = def.icon;
   const isEmpty = !content.trim() || content.includes("لا تنبيهات");
   const isAlert = sectionKey === "🚨 تنبيهات عاجلة";
 
   return (
-    <Card className={cn("border transition-all duration-200", def.bg, isAlert && !isEmpty && "ring-2 ring-red-300")}>
+    <Card className={cn(
+      "border transition-all duration-200",
+      def.bg,
+      isAlert && !isEmpty && "ring-2 ring-red-300",
+      isHighlight && "ring-2 ring-indigo-300 shadow-md"
+    )}>
       <CardHeader className="pb-2 cursor-pointer" onClick={() => setCollapsed(!collapsed)}>
         <CardTitle className={cn("text-sm flex items-center justify-between", def.color)}>
           <div className="flex items-center gap-2">
             <Icon className="w-4 h-4" />
-            {def.title}
+            <span className={isHighlight ? "font-bold text-base" : ""}>{def.title}</span>
+            {isHighlight && (
+              <Badge className="text-xs bg-indigo-600 text-white">الأولوية القصوى</Badge>
+            )}
             {isAlert && !isEmpty && (
               <Badge variant="destructive" className="text-xs">يحتاج انتباهاً</Badge>
             )}

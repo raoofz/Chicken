@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Target, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CAT_LABELS: Record<string, string> = { production: "إنتاج", health: "صحة", growth: "نمو", financial: "مالي", other: "أخرى" };
 const CAT_COLORS: Record<string, string> = { production: "text-amber-600", health: "text-emerald-600", growth: "text-blue-600", financial: "text-violet-600", other: "text-gray-600" };
@@ -117,6 +118,7 @@ export default function Goals() {
     refresh();
   };
 
+  const { isAdmin } = useAuth();
   const active = goals?.filter(g => !g.completed) ?? [];
   const completed = goals?.filter(g => g.completed) ?? [];
 
@@ -127,15 +129,17 @@ export default function Goals() {
           <h1 className="text-2xl font-bold">الأهداف</h1>
           <p className="text-muted-foreground text-sm">{completed.length} من {goals?.length ?? 0} أهداف محققة</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="w-4 h-4" />هدف جديد</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>إضافة هدف جديد</DialogTitle></DialogHeader>
-            <GoalForm onSubmit={async d => { await createGoal.mutateAsync({ data: d }); toast({ title: "تم إضافة الهدف" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        {isAdmin && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2"><Plus className="w-4 h-4" />هدف جديد</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>إضافة هدف جديد</DialogTitle></DialogHeader>
+              <GoalForm onSubmit={async d => { await createGoal.mutateAsync({ data: d }); toast({ title: "تم إضافة الهدف" }); setOpen(false); refresh(); }} onClose={() => setOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {isLoading ? (
@@ -166,11 +170,13 @@ export default function Goals() {
                           </div>
                           {goal.deadline && <p className="text-xs text-muted-foreground mt-0.5">الموعد: {goal.deadline}</p>}
                         </div>
-                        <div className="flex gap-1.5 shrink-0">
-                          <Button size="sm" variant="outline" onClick={() => setProgressItem(goal)} className="text-xs">تحديث</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditItem(goal)}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                        </div>
+                        {isAdmin && (
+                          <div className="flex gap-1.5 shrink-0">
+                            <Button size="sm" variant="outline" onClick={() => setProgressItem(goal)} className="text-xs">تحديث</Button>
+                            <Button size="sm" variant="ghost" onClick={() => setEditItem(goal)}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-1.5">
@@ -200,7 +206,7 @@ export default function Goals() {
                       <p className="font-medium">{goal.title}</p>
                       <p className="text-xs text-muted-foreground">{goal.targetValue} {goal.unit}</p>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    {isAdmin && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>}
                   </CardContent>
                 </Card>
               ))}

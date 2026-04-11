@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const STATUS_LABELS: Record<string, string> = {
   incubating: "قيد التحضين",
@@ -203,6 +204,7 @@ export default function Hatching() {
   const deleteCycle = useDeleteHatchingCycle();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -224,6 +226,7 @@ export default function Hatching() {
           <h1 className="text-2xl font-bold">دورات التفقيس</h1>
           <p className="text-muted-foreground text-sm">الدورة 21 يوم — تحضين 18 يوم ثم إقفال وفقس 3 أيام</p>
         </div>
+        {isAdmin && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2"><Plus className="w-4 h-4" />دفعة جديدة</Button>
@@ -241,6 +244,7 @@ export default function Hatching() {
             />
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Legend */}
@@ -336,10 +340,12 @@ export default function Hatching() {
                     </div>
 
                     {/* Actions */}
+                    {isAdmin && (
                     <div className="flex gap-2 shrink-0">
                       <Button size="sm" variant="outline" onClick={() => setEditItem(cycle)}><Pencil className="w-3.5 h-3.5" /></Button>
                       <Button size="sm" variant="destructive" onClick={() => setDeleteId(cycle.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
