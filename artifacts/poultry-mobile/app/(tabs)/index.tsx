@@ -9,6 +9,7 @@ import {
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   RefreshControl,
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -44,6 +46,7 @@ export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const { user, logout, isAdmin } = useAuth();
   const { data: summary, isLoading: loadingSummary, refetch: refetchSummary } = useGetDashboardSummary();
   const { data: tasks, isLoading: loadingTasks, refetch: refetchTasks } = useGetTodayTasks();
   const updateTask = useUpdateTask();
@@ -75,12 +78,27 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <View style={[styles.headerIcon, { backgroundColor: colors.primary }]}>
-          <Feather name="home" size={20} color="#fff" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.greeting, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>مرحباً بك</Text>
-          <Text style={[styles.dateText, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>{formatDateAr(new Date())}</Text>
+        <Pressable
+          onPress={() => Alert.alert("تسجيل الخروج", "هل تريد تسجيل الخروج؟", [
+            { text: "إلغاء", style: "cancel" },
+            { text: "خروج", style: "destructive", onPress: logout },
+          ])}
+          style={[styles.logoutBtn, { backgroundColor: colors.muted }]}
+        >
+          <Feather name="log-out" size={16} color={colors.mutedForeground} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: "flex-end" }}>
+          <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
+            <Text style={[styles.greeting, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>
+              {user?.name ?? "المستخدم"}
+            </Text>
+            <View style={[styles.roleBadge, { backgroundColor: isAdmin ? "#B85C2A22" : "#6B9E5B22" }]}>
+              <Text style={[styles.roleText, { color: isAdmin ? "#B85C2A" : "#6B9E5B", fontFamily: "Inter_600SemiBold" }]}>
+                {isAdmin ? "مدير" : "عامل"}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.dateText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{formatDateAr(new Date())}</Text>
         </View>
       </View>
 
@@ -168,8 +186,11 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, paddingBottom: 16, gap: 12 },
   headerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  greeting: { fontSize: 13 },
-  dateText: { fontSize: 16, marginTop: 2 },
+  logoutBtn: { width: 38, height: 38, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
+  roleText: { fontSize: 11 },
+  greeting: { fontSize: 15 },
+  dateText: { fontSize: 12, marginTop: 2 },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 10, marginBottom: 16 },
   statCard: {
     width: "46%", flex: 1, borderRadius: 14, padding: 14, alignItems: "flex-end",

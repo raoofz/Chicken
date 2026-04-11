@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Target, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -104,8 +105,17 @@ export default function Goals() {
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [progressItem, setProgressItem] = useState<any>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: getListGoalsQueryKey() });
+
+  const handleDelete = async () => {
+    if (deleteId == null) return;
+    await deleteGoal.mutateAsync({ id: deleteId });
+    toast({ title: "تم حذف الهدف" });
+    setDeleteId(null);
+    refresh();
+  };
 
   const active = goals?.filter(g => !g.completed) ?? [];
   const completed = goals?.filter(g => g.completed) ?? [];
@@ -159,7 +169,7 @@ export default function Goals() {
                         <div className="flex gap-1.5 shrink-0">
                           <Button size="sm" variant="outline" onClick={() => setProgressItem(goal)} className="text-xs">تحديث</Button>
                           <Button size="sm" variant="ghost" onClick={() => setEditItem(goal)}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => { if (!confirm("حذف الهدف؟")) return; await deleteGoal.mutateAsync({ id: goal.id }); toast({ title: "تم الحذف" }); refresh(); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
                       </div>
                       <div>
@@ -190,7 +200,7 @@ export default function Goals() {
                       <p className="font-medium">{goal.title}</p>
                       <p className="text-xs text-muted-foreground">{goal.targetValue} {goal.unit}</p>
                     </div>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => { await deleteGoal.mutateAsync({ id: goal.id }); refresh(); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteId(goal.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                   </CardContent>
                 </Card>
               ))}
@@ -212,6 +222,19 @@ export default function Goals() {
           {progressItem && <UpdateProgressDialog goal={progressItem} onClose={() => setProgressItem(null)} />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteId != null} onOpenChange={v => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من حذف هذا الهدف؟ لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">نعم، احذف</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PURPOSE_AR: Record<string, string> = {
   eggs: "إنتاج بيض",
@@ -37,16 +38,18 @@ const PURPOSE_COLOR: Record<string, string> = {
   mixed: "#7B68EE",
 };
 
-function FlockCard({ flock, onDelete }: { flock: any; onDelete: (id: number) => void }) {
+function FlockCard({ flock, onDelete, isAdmin }: { flock: any; onDelete: (id: number) => void; isAdmin: boolean }) {
   const colors = useColors();
   const badgeColor = PURPOSE_COLOR[flock.purpose] ?? colors.primary;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.cardTop}>
-        <Pressable onPress={() => onDelete(flock.id)} style={[styles.deleteBtn, { backgroundColor: "#FEE2E2" }]}>
-          <Feather name="trash-2" size={16} color={colors.destructive} />
-        </Pressable>
+        {isAdmin && (
+          <Pressable onPress={() => onDelete(flock.id)} style={[styles.deleteBtn, { backgroundColor: "#FEE2E2" }]}>
+            <Feather name="trash-2" size={16} color={colors.destructive} />
+          </Pressable>
+        )}
         <View style={{ flex: 1, alignItems: "flex-end" }}>
           <Text style={[styles.flockName, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{flock.name}</Text>
           <Text style={[styles.flockBreed, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{flock.breed}</Text>
@@ -169,6 +172,7 @@ function AddFlockModal({ visible, onClose }: { visible: boolean; onClose: () => 
 export default function ChickensScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
   const { data: flocks, isLoading, refetch } = useListFlocks();
   const deleteFlock = useDeleteFlock();
   const qc = useQueryClient();
@@ -210,14 +214,16 @@ export default function ChickensScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={false} onRefresh={refetch} tintColor={colors.primary} />}>
-          {flocks?.map((f) => <FlockCard key={f.id} flock={f} onDelete={handleDelete} />)}
+          {flocks?.map((f) => <FlockCard key={f.id} flock={f} onDelete={handleDelete} isAdmin={isAdmin} />)}
         </ScrollView>
       )}
 
-      <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
-        <Feather name="plus" size={24} color="#fff" />
-      </Pressable>
+      {isAdmin && (
+        <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
+          <Feather name="plus" size={24} color="#fff" />
+        </Pressable>
+      )}
 
       <AddFlockModal visible={showAdd} onClose={() => setShowAdd(false)} />
     </View>

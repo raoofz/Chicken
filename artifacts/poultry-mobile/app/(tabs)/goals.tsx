@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CATEGORY_AR: Record<string, string> = {
   production: "الإنتاج",
@@ -40,7 +41,7 @@ const CATEGORY_ICON: Record<string, string> = {
   other: "star",
 };
 
-function GoalCard({ goal, onDelete, onUpdate }: { goal: any; onDelete: (id: number) => void; onUpdate: (id: number, current: number) => void }) {
+function GoalCard({ goal, onDelete, onUpdate, isAdmin }: { goal: any; onDelete: (id: number) => void; onUpdate: (id: number, current: number) => void; isAdmin: boolean }) {
   const colors = useColors();
   const progress = Math.min(goal.currentValue / goal.targetValue, 1);
   const pct = Math.round(progress * 100);
@@ -50,16 +51,18 @@ function GoalCard({ goal, onDelete, onUpdate }: { goal: any; onDelete: (id: numb
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: isCompleted ? colors.success : colors.border }]}>
       <View style={styles.cardTop}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {!isCompleted && (
-            <Pressable onPress={() => onUpdate(goal.id, goal.currentValue)} style={[styles.actionBtn, { backgroundColor: colors.secondary }]}>
-              <Feather name="edit-2" size={14} color={colors.primary} />
+        {isAdmin && (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {!isCompleted && (
+              <Pressable onPress={() => onUpdate(goal.id, goal.currentValue)} style={[styles.actionBtn, { backgroundColor: colors.secondary }]}>
+                <Feather name="edit-2" size={14} color={colors.primary} />
+              </Pressable>
+            )}
+            <Pressable onPress={() => onDelete(goal.id)} style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
+              <Feather name="trash-2" size={14} color={colors.destructive} />
             </Pressable>
-          )}
-          <Pressable onPress={() => onDelete(goal.id)} style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
-            <Feather name="trash-2" size={14} color={colors.destructive} />
-          </Pressable>
-        </View>
+          </View>
+        )}
         <View style={{ flex: 1, alignItems: "flex-end" }}>
           <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 8 }}>
             <View style={[styles.iconWrap, { backgroundColor: isCompleted ? colors.success + "20" : colors.secondary }]}>
@@ -192,6 +195,7 @@ function AddGoalModal({ visible, onClose }: { visible: boolean; onClose: () => v
 export default function GoalsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
   const { data: goals, isLoading, refetch } = useListGoals();
   const deleteGoal = useDeleteGoal();
   const updateGoal = useUpdateGoal();
@@ -240,13 +244,13 @@ export default function GoalsScreen() {
           {active.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.text, fontFamily: "Inter_700Bold" }]}>جارية ({active.length})</Text>
-              {active.map(g => <GoalCard key={g.id} goal={g} onDelete={handleDelete} onUpdate={handleUpdate} />)}
+              {active.map(g => <GoalCard key={g.id} goal={g} onDelete={handleDelete} onUpdate={handleUpdate} isAdmin={isAdmin} />)}
             </>
           )}
           {completed.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 8 }]}>مكتملة ({completed.length})</Text>
-              {completed.map(g => <GoalCard key={g.id} goal={g} onDelete={handleDelete} onUpdate={handleUpdate} />)}
+              {completed.map(g => <GoalCard key={g.id} goal={g} onDelete={handleDelete} onUpdate={handleUpdate} isAdmin={isAdmin} />)}
             </>
           )}
           {goals?.length === 0 && (
@@ -259,10 +263,12 @@ export default function GoalsScreen() {
         </ScrollView>
       )}
 
-      <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
-        <Feather name="plus" size={24} color="#fff" />
-      </Pressable>
+      {isAdmin && (
+        <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
+          <Feather name="plus" size={24} color="#fff" />
+        </Pressable>
+      )}
       <AddGoalModal visible={showAdd} onClose={() => setShowAdd(false)} />
     </View>
   );

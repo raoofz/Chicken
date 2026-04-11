@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets } from "lucide-react";
@@ -114,8 +115,17 @@ export default function Hatching() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: getListHatchingCyclesQueryKey() });
+
+  const handleDelete = async () => {
+    if (deleteId == null) return;
+    await deleteCycle.mutateAsync({ id: deleteId });
+    toast({ title: "تم حذف الدفعة" });
+    setDeleteId(null);
+    refresh();
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -185,7 +195,7 @@ export default function Hatching() {
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <Button size="sm" variant="outline" onClick={() => setEditItem(cycle)}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="sm" variant="destructive" onClick={async () => { if (!confirm("حذف هذه الدفعة؟")) return; await deleteCycle.mutateAsync({ id: cycle.id }); toast({ title: "تم الحذف" }); refresh(); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      <Button size="sm" variant="destructive" onClick={() => setDeleteId(cycle.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
                   </div>
                 </CardContent>
@@ -201,6 +211,19 @@ export default function Hatching() {
           {editItem && <CycleForm initial={editItem} onSubmit={async d => { await updateCycle.mutateAsync({ id: editItem.id, data: d }); toast({ title: "تم التحديث" }); setEditItem(null); refresh(); }} onClose={() => setEditItem(null)} />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteId != null} onOpenChange={v => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">نعم، احذف</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

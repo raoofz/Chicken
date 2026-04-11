@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CATEGORY_AR: Record<string, string> = {
   feeding: "التغذية",
@@ -42,7 +43,7 @@ const CATEGORY_ICON: Record<string, string> = {
 const PRIORITY_AR: Record<string, string> = { low: "منخفضة", medium: "متوسطة", high: "عالية" };
 const PRIORITY_COLOR: Record<string, string> = {};
 
-function TaskItem({ task, onToggle, onDelete }: { task: any; onToggle: () => void; onDelete: () => void }) {
+function TaskItem({ task, onToggle, onDelete, isAdmin }: { task: any; onToggle: () => void; onDelete: () => void; isAdmin: boolean }) {
   const colors = useColors();
   const priorityColors: Record<string, string> = { high: colors.destructive, medium: colors.warning, low: colors.success };
   const pc = priorityColors[task.priority] ?? colors.mutedForeground;
@@ -76,9 +77,11 @@ function TaskItem({ task, onToggle, onDelete }: { task: any; onToggle: () => voi
         </View>
       </View>
 
-      <Pressable onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
-        <Feather name="x" size={16} color={colors.mutedForeground} />
-      </Pressable>
+      {isAdmin && (
+        <Pressable onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
+          <Feather name="x" size={16} color={colors.mutedForeground} />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -166,6 +169,7 @@ function AddTaskModal({ visible, onClose }: { visible: boolean; onClose: () => v
 export default function TasksScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const { data: tasks, isLoading, refetch } = useListTasks({ params: { date: today } });
   const updateTask = useUpdateTask();
@@ -216,13 +220,13 @@ export default function TasksScreen() {
           {pending.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.text, fontFamily: "Inter_700Bold" }]}>قيد التنفيذ ({pending.length})</Text>
-              {pending.map(t => <TaskItem key={t.id} task={t} onToggle={() => toggle(t.id, t.completed)} onDelete={() => remove(t.id)} />)}
+              {pending.map(t => <TaskItem key={t.id} task={t} onToggle={() => toggle(t.id, t.completed)} onDelete={() => remove(t.id)} isAdmin={isAdmin} />)}
             </>
           )}
           {completed.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold", marginTop: 8 }]}>مكتملة ({completed.length})</Text>
-              {completed.map(t => <TaskItem key={t.id} task={t} onToggle={() => toggle(t.id, t.completed)} onDelete={() => remove(t.id)} />)}
+              {completed.map(t => <TaskItem key={t.id} task={t} onToggle={() => toggle(t.id, t.completed)} onDelete={() => remove(t.id)} isAdmin={isAdmin} />)}
             </>
           )}
           {tasks?.length === 0 && (
@@ -235,10 +239,12 @@ export default function TasksScreen() {
         </ScrollView>
       )}
 
-      <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
-        <Feather name="plus" size={24} color="#fff" />
-      </Pressable>
+      {isAdmin && (
+        <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
+          <Feather name="plus" size={24} color="#fff" />
+        </Pressable>
+      )}
 
       <AddTaskModal visible={showAdd} onClose={() => setShowAdd(false)} />
     </View>

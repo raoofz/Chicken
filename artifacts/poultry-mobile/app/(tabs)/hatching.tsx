@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
+import { useAuth } from "@/contexts/AuthContext";
 
 const STATUS_AR: Record<string, string> = {
   incubating: "تحت التفقيس",
@@ -44,7 +45,7 @@ function getDaysSince(dateStr: string) {
   return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function CycleCard({ cycle, onDelete }: { cycle: any; onDelete: (id: number) => void }) {
+function CycleCard({ cycle, onDelete, isAdmin }: { cycle: any; onDelete: (id: number) => void; isAdmin: boolean }) {
   const colors = useColors();
   const qc = useQueryClient();
   const updateCycle = useUpdateHatchingCycle();
@@ -72,16 +73,18 @@ function CycleCard({ cycle, onDelete }: { cycle: any; onDelete: (id: number) => 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.cardTop}>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {(cycle.status === "incubating" || cycle.status === "hatching") && (
-            <Pressable onPress={markCompleted} style={[styles.actionBtn, { backgroundColor: "#E8F5E4" }]}>
-              <Feather name="check" size={14} color={colors.success} />
+        {isAdmin && (
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {(cycle.status === "incubating" || cycle.status === "hatching") && (
+              <Pressable onPress={markCompleted} style={[styles.actionBtn, { backgroundColor: "#E8F5E4" }]}>
+                <Feather name="check" size={14} color={colors.success} />
+              </Pressable>
+            )}
+            <Pressable onPress={() => onDelete(cycle.id)} style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
+              <Feather name="trash-2" size={14} color={colors.destructive} />
             </Pressable>
-          )}
-          <Pressable onPress={() => onDelete(cycle.id)} style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}>
-            <Feather name="trash-2" size={14} color={colors.destructive} />
-          </Pressable>
-        </View>
+          </View>
+        )}
         <View style={{ flex: 1, alignItems: "flex-end" }}>
           <Text style={[styles.cycleName, { color: colors.text, fontFamily: "Inter_700Bold" }]}>{cycle.batchName}</Text>
           <View style={[styles.statusBadge, { backgroundColor: badgeColor + "20" }]}>
@@ -211,6 +214,7 @@ function AddCycleModal({ visible, onClose }: { visible: boolean; onClose: () => 
 export default function HatchingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { isAdmin } = useAuth();
   const { data: cycles, isLoading, refetch } = useListHatchingCycles();
   const deleteCycle = useDeleteHatchingCycle();
   const qc = useQueryClient();
@@ -239,13 +243,13 @@ export default function HatchingScreen() {
           {active.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>نشطة</Text>
-              {active.map(c => <CycleCard key={c.id} cycle={c} onDelete={handleDelete} />)}
+              {active.map(c => <CycleCard key={c.id} cycle={c} onDelete={handleDelete} isAdmin={isAdmin} />)}
             </>
           )}
           {past.length > 0 && (
             <>
               <Text style={[styles.groupLabel, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>سابقة</Text>
-              {past.map(c => <CycleCard key={c.id} cycle={c} onDelete={handleDelete} />)}
+              {past.map(c => <CycleCard key={c.id} cycle={c} onDelete={handleDelete} isAdmin={isAdmin} />)}
             </>
           )}
           {cycles?.length === 0 && (
@@ -258,10 +262,12 @@ export default function HatchingScreen() {
         </ScrollView>
       )}
 
-      <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
-        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
-        <Feather name="plus" size={24} color="#fff" />
-      </Pressable>
+      {isAdmin && (
+        <Pressable style={[styles.fab, { backgroundColor: colors.primary, bottom: (Platform.OS === "web" ? 34 : insets.bottom) + 80 }]}
+          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowAdd(true); }}>
+          <Feather name="plus" size={24} color="#fff" />
+        </Pressable>
+      )}
 
       <AddCycleModal visible={showAdd} onClose={() => setShowAdd(false)} />
     </View>
