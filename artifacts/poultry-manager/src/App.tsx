@@ -13,6 +13,7 @@ import Logs from "@/pages/logs";
 import Notes from "@/pages/notes";
 import AiInsights from "@/pages/ai-insights";
 import Login from "@/pages/login";
+import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Route path="/logs" component={Logs} />
         <Route path="/notes" component={Notes} />
         <Route path="/ai" component={AiInsights} />
+        <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

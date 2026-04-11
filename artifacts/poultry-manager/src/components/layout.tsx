@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Bird, Egg, ListTodo, Target, ActivitySquare, Menu } from "lucide-react";
+import { LayoutDashboard, Bird, Egg, ListTodo, Target, ActivitySquare, Menu, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useState } from "react";
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/tasks", label: "المهام", icon: ListTodo },
   { href: "/goals", label: "الأهداف", icon: Target },
   { href: "/logs", label: "سجل النشاط", icon: ActivitySquare },
+  { href: "/settings", label: "الإعدادات", icon: Settings },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
