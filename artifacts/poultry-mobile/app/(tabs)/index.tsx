@@ -10,6 +10,7 @@ import React from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -21,6 +22,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
+
+const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/XXXXXXXXXX";
 
 const DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
@@ -78,15 +81,23 @@ export default function DashboardScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Pressable
-          onPress={() => Alert.alert("تسجيل الخروج", "هل تريد تسجيل الخروج؟", [
-            { text: "إلغاء", style: "cancel" },
-            { text: "خروج", style: "destructive", onPress: logout },
-          ])}
-          style={[styles.logoutBtn, { backgroundColor: colors.muted }]}
-        >
-          <Feather name="log-out" size={16} color={colors.mutedForeground} />
-        </Pressable>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable
+            onPress={() => Alert.alert("تسجيل الخروج", "هل تريد تسجيل الخروج؟", [
+              { text: "إلغاء", style: "cancel" },
+              { text: "خروج", style: "destructive", onPress: logout },
+            ])}
+            style={[styles.logoutBtn, { backgroundColor: colors.muted }]}
+          >
+            <Feather name="log-out" size={16} color={colors.mutedForeground} />
+          </Pressable>
+          <Pressable
+            onPress={() => Linking.openURL(WHATSAPP_GROUP_URL)}
+            style={[styles.logoutBtn, { backgroundColor: "#25D36622" }]}
+          >
+            <Feather name="message-circle" size={16} color="#25D366" />
+          </Pressable>
+        </View>
         <View style={{ flex: 1, alignItems: "flex-end" }}>
           <View style={{ flexDirection: "row-reverse", alignItems: "center", gap: 6 }}>
             <Text style={[styles.greeting, { color: colors.text, fontFamily: "Inter_600SemiBold" }]}>

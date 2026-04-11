@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield,
+  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+
+const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/XXXXXXXXXX";
 
 const NAV_ITEMS = [
   { href: "/", label: "لوحة المتابعة", icon: LayoutDashboard, adminOnly: false },
@@ -99,7 +101,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User card + logout */}
+        {/* User card + actions */}
         <div className="p-3 border-t border-white/8 space-y-2">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
             <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
@@ -110,6 +112,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-white/40 truncate">{user?.username}</p>
             </div>
           </div>
+
+          {/* WhatsApp Group Button */}
+          <a
+            href={WHATSAPP_GROUP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
+          >
+            <MessageCircle className="w-4 h-4" />
+            مجموعة الواتساب
+          </a>
+
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"

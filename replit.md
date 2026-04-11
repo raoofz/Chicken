@@ -61,16 +61,21 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Tasks** (مهام اليوم) — daily task management with categories & priorities
 - **Goals** (الأهداف) — progress tracking with progress bars
 - **Notes** (المذكرات) — daily journal, admin-only
-- **AI Insights** (تحليل AI) — admin-only, uses OpenAI gpt-4o for farm analysis
+- **AI Insights** (المستشار الذكي) — admin-only; structured 8-section analysis via gpt-4o:
+  - Urgent alerts, hatchery analysis, flock health, performance, 2-week predictions, action plan, profitability, preventive health
+  - Feeds: full flock data + hatching cycle phase data + overdue tasks + goal progress + notes + activity logs
+  - `summary` field returns: urgentCount, avgHatchRate, activeCyclesCount, tasksDone, goalsProgress
+- **Sidebar** — WhatsApp group button (green, `WHATSAPP_GROUP_URL` constant in Layout.tsx)
 - **Logs** (سجل النشاط) — activity log
 
 ### Mobile App (artifacts/poultry-mobile)
 - Login screen with username/password fields in Arabic
 - All tabs: الرئيسية, الدجاجات, الفقاسة, المهام, الأهداف
-- Dashboard shows user name, role badge (مدير/عامل), logout button
+- Dashboard shows user name, role badge (مدير/عامل), logout button + WhatsApp group button
 - Hatching tab: shows 2-phase system (blue=incubation, orange=lockdown) with progress bar
 - Role-based: workers see read-only (no FAB, no delete/edit buttons)
 - Pull-to-refresh on all screens
+- WhatsApp button (`WHATSAPP_GROUP_URL` constant in `app/(tabs)/index.tsx`)
 
 ## Design
 
