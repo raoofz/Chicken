@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle,
+  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: "/notes", label: "المذكرات", icon: FileText, adminOnly: true },
   { href: "/logs", label: "سجل النشاط", icon: BookOpen, adminOnly: false },
   { href: "/ai", label: "تحليل ذكي", icon: Brain, adminOnly: true },
+  { href: "/settings", label: "الإعدادات", icon: Settings, adminOnly: false },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
