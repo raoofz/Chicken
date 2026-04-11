@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { seedUsers } from "./lib/seed";
+import { runMigrations } from "./lib/migrate";
 
 const app: Express = express();
 
@@ -46,6 +47,7 @@ app.use(
   }),
 );
 
+runMigrations().catch(err => logger.error({ err }, "Migrations failed"));
 seedUsers().catch(err => logger.error({ err }, "Seed users failed"));
 
 app.use("/api", router);
