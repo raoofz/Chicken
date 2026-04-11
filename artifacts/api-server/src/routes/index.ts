@@ -9,6 +9,7 @@ import dashboardRouter from "./dashboard";
 import authRouter from "./auth";
 import dailyNotesRouter from "./dailyNotes";
 import aiAnalysisRouter from "./aiAnalysis";
+import hatchingAssistantRouter from "./hatchingAssistant";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(activityLogsRouter);
 router.use(dashboardRouter);
 router.use(dailyNotesRouter);
 router.use(aiAnalysisRouter);
+router.use(hatchingAssistantRouter);
 
 export default router;
