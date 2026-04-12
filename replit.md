@@ -66,6 +66,14 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - Urgent alerts, hatchery analysis, flock health, performance, 2-week predictions, action plan, profitability, preventive health
   - Feeds: full flock data + hatching cycle phase data + overdue tasks + goal progress + notes + activity logs
   - `summary` field returns: urgentCount, avgHatchRate, activeCyclesCount, tasksDone, goalsProgress
+- **Hatching Assistant** (دكتور التفقيس) — AI-powered hatching expert with comprehensive knowledge base:
+  - **Full Hatching Plan**: generates complete scientific guide based on user's machine type, egg type, experience, current day
+  - **Quick Diagnosis**: 8 one-click problem buttons (power outage, high temp, low humidity, stuck chick, etc.)
+  - **Custom Problem Diagnosis**: describe any problem for AI-powered analysis with cause → solution → prevention
+  - **Follow-up Chat**: ask unlimited follow-up questions with full knowledge base context
+  - **Knowledge Base**: 11 scientific chapters covering embryo development day-by-day, parameters for 6 egg types (chicken, duck, quail, turkey, goose, broiler), 20+ common problems, post-hatch care, breeder nutrition, weight loss monitoring, biosecurity
+  - **New fields**: current day, room temperature, room humidity for more precise recommendations
+  - API routes: `POST /api/ai/hatching-assistant`, `POST /api/ai/hatching-followup`, `POST /api/ai/hatching-diagnose`
 - **Sidebar** — WhatsApp group button (green, `WHATSAPP_GROUP_URL` constant in Layout.tsx)
 - **Logs** (سجل النشاط) — activity log
 
@@ -117,6 +125,9 @@ Tables:
 - `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
 - `GET/POST /api/notes` — daily journal (admin-only, requireAdmin middleware)
 - `POST /api/ai/analyze` — AI analysis (OpenAI); accepts `{ lang: "sv" }` for Swedish output, defaults to Arabic
+- `POST /api/ai/hatching-assistant` — generate complete hatching guide (with knowledge base)
+- `POST /api/ai/hatching-followup` — follow-up questions with knowledge base context
+- `POST /api/ai/hatching-diagnose` — diagnose hatching problems with knowledge base
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
 

@@ -354,7 +354,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "lang.switch": { ar: "SV 🇸🇪", sv: "AR 🇸🇦" },
   "lang.current": { ar: "العربية", sv: "Svenska" },
 
-  "nav.hatchAssistant": { ar: "مساعد التفقيس", sv: "Kläckningsassistent" },
+  "nav.hatchAssistant": { ar: "دكتور التفقيس", sv: "Doktor Kläckning" },
 
   "hatchAssist.title": { ar: "مساعد التفقيس الذكي", sv: "Smart kläckningsassistent" },
   "hatchAssist.subtitle": { ar: "أجب على الأسئلة وسيعطيك الذكاء الاصطناعي خطة تفقيس كاملة ومفصلة", sv: "Svara på frågorna så ger AI dig en komplett och detaljerad kläckningsplan" },
