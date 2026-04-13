@@ -1,12 +1,13 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
-import { authMiddleware } from "./middlewares/authMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { runMigrations } from "./lib/migrate";
-import { db } from "@workspace/db";
+import { seedUsers } from "./lib/seed";
+import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 const app: Express = express();
@@ -32,10 +33,23 @@ app.use(
 );
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(authMiddleware);
+
+const PgStore = connectPgSimple(session);
+app.use(
+  session({
+    store: new PgStore({ pool, createTableIfMissing: true }),
+    secret: process.env.SESSION_SECRET || "farm-secret-key-change-me",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    },
+  }),
+);
 
 async function ensureDbConnection() {
   try {
@@ -54,6 +68,7 @@ async function ensureDbConnection() {
 
 ensureDbConnection()
   .then(() => runMigrations())
+  .then(() => seedUsers())
   .catch(err => logger.error({ err }, "DB init failed"));
 
 app.use("/api", router);
