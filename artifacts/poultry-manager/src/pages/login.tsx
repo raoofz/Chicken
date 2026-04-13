@@ -1,13 +1,35 @@
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { LogIn, Languages } from "lucide-react";
+import { Eye, EyeOff, Lock, User, Languages } from "lucide-react";
 
 export default function Login() {
   const { login } = useAuth();
-  const { t, dir, toggleLang } = useLanguage();
+  const { t, dir, lang, toggleLang } = useLanguage();
+  const isRtl = dir === "rtl";
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await login(username, password);
+    } catch (err: any) {
+      setError(err.message ?? t("login.error"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4" dir={dir}>
@@ -42,12 +64,68 @@ export default function Login() {
             <CardDescription className="text-center">{t("login.desc")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={login} className="w-full h-11 text-base font-semibold gap-2">
-              <LogIn className="w-5 h-5" />
-              {t("login.submit")}
-            </Button>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="username">{t("login.username")}</Label>
+                <div className="relative">
+                  <User className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${isRtl ? "right-3" : "left-3"}`} />
+                  <Input
+                    id="username"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                    placeholder={t("login.username.placeholder")}
+                    className={isRtl ? "pr-10" : "pl-10"}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">{t("login.password")}</Label>
+                <div className="relative">
+                  <Lock className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground ${isRtl ? "right-3" : "left-3"}`} />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder={t("login.password.placeholder")}
+                    className={isRtl ? "pr-10 pl-10" : "pl-10 pr-10"}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className={`absolute top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors ${isRtl ? "left-3" : "right-3"}`}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-lg p-3 text-center">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full h-11 text-base font-semibold" disabled={loading}>
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {t("login.loading")}
+                  </span>
+                ) : t("login.submit")}
+              </Button>
+
+            </form>
           </CardContent>
         </Card>
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          {t("app.ai.tagline")}
+        </p>
       </div>
     </div>
   );

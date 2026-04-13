@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, LogOut, User, MessageCircle, Settings,
+  Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages,
 } from "lucide-react";
 import { useState } from "react";
@@ -63,7 +63,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-white/50">{t("app.subtitle")}</p>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className={cn("md:hidden text-white/50 hover:text-white transition-colors p-1", isRtl ? "mr-auto" : "ml-auto")}>
+          <button onClick={() => setSidebarOpen(false)} className={cn("md:hidden text-white/50 hover:text-white transition-colors p-1", isRtl ? "mr-auto" : "ml-auto") }>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -150,7 +150,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Logo size={28} />
             <span className="font-bold text-sm">{t("app.name")}</span>
           </div>
-          <div className={cn("flex items-center gap-2", isRtl ? "mr-auto" : "ml-auto")}>
+          <div className={cn("flex items-center gap-2", isRtl ? "mr-auto" : "ml-auto") }>
             <button onClick={toggleLang} className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded bg-muted">
               {t("lang.switch")}
             </button>
