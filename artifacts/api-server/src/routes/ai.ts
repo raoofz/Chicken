@@ -14,9 +14,12 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+const baseURL = process.env.OPENAI_API_KEY
+  ? "https://api.openai.com/v1"
+  : (process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "https://api.openai.com/v1");
+
+const openai = new OpenAI({ baseURL, apiKey });
 
 router.post("/ai/analyze", requireAdmin, async (req: Request, res: Response) => {
   try {
