@@ -32,27 +32,21 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 ## Authentication
 
-- **Session-based** via express-session + bcrypt
-- **User accounts** (all password: `1234`):
-  - Admins: `yones` (يونس), `raoof` (رؤوف), `nassar` (ناصر)
-  - Workers: `hoobi` (هوبي), `abood` (عبود)
-- Session stored in DB, session secret in `SESSION_SECRET` env var
-- Auth routes: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
-- Web app: `AuthContext.tsx` wraps all pages; login redirects to dashboard
-- Mobile app: `AuthContext.tsx` with AsyncStorage persistence; `AuthGuard` in `_layout.tsx`
-
-## Role-Based Access
-
-| Feature | Admin (مدير) | Worker (عامل) |
-|---|---|---|
-| View all data | ✅ | ✅ |
-| Add/Edit/Delete records | ✅ | ❌ (read-only) |
-| Daily Notes | ✅ | ❌ (hidden + API protected) |
+- **Replit Auth** via OpenID Connect (OIDC) with PKCE
+- **Auth library**: `openid-client` on server, `@workspace/replit-auth-web` on frontend
+- **Sessions**: Stored in `sessions` postgres table (sid, sess JSON, expire)
+- **Users**: Upserted to `auth_users` table on first login (id, email, firstName, lastName, profileImageUrl)
+- **Auth middleware**: `authMiddleware.ts` resolves session from cookie (`sid`) or `Authorization: Bearer <sid>` header
+- **Auth routes**: `GET /api/auth/user`, `GET /api/login`, `GET /api/callback`, `GET /api/logout`
+- **Mobile auth**: `POST /api/mobile-auth/token-exchange`, `POST /api/mobile-auth/logout`
+- **Frontend**: `AuthContext.tsx` wraps `@workspace/replit-auth-web`'s `useAuth()` hook; login redirects to Replit OIDC
+- **All authenticated users have full access** (no admin/worker role distinction with Replit Auth)
+- Old `users` table (serial int, username/password) remains in DB but is no longer used
 
 ## Features
 
 ### Web App (artifacts/poultry-manager)
-- **Login page** — Arabic RTL, chicken logo, no default credentials shown
+- **Login page** — Single "Login" button that redirects to Replit OIDC
 - **Dashboard** — clickable stat cards (navigate to /flocks, /hatching, /tasks, /goals)
 - **Flocks** (الدجاجات) — CRUD for chicken groups, age in days (ageDays), AlertDialog for delete
 - **Hatching** (دورات التفقيس) — 21-day cycle with 2-phase system:
@@ -60,10 +54,10 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - Phase 2 (days 18-21): lockdown temp/humidity + time eggs transferred (HH:MM)
 - **Tasks** (مهام اليوم) — daily task management with categories & priorities
 - **Goals** (الأهداف) — progress tracking with progress bars
-- **Notes** (المذكرات) — daily journal, admin-only
+- **Notes** (المذكرات) — daily journal (auth-protected)
 - **Sidebar** — WhatsApp group button (green, `WHATSAPP_GROUP_URL` constant in Layout.tsx)
 - **Logs** (سجل النشاط) — activity log
-- **Settings** — app settings page
+- **Settings** — account info + logout
 - **Language switcher** — AR/SV toggle in sidebar and mobile header
 
 ### Mobile App (artifacts/poultry-mobile)
@@ -71,7 +65,6 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - All tabs: الرئيسية, الدجاجات, الفقاسة, المهام, الأهداف
 - Dashboard shows user name, role badge (مدير/عامل), logout button + WhatsApp group button
 - Hatching tab: shows 2-phase system (blue=incubation, orange=lockdown) with progress bar
-- Role-based: workers see read-only (no FAB, no delete/edit buttons)
 - Pull-to-refresh on all screens
 - WhatsApp button (`WHATSAPP_GROUP_URL` constant in `app/(tabs)/index.tsx`)
 
@@ -98,21 +91,26 @@ Tables:
   - Phase 1: startDate, setTime (HH:MM), temperature, humidity (days 1-18)
   - Phase 2: lockdownDate, lockdownTime (HH:MM), lockdownTemperature, lockdownHumidity (days 18-21)
 - `goals` — farm goals (title, targetValue, currentValue, unit, category)
-- `users` — auth users (username, passwordHash, name, role)
-- `daily_notes` — daily journal (date, content, authorId, category)
+- `users` — legacy auth users (serial id, username, passwordHash, name, role) — NOT USED
+- `auth_users` — Replit Auth users (varchar id, email, firstName, lastName, profileImageUrl)
+- `sessions` — OIDC sessions (sid, sess JSON, expire)
+- `daily_notes` — daily journal (date, content, authorName, category)
 - `activity_logs` — activity history
 
 ## API Routes
 
-- `GET /api/auth/me` — current user session
-- `POST /api/auth/login` — login with username/password
-- `POST /api/auth/logout` — logout
+- `GET /api/auth/user` — current authenticated user (or null)
+- `GET /api/login` — begin OIDC login flow
+- `GET /api/callback` — OIDC callback
+- `GET /api/logout` — clear session + OIDC logout
+- `POST /api/mobile-auth/token-exchange` — mobile auth code exchange
+- `POST /api/mobile-auth/logout` — mobile session logout
 - `GET/POST /api/flocks`, `GET/PUT/DELETE /api/flocks/:id`
 - `GET/POST /api/tasks`, `PUT/DELETE /api/tasks/:id`
 - `GET/POST /api/hatching-cycles`, `GET/PUT/DELETE /api/hatching-cycles/:id`
 - `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
-- `GET/POST /api/notes` — daily journal (admin-only, requireAdmin middleware)
-- `DELETE /api/notes/:id` — delete note (admin-only)
+- `GET/POST /api/notes` — daily journal (requireAuth middleware)
+- `DELETE /api/notes/:id` — delete note (requireAuth)
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
 

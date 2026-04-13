@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
+  Menu, X, FileText, LogOut, User, MessageCircle, Settings,
   Languages,
 } from "lucide-react";
 import { useState } from "react";
@@ -68,15 +68,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-white/8 space-y-2">
-          <div className={cn(
-            "flex items-center gap-2 text-xs px-3 py-2 rounded-lg",
-            isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
-          )}>
-            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
-            <span className="font-medium">{isAdmin ? t("role.admin.account") : t("role.worker.account")}</span>
-          </div>
-
+        <div className="px-4 py-3 border-b border-white/8">
           <button
             onClick={toggleLang}
             className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200"
@@ -114,12 +106,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="p-3 border-t border-white/8 space-y-2">
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
-            <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
-              <User className="w-4 h-4 text-primary" />
-            </div>
+            {user?.profileImageUrl ? (
+              <img src={user.profileImageUrl} alt="" className="w-8 h-8 rounded-full shrink-0 object-cover" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4 text-primary" />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-              <p className="text-xs text-white/40 truncate">{user?.username}</p>
+              <p className="text-sm font-medium text-white truncate">
+                {user?.firstName ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}` : user?.email ?? ""}
+              </p>
+              <p className="text-xs text-white/40 truncate">{user?.email ?? ""}</p>
             </div>
           </div>
 
@@ -156,7 +154,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button onClick={toggleLang} className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded bg-muted">
               {t("lang.switch")}
             </button>
-            <span className="text-xs text-muted-foreground">{user?.name}</span>
+            <span className="text-xs text-muted-foreground">{user?.firstName ?? user?.email ?? ""}</span>
           </div>
         </header>
 

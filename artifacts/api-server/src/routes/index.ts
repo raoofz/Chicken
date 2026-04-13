@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import healthRouter from "./health";
 import flocksRouter from "./flocks";
 import hatchingCyclesRouter from "./hatchingCycles";
@@ -11,8 +11,18 @@ import dailyNotesRouter from "./dailyNotes";
 
 const router: IRouter = Router();
 
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+  next();
+}
+
 router.use(authRouter);
 router.use(healthRouter);
+
+router.use(requireAuth);
 router.use(flocksRouter);
 router.use(hatchingCyclesRouter);
 router.use(tasksRouter);

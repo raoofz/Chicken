@@ -1,10 +1,10 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
-import session from "express-session";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
+import { authMiddleware } from "./middlewares/authMiddleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { seedUsers } from "./lib/seed";
 import { runMigrations } from "./lib/migrate";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
@@ -32,22 +32,10 @@ app.use(
 );
 
 app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-const secret = process.env["SESSION_SECRET"] ?? "farm-secret-key-2024";
-app.use(
-  session({
-    secret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false,
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    },
-  }),
-);
+app.use(authMiddleware);
 
 async function ensureDbConnection() {
   try {
@@ -66,7 +54,6 @@ async function ensureDbConnection() {
 
 ensureDbConnection()
   .then(() => runMigrations())
-  .then(() => seedUsers())
   .catch(err => logger.error({ err }, "DB init failed"));
 
 app.use("/api", router);
