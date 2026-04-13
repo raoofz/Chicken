@@ -4,6 +4,16 @@ import { logger } from "./logger";
 export async function runMigrations() {
   const client = await pool.connect();
   try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      );
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    `);
+
     // Fix 1: Rename age_weeks → age_days in flocks if needed
     const { rows: flocksColumns } = await client.query(`
       SELECT column_name FROM information_schema.columns

@@ -46,7 +46,7 @@ app.use(express.urlencoded({ extended: true }));
 const PgStore = connectPgSimple(session);
 app.use(
   session({
-    store: new PgStore({ pool, createTableIfMissing: true }),
+    store: new PgStore({ pool, createTableIfMissing: false, tableName: "session" }),
     secret: process.env.SESSION_SECRET || "farm-secret-key-change-me",
     resave: false,
     saveUninitialized: false,
