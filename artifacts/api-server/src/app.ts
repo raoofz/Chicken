@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
@@ -11,6 +12,12 @@ import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 const app: Express = express();
+const isProd = process.env.NODE_ENV === "production";
+
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 
 app.use(
   pinoHttp({
@@ -32,8 +39,16 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(cors({
+  origin: isProd
+    ? [
+        `https://${process.env.REPLIT_DEV_DOMAIN}`,
+        `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`,
+      ].filter(Boolean)
+    : true,
+  credentials: true,
+}));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 const PgStore = connectPgSimple(session);
@@ -44,8 +59,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
+      secure: isProd,
       httpOnly: true,
+      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   }),
