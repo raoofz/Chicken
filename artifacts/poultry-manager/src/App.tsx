@@ -19,8 +19,7 @@ import NotFound from "@/pages/not-found";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { user, loading: isLoading } = useAuth();
-  const loading = isLoading;
+  const { user, loading } = useAuth();
   const { dir, t } = useLanguage();
 
   if (loading) {
