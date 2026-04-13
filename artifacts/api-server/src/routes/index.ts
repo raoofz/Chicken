@@ -8,6 +8,7 @@ import activityLogsRouter from "./activityLogs";
 import dashboardRouter from "./dashboard";
 import authRouter from "./auth";
 import dailyNotesRouter from "./dailyNotes";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(goalsRouter);
 router.use(activityLogsRouter);
 router.use(dashboardRouter);
 router.use(dailyNotesRouter);
+router.use(aiRouter);
 
 export default router;

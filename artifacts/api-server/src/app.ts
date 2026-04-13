@@ -39,15 +39,7 @@ app.use(
   }),
 );
 
-app.use(cors({
-  origin: isProd
-    ? [
-        `https://${process.env.REPLIT_DEV_DOMAIN}`,
-        `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`,
-      ].filter(Boolean)
-    : true,
-  credentials: true,
-}));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 

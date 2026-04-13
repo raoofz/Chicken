@@ -75,7 +75,7 @@ export default function Login() {
                     onChange={e => setUsername(e.target.value)}
                     placeholder={t("login.username.placeholder")}
                     className={isRtl ? "pr-10" : "pl-10"}
-                    required
+                    autoComplete="username"
                     autoFocus
                   />
                 </div>
@@ -92,7 +92,7 @@ export default function Login() {
                     onChange={e => setPassword(e.target.value)}
                     placeholder={t("login.password.placeholder")}
                     className={isRtl ? "pr-10 pl-10" : "pl-10 pr-10"}
-                    required
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"

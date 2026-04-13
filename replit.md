@@ -43,7 +43,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 
 - **Helmet**: Security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.)
 - **Rate Limiting**: 100 requests/minute general, 10 login attempts per 15 minutes
-- **CORS**: Restricted origins in production, open in development
+- **CORS**: All origins allowed with credentials
 - **Session cookies**: httpOnly, sameSite=lax, secure in production
 - **Input validation**: Zod schemas on all API routes, type/length checks on auth inputs
 - **Audit logging**: Failed login attempts, password changes, and logouts logged via Pino
@@ -66,11 +66,12 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Logs** (سجل النشاط) — activity log
 - **Settings** — account info, role display, change password, logout
 - **Language switcher** — AR/SV toggle in sidebar and mobile header
+- **AI Analysis** (تحليل ذكي) — admin-only, uses OpenAI to analyze farm data (flocks, hatching, tasks, goals, notes)
 
 ### Swedish Web App (artifacts/poultry-manager-sv)
 - **Login page** — Swedish LTR, same chicken logo, "Gårdsförvaltare" title
 - **Dashboard** — Swedish labels, same clickable stat cards
-- **All pages translated**: Flockar, Kläckning, Uppgifter, Mål, Anteckningar, Aktivitetslogg, Inställningar
+- **All pages translated**: Flockar, Kläckning, Uppgifter, Mål, AI-analys, Anteckningar, Aktivitetslogg, Inställningar
 - **Auth errors** show Swedish messages
 - **Layout**: Sidebar on LEFT (LTR), Inter font, same warm earthy palette
 - **Role-based navigation**: Admin-only items labeled with badge
@@ -106,6 +107,7 @@ Indexes on: created_at, due_date, status, completed, date, author_id, username
 - `GET/POST /api/hatching-cycles`, `GET/PUT/DELETE /api/hatching-cycles/:id`
 - `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
 - `GET/POST /api/notes`, `DELETE /api/notes/:id` — admin only
+- `POST /api/ai/analyze` — AI farm analysis (admin-only, uses OpenAI)
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
 
