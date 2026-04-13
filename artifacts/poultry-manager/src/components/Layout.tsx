@@ -1,8 +1,8 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
-  Languages, GraduationCap,
+  Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
+  Languages,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,8 +22,6 @@ const NAV_KEYS = [
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
   { href: "/notes", key: "nav.notes", icon: FileText, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
-  { href: "/ai", key: "nav.ai", icon: Brain, adminOnly: true },
-  { href: "/hatching-assistant", key: "nav.hatchAssistant", icon: GraduationCap, adminOnly: false },
   { href: "/settings", key: "nav.settings", icon: Settings, adminOnly: false },
 ];
 

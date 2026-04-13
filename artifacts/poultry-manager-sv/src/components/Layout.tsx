@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, Brain, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
+  Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { href: "/goals", label: "Mål", icon: Target, adminOnly: false },
   { href: "/notes", label: "Anteckningar", icon: FileText, adminOnly: true },
   { href: "/logs", label: "Logg", icon: BookOpen, adminOnly: false },
-  { href: "/ai", label: "AI-analys", icon: Brain, adminOnly: true },
   { href: "/settings", label: "Inställningar", icon: Settings, adminOnly: false },
 ];
 

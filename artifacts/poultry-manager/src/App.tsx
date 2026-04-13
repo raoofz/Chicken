@@ -12,8 +12,6 @@ import Tasks from "@/pages/tasks";
 import Goals from "@/pages/goals";
 import Logs from "@/pages/logs";
 import Notes from "@/pages/notes";
-import AiInsights from "@/pages/ai-insights";
-import HatchingAssistant from "@/pages/hatching-assistant";
 import Login from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import NotFound from "@/pages/not-found";
@@ -47,8 +45,6 @@ function AppRoutes() {
         <Route path="/goals" component={Goals} />
         <Route path="/logs" component={Logs} />
         <Route path="/notes" component={Notes} />
-        <Route path="/ai" component={AiInsights} />
-        <Route path="/hatching-assistant" component={HatchingAssistant} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>

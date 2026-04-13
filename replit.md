@@ -47,7 +47,6 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 |---|---|---|
 | View all data | ✅ | ✅ |
 | Add/Edit/Delete records | ✅ | ❌ (read-only) |
-| AI Analysis page | ✅ | ❌ (hidden) |
 | Daily Notes | ✅ | ❌ (hidden + API protected) |
 
 ## Features
@@ -62,20 +61,10 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Tasks** (مهام اليوم) — daily task management with categories & priorities
 - **Goals** (الأهداف) — progress tracking with progress bars
 - **Notes** (المذكرات) — daily journal, admin-only
-- **AI Insights** (المستشار الذكي) — admin-only; structured 8-section analysis via gpt-4o:
-  - Urgent alerts, hatchery analysis, flock health, performance, 2-week predictions, action plan, profitability, preventive health
-  - Feeds: full flock data + hatching cycle phase data + overdue tasks + goal progress + notes + activity logs
-  - `summary` field returns: urgentCount, avgHatchRate, activeCyclesCount, tasksDone, goalsProgress
-- **Hatching Assistant** (دكتور التفقيس) — AI-powered hatching expert with comprehensive knowledge base:
-  - **Full Hatching Plan**: generates complete scientific guide based on user's machine type, egg type, experience, current day
-  - **Quick Diagnosis**: 8 one-click problem buttons (power outage, high temp, low humidity, stuck chick, etc.)
-  - **Custom Problem Diagnosis**: describe any problem for AI-powered analysis with cause → solution → prevention
-  - **Follow-up Chat**: ask unlimited follow-up questions with full knowledge base context
-  - **Knowledge Base**: 11 scientific chapters covering embryo development day-by-day, parameters for 6 egg types (chicken, duck, quail, turkey, goose, broiler), 20+ common problems, post-hatch care, breeder nutrition, weight loss monitoring, biosecurity
-  - **New fields**: current day, room temperature, room humidity for more precise recommendations
-  - API routes: `POST /api/ai/hatching-assistant`, `POST /api/ai/hatching-followup`, `POST /api/ai/hatching-diagnose`
 - **Sidebar** — WhatsApp group button (green, `WHATSAPP_GROUP_URL` constant in Layout.tsx)
 - **Logs** (سجل النشاط) — activity log
+- **Settings** — app settings page
+- **Language switcher** — AR/SV toggle in sidebar and mobile header
 
 ### Mobile App (artifacts/poultry-mobile)
 - Login screen with username/password fields in Arabic
@@ -89,8 +78,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ### Swedish Web App (artifacts/poultry-manager-sv)
 - **Login page** — Swedish LTR, same chicken logo, "Gårdsförvaltare" title
 - **Dashboard** — Swedish labels, same clickable stat cards
-- **All pages translated**: Flockar, Kläckning, Uppgifter, Mål, Anteckningar, Smart rådgivare, Aktivitetslogg, Inställningar
-- **AI Insights** sends `lang: "sv"` to get Swedish AI analysis (same 10-section format)
+- **All pages translated**: Flockar, Kläckning, Uppgifter, Mål, Anteckningar, Aktivitetslogg, Inställningar
 - **Auth errors** show Swedish messages (not Arabic backend errors)
 - **Layout**: Sidebar on LEFT (LTR), Inter font, same warm earthy palette
 
@@ -124,10 +112,7 @@ Tables:
 - `GET/POST /api/hatching-cycles`, `GET/PUT/DELETE /api/hatching-cycles/:id`
 - `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`
 - `GET/POST /api/notes` — daily journal (admin-only, requireAdmin middleware)
-- `POST /api/ai/analyze` — AI analysis (OpenAI); accepts `{ lang: "sv" }` for Swedish output, defaults to Arabic
-- `POST /api/ai/hatching-assistant` — generate complete hatching guide (with knowledge base)
-- `POST /api/ai/hatching-followup` — follow-up questions with knowledge base context
-- `POST /api/ai/hatching-diagnose` — diagnose hatching problems with knowledge base
+- `DELETE /api/notes/:id` — delete note (admin-only)
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
 
