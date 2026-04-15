@@ -78,6 +78,15 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - Data quality assessment
   - Chat mode: context-aware expert replies based on actual farm data
   - Engine file: `artifacts/api-server/src/lib/ai-engine.ts`
+- **Daily Plan** (الخطة اليومية الذكية) — admin-only, AI-generated daily schedule:
+  - Reads farm data (flocks, cycles, tasks, notes) and builds a time-ordered plan from 05:30-20:00
+  - Dynamic slots based on active hatching cycles, overdue/today tasks, vaccination needs
+  - Risk level indicator (critical/high/medium/low) from future risk analysis
+  - Daily tip from veterinary knowledge base
+  - Interactive checklist — mark tasks done as you progress through the day
+  - Progress bar showing completion percentage
+  - API: `POST /api/ai/daily-plan`
+  - Page: `artifacts/poultry-manager/src/pages/daily-plan.tsx`
 
 ### Swedish Web App (artifacts/poultry-manager-sv)
 - **Login page** — Swedish LTR, same chicken logo, "Gårdsförvaltare" title

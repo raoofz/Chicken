@@ -1015,6 +1015,253 @@ function buildNarrativeReply(analysis: FullAnalysis, lang: EngineLang): string {
   return lines.filter(Boolean).join("\n");
 }
 
+export interface DailyPlanSlot {
+  time: string;
+  icon: string;
+  title: string;
+  description: string;
+  priority: "critical" | "high" | "normal";
+  source: "system" | "task" | "cycle" | "note";
+}
+
+export interface DailyPlanResult {
+  date: string;
+  greeting: string;
+  slots: DailyPlanSlot[];
+  riskLevel: "critical" | "high" | "medium" | "low";
+  riskSummary: string;
+  tip: string;
+}
+
+export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
+  const t = today();
+  const slots: DailyPlanSlot[] = [];
+
+  const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
+  const overdueTasks = data.tasks.filter(tk => tk.dueDate && tk.dueDate <= t && !tk.completed);
+  const todayTasks = data.tasks.filter(tk => tk.dueDate === t && !tk.completed);
+  const pendingTasks = data.tasks.filter(tk => !tk.completed);
+  const totalBirds = data.flocks.reduce((s, f) => s + (f.currentCount ?? 0), 0);
+
+  slots.push({
+    time: "05:30",
+    icon: "🌅",
+    title: "جولة الصباح الأولى",
+    description: totalBirds > 0
+      ? `تفقّد ${totalBirds} طير: سلوك، حركة، أصوات غير طبيعية. افحص أي نفوق ليلي وسجّله فوراً.`
+      : "تفقّد العنابر: سلوك الطيور، نفوق ليلي، أي أعراض غير طبيعية.",
+    priority: "critical",
+    source: "system",
+  });
+
+  slots.push({
+    time: "06:00",
+    icon: "🌡️",
+    title: "فحص الحرارة والرطوبة",
+    description: activeCycles.length > 0
+      ? `لديك ${activeCycles.length} فقاسة نشطة — تأكد من الحرارة (37.5-37.8°م) والرطوبة (55-60%). ${activeCycles.map(c => {
+          const daysLeft = daysBetween(t, c.expectedHatchDate);
+          return `"${c.batchName}": ${daysLeft > 0 ? `متبقي ${daysLeft} يوم` : "موعد الفقس اليوم!"}`;
+        }).join(" | ")}`
+      : "افحص حرارة العنابر والتأكد من التهوية. سجّل القراءات.",
+    priority: activeCycles.length > 0 ? "critical" : "normal",
+    source: "cycle",
+  });
+
+  slots.push({
+    time: "06:30",
+    icon: "🥣",
+    title: "تقديم العلف الصباحي",
+    description: totalBirds > 0
+      ? `وزّع العلف على ${data.flocks.length} قطيع. تأكد من توزيع متساوي ونظافة المعالف.`
+      : "جهّز العلف ووزّعه بالتساوي. نظّف المعالف قبل التعبئة.",
+    priority: "high",
+    source: "system",
+  });
+
+  slots.push({
+    time: "07:00",
+    icon: "💧",
+    title: "فحص الماء والمساقي",
+    description: "تأكد من تدفق الماء في كل المساقي. نظّف أي مساقي متسخة. راقب استهلاك الماء — انخفاضه إشارة مرضية.",
+    priority: "high",
+    source: "system",
+  });
+
+  if (overdueTasks.length > 0) {
+    const top3 = overdueTasks.slice(0, 3);
+    slots.push({
+      time: "07:30",
+      icon: "⚠️",
+      title: `${overdueTasks.length} مهمة متأخرة — أنجزها اليوم`,
+      description: top3.map(tk => `• ${tk.title}`).join("\n"),
+      priority: "critical",
+      source: "task",
+    });
+  }
+
+  if (todayTasks.length > 0) {
+    slots.push({
+      time: "08:00",
+      icon: "📋",
+      title: `مهام اليوم (${todayTasks.length})`,
+      description: todayTasks.slice(0, 5).map(tk => `• ${tk.title}`).join("\n"),
+      priority: "high",
+      source: "task",
+    });
+  }
+
+  const needsVaccine = pendingTasks.filter(tk =>
+    /تحصين|تطعيم|لقاح|vaccine/i.test(tk.title)
+  );
+  if (needsVaccine.length > 0) {
+    slots.push({
+      time: "08:30",
+      icon: "💉",
+      title: "تحصينات مطلوبة",
+      description: needsVaccine.map(tk => `• ${tk.title}`).join("\n"),
+      priority: "critical",
+      source: "task",
+    });
+  }
+
+  const cyclesNearHatch = activeCycles.filter(c => {
+    const daysLeft = daysBetween(t, c.expectedHatchDate);
+    return daysLeft >= 0 && daysLeft <= 3;
+  });
+  if (cyclesNearHatch.length > 0) {
+    slots.push({
+      time: "09:00",
+      icon: "🐣",
+      title: "دورات قريبة من الفقس!",
+      description: cyclesNearHatch.map(c => {
+        const daysLeft = daysBetween(t, c.expectedHatchDate);
+        return `• "${c.batchName}" (${c.eggsSet} بيضة) — ${daysLeft === 0 ? "الفقس اليوم!" : `متبقي ${daysLeft} يوم`}`;
+      }).join("\n"),
+      priority: "critical",
+      source: "cycle",
+    });
+  }
+
+  slots.push({
+    time: "10:00",
+    icon: "🧹",
+    title: "تنظيف العنابر",
+    description: "أزل الفرشة المبللة. نظّف حول المعالف والمساقي. تأكد من جفاف الأرضية.",
+    priority: "normal",
+    source: "system",
+  });
+
+  if (activeCycles.length > 0) {
+    slots.push({
+      time: "11:00",
+      icon: "🔄",
+      title: "فحص التقليب والفقاسات",
+      description: "تأكد من عمل التقليب التلقائي. افحص مستوى الماء في صواني الرطوبة. سجّل القراءات.",
+      priority: "high",
+      source: "cycle",
+    });
+  }
+
+  slots.push({
+    time: "12:00",
+    icon: "🥣",
+    title: "العلف الظهري",
+    description: "قدّم الوجبة الثانية. راقب شهية الطيور — ضعف الأكل إشارة مبكرة للمرض.",
+    priority: "high",
+    source: "system",
+  });
+
+  slots.push({
+    time: "14:00",
+    icon: "🔍",
+    title: "جولة فحص منتصف اليوم",
+    description: "تفقّد صحة الطيور: أعراض تنفسية، إسهال، خمول. افحص التهوية خصوصاً في الحر.",
+    priority: "high",
+    source: "system",
+  });
+
+  slots.push({
+    time: "16:00",
+    icon: "⚙️",
+    title: "صيانة المعدات",
+    description: "افحص المراوح، المدفئات، نظام الإضاءة. تأكد من عمل كل شيء قبل الليل.",
+    priority: "normal",
+    source: "system",
+  });
+
+  slots.push({
+    time: "17:00",
+    icon: "🥣",
+    title: "العلف المسائي",
+    description: "الوجبة الأخيرة في اليوم. تأكد من كفاية العلف للّيل.",
+    priority: "high",
+    source: "system",
+  });
+
+  if (activeCycles.length > 0) {
+    slots.push({
+      time: "18:00",
+      icon: "🌡️",
+      title: "فحص الفقاسات المسائي",
+      description: "قراءة الحرارة والرطوبة. مقارنة مع قراءات الصباح. تسجيل أي فرق.",
+      priority: "critical",
+      source: "cycle",
+    });
+  }
+
+  slots.push({
+    time: "19:00",
+    icon: "📝",
+    title: "تسجيل الملاحظات اليومية",
+    description: "سجّل كل ما لاحظته اليوم: نفوق، أعراض، استهلاك علف وماء، سلوك غير طبيعي.",
+    priority: "high",
+    source: "system",
+  });
+
+  slots.push({
+    time: "20:00",
+    icon: "🔒",
+    title: "إغلاق العنابر",
+    description: "تأكد من إغلاق الأبواب والنوافذ. اضبط التدفئة/التبريد الليلي. فحص أخير للماء.",
+    priority: "normal",
+    source: "system",
+  });
+
+  const risk = futureRiskAnalysis(data);
+  const riskLevel = risk?.level ?? "low";
+
+  const recentNotes = data.notes.slice(0, 5);
+  const diseaseKeywordsFound = recentNotes.some(n =>
+    KEYWORDS_DISEASE.some(k => n.content.toLowerCase().includes(k))
+  );
+
+  const tips = [
+    "الملاحظة اليومية الدقيقة هي أقوى أداة وقائية — لا تهملها.",
+    "التحصينات في وقتها أهم من العلاج بعد المرض.",
+    "الحرارة المستقرة أهم من الحرارة المثالية — التقلبات هي العدو.",
+    "استهلاك الماء أهم مؤشر مبكر للمرض — راقبه يومياً.",
+    "النظافة 80% من الوقاية — نظّف قبل أن تعالج.",
+    "سجّل كل شيء — الذاكرة تخون لكن السجل لا يكذب.",
+  ];
+  if (diseaseKeywordsFound) {
+    tips.unshift("تنبيه: ملاحظاتك الأخيرة تحتوي إشارات مرضية — ركّز على العزل والمراقبة اليوم.");
+  }
+  const tip = tips[Math.floor(Math.random() * Math.min(tips.length, 3))];
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "صباح الخير" : hour < 17 ? "مرحباً" : "مساء الخير";
+
+  return {
+    date: t,
+    greeting: `${greeting} — هذه خطتك لليوم`,
+    slots,
+    riskLevel,
+    riskSummary: risk?.summary ?? "لا توجد مخاطر كبيرة حالياً.",
+    tip,
+  };
+}
+
 export function buildExpertChatReply(message: string, data: RawFarmData): string {
   const lang = detectLang(message);
   const analysis = runFullAnalysis(data);

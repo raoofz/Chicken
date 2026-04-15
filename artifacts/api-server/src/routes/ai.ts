@@ -632,6 +632,18 @@ router.post("/ai/analyze-farm", requireAdmin, async (req: Request, res: Response
   }
 });
 
+router.post("/ai/daily-plan", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const rawData = await getRawFarmData();
+    const { buildDailyPlan } = await import("../lib/ai-engine.js");
+    const plan = buildDailyPlan(rawData);
+    res.json({ plan, timestamp: new Date().toISOString() });
+  } catch (err: any) {
+    logger.error({ err }, "Daily plan failed");
+    res.status(500).json({ error: "فشل بناء الخطة: " + (err?.message ?? "خطأ غير معروف") });
+  }
+});
+
 router.post("/ai/clear", requireAdmin, (_req: Request, res: Response) => {
   chatHistory.delete(_req.session.userId!);
   res.json({ success: true });

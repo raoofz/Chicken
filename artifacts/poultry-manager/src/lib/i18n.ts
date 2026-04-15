@@ -21,6 +21,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.notes": { ar: "المذكرات", sv: "Anteckningar" },
   "nav.logs": { ar: "سجل النشاط", sv: "Aktivitetslogg" },
   "nav.ai": { ar: "د. نصار", sv: "Dr. Nassar" },
+  "nav.dailyPlan": { ar: "الخطة اليومية", sv: "Dagsplan" },
   "nav.settings": { ar: "الإعدادات", sv: "Inställningar" },
 
   "sidebar.whatsapp": { ar: "مجموعة الواتساب", sv: "WhatsApp-grupp" },
