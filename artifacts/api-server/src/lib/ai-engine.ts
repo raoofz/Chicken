@@ -123,6 +123,18 @@ interface TrendData {
   documentationFreq: TrendPoint[];
 }
 
+interface LiveInsight {
+  id: string;
+  icon: string;
+  title: string;
+  value: string;
+  unit: string;
+  detail: string;
+  status: "good" | "warning" | "critical" | "neutral";
+  trend?: "up" | "down" | "stable";
+  badge?: string;
+}
+
 interface FullAnalysis {
   score: number;
   scoreLabel: string;
@@ -150,6 +162,7 @@ interface FullAnalysis {
   summary: string;
   timestamp: string;
   dataQuality: { score: number; label: string; issues: string[] };
+  liveInsights: LiveInsight[];
 }
 
 type EngineLang = "ar" | "sv";
@@ -899,6 +912,154 @@ function assessDataQuality(data: RawFarmData, lang: EngineLang = "ar"): { score:
   return { score, label, issues };
 }
 
+function buildLiveInsights(data: RawFarmData, lang: EngineLang): LiveInsight[] {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
+  const t = today();
+  const insights: LiveInsight[] = [];
+
+  // 1. Total birds on farm
+  const totalBirds = data.flocks.reduce((a, f) => a + f.count, 0);
+  const flockCount = data.flocks.length;
+  insights.push({
+    id: "birds",
+    icon: "🐓",
+    title: L("الطيور النشطة", "Aktiva fåglar"),
+    value: String(totalBirds),
+    unit: L("طير", "fåglar"),
+    detail: flockCount === 0
+      ? L("لا توجد قطعان مسجلة حالياً", "Inga flockar registrerade")
+      : L(`موزعة على ${flockCount} قطيع — ${data.flocks.map(f => `${f.name} (${f.count})`).slice(0, 3).join("، ")}`, `Fördelat på ${flockCount} flock — ${data.flocks.map(f => `${f.name} (${f.count})`).slice(0, 3).join(", ")}`),
+    status: totalBirds > 0 ? "good" : "warning",
+    badge: flockCount > 0 ? L(`${flockCount} قطيع`, `${flockCount} flockar`) : undefined,
+  });
+
+  // 2. Active hatching cycles + closest hatch countdown
+  const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
+  const totalEggsIncubating = activeCycles.reduce((a, c) => a + c.eggsSet, 0);
+  let closestDaysLeft: number | null = null;
+  let closestBatch = "";
+  for (const c of activeCycles) {
+    const daysLeft = Math.ceil((new Date(c.expectedHatchDate).getTime() - new Date(t).getTime()) / 86400000);
+    if (closestDaysLeft === null || daysLeft < closestDaysLeft) {
+      closestDaysLeft = daysLeft;
+      closestBatch = c.batchName;
+    }
+  }
+  const hatchStatus: LiveInsight["status"] = activeCycles.length === 0 ? "neutral" : closestDaysLeft !== null && closestDaysLeft <= 3 ? "warning" : "good";
+  insights.push({
+    id: "hatching",
+    icon: "🥚",
+    title: L("دورات التفقيس", "Kläckningscykler"),
+    value: String(totalEggsIncubating),
+    unit: L("بيضة", "ägg"),
+    detail: activeCycles.length === 0
+      ? L("لا توجد دورات نشطة حالياً", "Inga aktiva cykler just nu")
+      : closestDaysLeft !== null && closestDaysLeft <= 0
+        ? L(`🔔 ${closestBatch} — موعد الفقس اليوم أو تجاوز!`, `🔔 ${closestBatch} — kläckningsdatum idag eller passerat!`)
+        : closestDaysLeft !== null && closestDaysLeft <= 3
+          ? L(`⚠️ ${closestBatch} — فقس خلال ${closestDaysLeft} يوم`, `⚠️ ${closestBatch} — kläcks om ${closestDaysLeft} dagar`)
+          : L(`أقرب دفعة: ${closestBatch} بعد ${closestDaysLeft} يوم`, `Nästa batch: ${closestBatch} om ${closestDaysLeft} dagar`),
+    status: hatchStatus,
+    badge: activeCycles.length > 0 ? L(`${activeCycles.length} دورة`, `${activeCycles.length} cykel`) : undefined,
+  });
+
+  // 3. Average hatch rate (last 3 completed cycles)
+  const completedCycles = data.hatchingCycles.filter(c => c.status === "completed" && c.eggsHatched != null);
+  const last3 = completedCycles.slice(-3);
+  let hatchRateStr = "—";
+  let hatchRateStatus: LiveInsight["status"] = "neutral";
+  let hatchRateDetail = L("لا توجد دورات مكتملة بعد", "Inga avslutade cykler ännu");
+  if (last3.length > 0) {
+    const avg = last3.reduce((a, c) => a + (c.eggsSet > 0 ? ((c.eggsHatched! / c.eggsSet) * 100) : 0), 0) / last3.length;
+    hatchRateStr = avg.toFixed(1);
+    hatchRateStatus = avg >= SCIENCE.incubation.hatchRate.good ? "good" : avg >= SCIENCE.incubation.hatchRate.acceptable ? "warning" : "critical";
+    const trend: LiveInsight["trend"] = last3.length >= 2
+      ? (((last3[last3.length - 1].eggsHatched! / last3[last3.length - 1].eggsSet) * 100) >
+         ((last3[last3.length - 2].eggsHatched! / last3[last3.length - 2].eggsSet) * 100) ? "up" : "down")
+      : "stable";
+    hatchRateDetail = avg >= SCIENCE.incubation.hatchRate.excellent
+      ? L(`ممتاز — آخر ${last3.length} دورات: معدل ${avg.toFixed(0)}%`, `Utmärkt — Senaste ${last3.length} cykler: snitt ${avg.toFixed(0)}%`)
+      : avg >= SCIENCE.incubation.hatchRate.good
+        ? L(`جيد — حافظ على الحرارة والرطوبة لرفعه`, `Bra — Håll temp och fukt för att förbättra`)
+        : avg >= SCIENCE.incubation.hatchRate.acceptable
+          ? L(`مقبول — مجال للتحسين في ضبط الحرارة والتقليب`, `Acceptabelt — Förbättringsmöjligheter i temperatur och vändning`)
+          : L(`ضعيف — راجع: جودة البيض، الحرارة، الرطوبة، التقليب`, `Svagt — Granska: äggkvalitet, temperatur, fuktighet, vändning`);
+    insights.push({ id: "hatchrate", icon: "📊", title: L("معدل الفقس (آخر 3)", "Kläckningsgrad (senaste 3)"), value: hatchRateStr, unit: "%", detail: hatchRateDetail, status: hatchRateStatus, trend });
+  } else {
+    insights.push({ id: "hatchrate", icon: "📊", title: L("معدل الفقس", "Kläckningsgrad"), value: "—", unit: "%", detail: hatchRateDetail, status: "neutral" });
+  }
+
+  // 4. Tasks status (pending / overdue)
+  const pendingTasks = data.tasks.filter(t2 => !t2.completed);
+  const overdueTasks = pendingTasks.filter(t2 => t2.dueDate && t2.dueDate < t);
+  const completedToday = data.tasks.filter(t2 => t2.completed && t2.dueDate === t).length;
+  const taskStatus: LiveInsight["status"] = overdueTasks.length > 3 ? "critical" : overdueTasks.length > 0 ? "warning" : "good";
+  insights.push({
+    id: "tasks",
+    icon: "📋",
+    title: L("المهام المعلقة", "Pågående uppgifter"),
+    value: String(pendingTasks.length),
+    unit: L("مهمة", "uppgifter"),
+    detail: overdueTasks.length > 0
+      ? L(`⚠️ ${overdueTasks.length} مهمة متأخرة — معالجتها أولى`, `⚠️ ${overdueTasks.length} försenade — hantera dessa först`)
+      : pendingTasks.length === 0
+        ? L("✓ جميع المهام مكتملة — عمل ممتاز", "✓ Alla uppgifter klara — utmärkt arbete")
+        : L(`${completedToday} مكتملة اليوم — ${pendingTasks.length} متبقية`, `${completedToday} klara idag — ${pendingTasks.length} återstår`),
+    status: taskStatus,
+    badge: overdueTasks.length > 0 ? L(`${overdueTasks.length} متأخرة`, `${overdueTasks.length} försenade`) : undefined,
+  });
+
+  // 5. Goals progress
+  const activeGoals = data.goals.filter(g => !g.completed);
+  const completedGoals = data.goals.filter(g => g.completed);
+  let avgProgress = 0;
+  let goalStatus: LiveInsight["status"] = "neutral";
+  let goalDetail = L("لا توجد أهداف مسجلة بعد", "Inga mål registrerade ännu");
+  if (data.goals.length > 0) {
+    const progresses = data.goals.map(g => {
+      const cur = parseFloat(g.currentValue) || 0;
+      const tgt = parseFloat(g.targetValue) || 1;
+      return Math.min((cur / tgt) * 100, 100);
+    });
+    avgProgress = progresses.reduce((a, b) => a + b, 0) / progresses.length;
+    goalStatus = avgProgress >= 80 ? "good" : avgProgress >= 50 ? "warning" : "critical";
+    goalDetail = L(
+      `${completedGoals.length} هدف محقق — ${activeGoals.length} جارٍ — تقدم وسطي ${avgProgress.toFixed(0)}%`,
+      `${completedGoals.length} uppnådda — ${activeGoals.length} pågående — snittframsteg ${avgProgress.toFixed(0)}%`
+    );
+  }
+  insights.push({
+    id: "goals",
+    icon: "🎯",
+    title: L("تقدم الأهداف", "Målframsteg"),
+    value: String(data.goals.length > 0 ? avgProgress.toFixed(0) : "—"),
+    unit: data.goals.length > 0 ? "%" : "",
+    detail: goalDetail,
+    status: goalStatus,
+    badge: completedGoals.length > 0 ? L(`${completedGoals.length} منجز`, `${completedGoals.length} uppnådda`) : undefined,
+  });
+
+  // 6. Notes activity (last 7 days)
+  const sevenDaysAgo = new Date(new Date(t).getTime() - 7 * 86400000).toISOString().split("T")[0];
+  const recentNotes = data.notes.filter(n => n.date >= sevenDaysAgo);
+  const notesStatus: LiveInsight["status"] = recentNotes.length >= 5 ? "good" : recentNotes.length >= 2 ? "warning" : "critical";
+  insights.push({
+    id: "notes",
+    icon: "📝",
+    title: L("المذكرات (7 أيام)", "Anteckningar (7 dagar)"),
+    value: String(recentNotes.length),
+    unit: L("ملاحظة", "anteckningar"),
+    detail: recentNotes.length === 0
+      ? L("لم تُسجَّل أي ملاحظات الأسبوع الماضي — التوثيق ضعيف", "Inga anteckningar förra veckan — svag dokumentation")
+      : recentNotes.length >= 5
+        ? L(`توثيق منتظم — آخر ملاحظة: ${recentNotes[recentNotes.length - 1].date}`, `Regelbunden dokumentation — senaste: ${recentNotes[recentNotes.length - 1].date}`)
+        : L(`توثيق متوسط — زد التسجيل لمتابعة أفضل`, `Måttlig dokumentation — öka registreringen för bättre uppföljning`),
+    status: notesStatus,
+  });
+
+  return insights;
+}
+
 export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): FullAnalysis {
   const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const env = analyzeEnvironment(data.hatchingCycles, lang);
@@ -1004,6 +1165,7 @@ export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): Ful
     summary: summaryParts.join(" | "),
     timestamp: new Date().toISOString(),
     dataQuality: dq,
+    liveInsights: buildLiveInsights(data, lang),
   };
 }
 
