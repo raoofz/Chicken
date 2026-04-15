@@ -202,6 +202,13 @@ export default function AiAnalysis() {
         </div>
       </div>
 
+      <div className="mb-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
+        <p className="text-sm font-semibold mb-1">شرح سريع</p>
+        <p className="text-sm text-muted-foreground leading-7">
+          هذا التحليل يقرأ بيانات المزرعة ويحوّلها إلى مشاكل، وتوصيات، وخطر مستقبلي، ثم يشرح لك المصطلحات الأساسية تحتها مباشرة.
+        </p>
+      </div>
+
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
         {!analysis && !analyzing && (
           <div className="flex flex-col items-center justify-center py-16 text-center space-y-6">
