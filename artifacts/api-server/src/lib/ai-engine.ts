@@ -135,6 +135,14 @@ interface FullAnalysis {
   errors: { title: string; description: string; solution: string }[];
   trends: TrendData;
   topPriority: string;
+  futureRisk: {
+    level: "critical" | "high" | "medium" | "low";
+    title: string;
+    summary: string;
+    horizon: string;
+    triggers: string[];
+    actions: string[];
+  };
   summary: string;
   timestamp: string;
   dataQuality: { score: number; label: string; issues: string[] };
@@ -208,6 +216,81 @@ function zScore(value: number, arr: number[]): number {
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
+
+function parseNum(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function daysOld(date: string | Date | null | undefined): number | null {
+  if (!date) return null;
+  const d = new Date(date);
+  if (!Number.isFinite(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+}
+
+function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
+  const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
+  const overdueTasks = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed);
+  const recentNotes = data.notes.slice(0, 10).map(n => n.content).join(" ").toLowerCase();
+  const diseaseSignals = KEYWORDS_DISEASE.filter(k => recentNotes.includes(k)).length;
+  const envSignals = KEYWORDS_ENVIRONMENT.filter(k => recentNotes.includes(k)).length;
+
+  const hatchHistory = data.hatchingCycles.filter(c => c.status === "completed" && c.eggsHatched != null && c.eggsSet > 0)
+    .map(c => (c.eggsHatched ?? 0) / c.eggsSet * 100);
+  const avgHatch = hatchHistory.length ? mean(hatchHistory) : 0;
+  const weakHistory = hatchHistory.filter(r => r < SCIENCE.incubation.hatchRate.acceptable).length;
+
+  const cycleStress = activeCycles.filter(c => {
+    const temp = parseNum(c.temperature);
+    const hum = parseNum(c.humidity);
+    return (temp !== null && (temp > 38.0 || temp < 37.2)) || (hum !== null && (hum < 50 || hum > 65));
+  }).length;
+
+  const riskScore = clamp(
+    20 +
+      overdueTasks.length * 12 +
+      diseaseSignals * 14 +
+      envSignals * 6 +
+      cycleStress * 18 +
+      (weakHistory > 0 ? 15 : 0) +
+      (avgHatch > 0 && avgHatch < 65 ? 20 : avgHatch >= 85 ? -10 : 0),
+    0,
+    100,
+  );
+
+  const level = riskScore >= 85 ? "critical" : riskScore >= 65 ? "high" : riskScore >= 40 ? "medium" : "low";
+  const horizon = riskScore >= 85 ? "24-48 ساعة" : riskScore >= 65 ? "3-7 أيام" : "7-14 يوم";
+
+  const triggers = [
+    ...(overdueTasks.length ? [`${overdueTasks.length} مهمة متأخرة`] : []),
+    ...(cycleStress ? [`${cycleStress} دورة نشطة خارج النطاق المثالي`] : []),
+    ...(diseaseSignals ? [`وجود ${diseaseSignals} إشارة مرضية في الملاحظات`] : []),
+    ...(envSignals ? [`مؤشرات بيئية متكررة في الملاحظات اليومية`] : []),
+    ...(weakHistory ? [`سجل فقس ضعيف سابقاً (${weakHistory} دورة)`] : []),
+  ];
+
+  const actions = [
+    "راجع الحرارة والرطوبة في كل فقاسة الآن ثم كل 30 دقيقة",
+    "أغلق المهام المتأخرة قبل نهاية اليوم",
+    "اعزل أي عنبر تظهر فيه أعراض تنفسية أو نفوق غير طبيعي",
+    "سجل ملاحظة يومية تفصيلية: حرارة، رطوبة، ماء، علف، نفوق، سلوك",
+    "قارن هذه الدورة بأفضل دورة سابقة لتحديد مصدر الخلل",
+  ];
+
+  return {
+    level,
+    title: riskScore >= 85 ? "خطر مستقبلي وشيك" : riskScore >= 65 ? "خطر مرتفع قادم" : riskScore >= 40 ? "خطر متوسط يحتاج متابعة" : "الخطر المستقبلي منخفض",
+    summary: riskScore >= 65
+      ? "البيانات الحالية تشير إلى احتمال تراجع قريب إذا لم يتم التدخل السريع."
+      : "لا توجد إشارات حرجة كبيرة حالياً، لكن يلزم الاستمرار في المراقبة اليومية.",
+    horizon,
+    triggers,
+    actions,
+  };
+}
+
 
 function analyzeEnvironment(cycles: HatchingCycle[]): {
   alerts: Alert[];

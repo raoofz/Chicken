@@ -208,6 +208,22 @@ export default function AiAnalysis() {
     }
   };
 
+  const runFutureRisk = async () => {
+    setAnalyzing(true);
+    setAnalyzeStep(0);
+    try {
+      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
+      const data = await res.json();
+      setAnalysis(data.analysis);
+      setActiveTab("analyze");
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const loadEncyclopedia = async () => {
     if (encyclopedia.length > 0) { setShowEncyclopedia(!showEncyclopedia); return; }
     setEncLoading(true);
@@ -398,6 +414,10 @@ export default function AiAnalysis() {
                 <Sparkles className="w-5 h-5" />
                 ابدأ التحليل العميق
               </Button>
+              <Button onClick={runFutureRisk} variant="outline" size="lg" className="gap-2 border-amber-500/30 text-amber-700 hover:bg-amber-500/10">
+                <AlertTriangle className="w-5 h-5" />
+                اكتشف مخاطر المستقبل
+              </Button>
             </div>
           )}
 
@@ -493,6 +513,40 @@ export default function AiAnalysis() {
                     <div>
                       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">أهم إجراء الآن</p>
                       <p className="text-sm font-medium mt-0.5">{analysis.topPriority}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {analysis.futureRisk && (
+                <Card className={cn("border", analysis.futureRisk.level === "critical" ? "border-red-500/40" : analysis.futureRisk.level === "high" ? "border-amber-500/40" : "border-blue-500/30")}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className={cn("w-5 h-5", analysis.futureRisk.level === "critical" ? "text-red-500" : analysis.futureRisk.level === "high" ? "text-amber-500" : "text-blue-500")} />
+                        <div>
+                          <p className="text-sm font-bold">{analysis.futureRisk.title}</p>
+                          <p className="text-xs text-muted-foreground">أفق الخطر: {analysis.futureRisk.horizon}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border">
+                        {analysis.futureRisk.level}
+                      </span>
+                    </div>
+                    <p className="text-sm">{analysis.futureRisk.summary}</p>
+                    <div className="grid md:grid-cols-2 gap-3 text-xs">
+                      <div className="space-y-1">
+                        <p className="font-semibold">المحفزات</p>
+                        <ul className="list-disc mr-4 space-y-1 text-muted-foreground">
+                          {analysis.futureRisk.triggers.map((t, i) => <li key={i}>{t}</li>)}
+                        </ul>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-semibold">الإجراءات الفورية</p>
+                        <ul className="list-disc mr-4 space-y-1 text-muted-foreground">
+                          {analysis.futureRisk.actions.map((a, i) => <li key={i}>{a}</li>)}
+                        </ul>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
