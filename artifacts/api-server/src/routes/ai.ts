@@ -3,6 +3,7 @@ import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNote
 import { sql } from "drizzle-orm";
 import OpenAI from "openai";
 import { logger } from "../lib/logger";
+import { runFullAnalysis, buildExpertChatReply } from "../lib/ai-engine";
 
 const router: IRouter = Router();
 
@@ -21,140 +22,15 @@ const baseURL = process.env.OPENAI_API_KEY
 
 const openai = new OpenAI({ baseURL, apiKey });
 
-function isOpenAIQuotaError(err: any) {
-  return err?.status === 429 || err?.code === "insufficient_quota" || String(err?.message ?? "").includes("quota");
-}
-
-function localAnalysisFallback(farmData: string) {
-  const tempMatches = [...farmData.matchAll(/حرارة:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
-  const humMatches = [...farmData.matchAll(/رطوبة:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
-  const overdueTasks = (farmData.match(/متأخرة/g) ?? []).length;
-  const activeCycles = (farmData.match(/حالة: incubating|حالة: hatching/g) ?? []).length;
-
-  const alerts: Array<{ type: string; title: string; description: string }> = [];
-  if (tempMatches.some((t) => t > 38.3)) alerts.push({ type: "danger", title: "حرارة عالية", description: "يوجد على الأقل دورة تفقيس بحرارة أعلى من الحد الآمن." });
-  if (tempMatches.some((t) => t < 37)) alerts.push({ type: "warning", title: "حرارة منخفضة", description: "يوجد على الأقل دورة تفقيس بحرارة أقل من المطلوب." });
-  if (humMatches.some((h) => h < 50)) alerts.push({ type: "warning", title: "رطوبة منخفضة", description: "بعض الدورات تحتاج رفع الرطوبة فوراً." });
-  if (overdueTasks > 0) alerts.push({ type: "warning", title: "مهام متأخرة", description: `يوجد ${overdueTasks} مهمة أو أكثر متأخرة.` });
-
-  const score = Math.max(35, 90 - alerts.length * 10 - overdueTasks * 5);
-
-  return {
-    score,
-    scoreLabel: score >= 80 ? "جيد جداً" : score >= 60 ? "جيد" : "مقبول",
-    alerts,
-    sections: [
-      { icon: "🥚", title: "التفقيس", items: [{ label: "الدورات النشطة", value: String(activeCycles), status: activeCycles > 0 ? "good" : "neutral" }] },
-      { icon: "📋", title: "المهام", items: [{ label: "المتأخرة", value: String(overdueTasks), status: overdueTasks > 0 ? "warning" : "good" }] },
-    ],
-    duties: [
-      { priority: "urgent", title: "راجع حرارة/رطوبة الفقاسات", description: "اضبط أي دورة خارج النطاق العلمي فوراً." },
-      { priority: "high", title: "أنجز المهام المتأخرة", description: "لا تؤجل المهام المتراكمة حتى لا تتضاعف الخسائر." },
-    ],
-    predictions: [
-      { title: "تحسن الفقس", description: "سيحسن الاستقرار البيئي النتائج في الدورة القادمة.", confidence: "medium" },
-    ],
-    errors: [],
-    topPriority: "ثبّت حرارة ورطوبة الفقاسات ثم أنجز المهام المتأخرة",
-  };
-}
-
-function buildDeepLocalAnalysis(farmData: string) {
-  const flockLines = farmData.match(/• .*$/gm) ?? [];
-  const cycleLines = farmData.match(/• .*حالة: .*$/gm) ?? [];
-  const taskLines = farmData.match(/• \[(.*?)\] (.*)$/gm) ?? [];
-  const noteLines = farmData.match(/• \[(.*?)\].*$/gm) ?? [];
-  const overdueTasks = (farmData.match(/متأخرة/g) ?? []).length;
-  const activeCycles = (farmData.match(/حالة: incubating|حالة: hatching/g) ?? []).length;
-  const completedGoals = Number((farmData.match(/محققة: (\d+)/)?.[1] ?? "0"));
-  const activeGoals = Number((farmData.match(/جارية: (\d+)/)?.[1] ?? "0"));
-  const tasksCount = Number((farmData.match(/إجمالي المهام: (\d+)/)?.[1] ?? "0"));
-  const notesCount = Number((farmData.match(/آخر الملاحظات \((\d+)\)/)?.[1] ?? "0"));
-
-  const alerts: Array<{ type: string; title: string; description: string }> = [];
-  if (activeCycles === 0) alerts.push({ type: "warning", title: "لا توجد دورات نشطة", description: "راجع سجل التفقيس وتأكد من وجود دفعات قيد العمل." });
-  if (overdueTasks > 0) alerts.push({ type: "danger", title: "مهام متأخرة", description: `هناك ${overdueTasks} مهمة متأخرة تحتاج إغلاقاً فورياً.` });
-  if (notesCount === 0) alerts.push({ type: "info", title: "الملاحظات فارغة", description: "التحليل القوي يحتاج ملاحظات يومية أكثر." });
-  if (completedGoals === 0 && activeGoals > 0) alerts.push({ type: "warning", title: "الأهداف تحتاج متابعة", description: "لا توجد أهداف منجزة حالياً مقارنة بالأهداف الجارية." });
-  if (taskLines.length > 0 && overdueTasks === 0) alerts.push({ type: "success", title: "تنظيم جيد", description: "لا توجد مهام متأخرة واضحة في السجل الحالي." });
-
-  const score = Math.max(10, 95 - overdueTasks * 8 - (activeCycles === 0 ? 10 : 0) - (notesCount === 0 ? 8 : 0) + Math.min(5, Math.floor(taskLines.length / 5)));
-  const topPriority = overdueTasks > 0
-    ? "أغلق المهام المتأخرة أولاً ثم راقب دورات التفقيس"
-    : activeCycles > 0
-      ? "ثبّت حرارة ورطوبة الدورات النشطة بدقة"
-      : "أنشئ دورة تفقيس فعلية وأدخل الملاحظات اليومية";
-
-  return {
-    score,
-    scoreLabel: score >= 85 ? "ممتاز" : score >= 70 ? "جيد جداً" : score >= 55 ? "جيد" : score >= 40 ? "مقبول" : "حرج",
-    alerts,
-    sections: [
-      {
-        icon: "🥚",
-        title: "التفقيس",
-        items: [
-          { label: "الدورات النشطة", value: String(activeCycles), status: activeCycles > 0 ? "good" : "warning" },
-          { label: "سجلات التفقيس", value: String(cycleLines.length), status: cycleLines.length > 0 ? "good" : "neutral" },
-        ],
-      },
-      {
-        icon: "✅",
-        title: "المهام",
-        items: [
-          { label: "إجمالي المهام", value: String(tasksCount), status: tasksCount > 0 ? "good" : "neutral" },
-          { label: "المتأخرة", value: String(overdueTasks), status: overdueTasks > 0 ? "danger" : "good" },
-        ],
-      },
-      {
-        icon: "🎯",
-        title: "الأهداف",
-        items: [
-          { label: "المحققة", value: String(completedGoals), status: completedGoals > 0 ? "good" : "warning" },
-          { label: "الجارية", value: String(activeGoals), status: activeGoals > 0 ? "good" : "neutral" },
-        ],
-      },
-      {
-        icon: "📝",
-        title: "الملاحظات",
-        items: [
-          { label: "آخر الملاحظات", value: String(notesCount), status: notesCount > 0 ? "good" : "warning" },
-          { label: "قطعان مسجلة", value: String(flockLines.length), status: flockLines.length > 0 ? "good" : "neutral" },
-        ],
-      },
-    ],
-    duties: [
-      { priority: "urgent", title: "راجع الفقاسات", description: "افحص حرارة/رطوبة/تقليب كل دورة نشطة وسجل أي انحراف فوراً." },
-      { priority: "high", title: "أغلق المهام المتأخرة", description: "أي مهمة متأخرة الآن تتحول إلى خسارة تشغيلية أو صحية لاحقاً." },
-      { priority: "high", title: "اكتب ملاحظة يومية", description: "سجل اليوم: حرارة، استهلاك، نفوق، سلوك، ماء، علف، وأي حدث غير طبيعي." },
-      { priority: "medium", title: "قارن النتائج أسبوعياً", description: "راجع تغيرات الفقس والأداء والأهداف لاكتشاف الانحراف مبكراً." },
-    ],
-    predictions: [
-      { title: "تحسن الفقس", description: "سيرتفع أداء الفقس إذا استقرت الإدارة اليومية وأصبحت الملاحظات منتظمة.", confidence: "medium" },
-      { title: "تقليل الأخطاء", description: "ستقل الأخطاء بسرعة عندما تُغلق المهام المتأخرة وتُراجع الدورات النشطة.", confidence: "high" },
-      { title: "انخفاض المخاطر", description: "الالتزام بالتوثيق اليومي يقلل المخاطر الصحية والإدارية قبل حدوثها.", confidence: "medium" },
-    ],
-    errors: [
-      { title: "ضعف التوثيق", description: "البرنامج لا يملك ملاحظات كافية إذا كان عدد السجلات منخفضاً.", solution: "أضف ملاحظة لكل يوم ولكل دورة." },
-      { title: "التحليل غير مكتمل", description: "أي تحليل بدون بيانات يومية تفصيلية سيكون أضعف.", solution: "سجل الحرارة والرطوبة والنفوق والعلف والماء يومياً." },
-      { title: "غياب المقارنة", description: "عدم المقارنة بين الدورات يجعل نفس الخطأ يتكرر.", solution: "احفظ مؤشرات كل دورة وقارنها أسبوعياً." },
-    ],
-    topPriority,
-  };
-}
-
-function buildDeepLocalReply(message: string, farmData: string, systemPrompt: string, history: Array<{ role: string; content: string }>) {
-  const analysis = buildDeepLocalAnalysis(farmData);
-  const recentNotes = (farmData.match(/📝 آخر الملاحظات[\s\S]*?(?:\n\n|$)/)?.[0] ?? "").trim();
-  const recentWarnings = analysis.alerts.map((a) => `- ${a.title}: ${a.description}`).join("\n");
-  const lower = message.toLowerCase();
-  if (lower.includes("تحليل") || lower.includes("المزرعة")) {
-    return `📊 تحليل محلي قوي\n\n${recentWarnings}\n\nأهم الأولويات:\n- ${analysis.topPriority}\n- ${analysis.duties.slice(0, 3).map((d) => d.title).join("\n- ")}\n\n${recentNotes}\n\nالنتيجة العامة: ${analysis.scoreLabel} (${analysis.score}/100)`;
-  }
-  if (lower.includes("مشكلة") || lower.includes("مرض") || lower.includes("كوكسيديا") || lower.includes("نيوكاسل")) {
-    return `🩺 تشخيص أولي\n\n${recentWarnings || "لا توجد إشارات حرجة واضحة في البيانات الحالية."}\n\nالخطوة العملية الآن:\n1) اعزل الحالة أو العنبر المشكوك فيه\n2) راقب النفوق والأكل والشرب والحرارة\n3) سجّل ملاحظة يومية مفصلة\n4) أرسل لي العلامات الظاهرة لأعطيك خطة أدق`;
-  }
-  return `📌 إجابة محلية مستندة إلى بيانات المزرعة\n\n${analysis.topPriority}\n\nإذا أردت تحليلاً نهائياً كاملاً، استخدم تبويب تحليل المزرعة؛ فهو يقرأ القطعان والفقاسات والمهام والأهداف والملاحظات ويخرج لك تقريراً عملياً بالأولوية.`;
+async function getRawFarmData() {
+  const [flocks, hatchingCycles, tasks, goals, notes] = await Promise.all([
+    db.select().from(flocksTable),
+    db.select().from(hatchingCyclesTable),
+    db.select().from(tasksTable),
+    db.select().from(goalsTable),
+    db.select().from(dailyNotesTable).orderBy(sql`${dailyNotesTable.date} DESC`).limit(60),
+  ]);
+  return { flocks, hatchingCycles: hatchingCycles as any[], tasks, goals: goals as any[], notes };
 }
 
 const POULTRY_MEGA_ENCYCLOPEDIA = `
@@ -628,92 +504,20 @@ const POULTRY_MEGA_ENCYCLOPEDIA = `
 const chatHistory: Map<number, Array<{role: string, content: string}>> = new Map();
 
 async function getFarmAnalysis() {
-  const [flocks, hatchingCycles, tasks, goals, notes] = await Promise.all([
-    db.select().from(flocksTable),
-    db.select().from(hatchingCyclesTable),
-    db.select().from(tasksTable),
-    db.select().from(goalsTable),
-    db.select().from(dailyNotesTable).orderBy(sql`${dailyNotesTable.date} DESC`).limit(30),
-  ]);
-
-  const today = new Date().toISOString().split("T")[0];
-  const activeCycles = hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
-  const completedCycles = hatchingCycles.filter(c => c.status === "completed" && c.eggsHatched != null);
-  const pendingTasks = tasks.filter(t => !t.completed);
-  const todayTasks = tasks.filter(t => t.dueDate === today);
-  const overdueTasks = tasks.filter(t => t.dueDate && t.dueDate < today && !t.completed);
+  const raw = await getRawFarmData();
+  const t = new Date().toISOString().split("T")[0];
+  const activeCycles = raw.hatchingCycles.filter((c: any) => c.status === "incubating" || c.status === "hatching");
+  const completedCycles = raw.hatchingCycles.filter((c: any) => c.status === "completed" && c.eggsHatched != null);
+  const overdueTasks = raw.tasks.filter((tk: any) => tk.dueDate && tk.dueDate < t && !tk.completed);
 
   let overallHatchRate = 0;
-  let bestCycle = "";
-  let worstCycle = "";
   if (completedCycles.length > 0) {
-    const totalSet = completedCycles.reduce((a, c) => a + c.eggsSet, 0);
-    const totalHatched = completedCycles.reduce((a, c) => a + (c.eggsHatched ?? 0), 0);
+    const totalSet = completedCycles.reduce((a: number, c: any) => a + c.eggsSet, 0);
+    const totalHatched = completedCycles.reduce((a: number, c: any) => a + (c.eggsHatched ?? 0), 0);
     overallHatchRate = totalSet > 0 ? Math.round((totalHatched / totalSet) * 100) : 0;
-
-    const cycleRates = completedCycles.map(c => ({
-      name: c.batchName,
-      rate: c.eggsSet > 0 ? Math.round(((c.eggsHatched ?? 0) / c.eggsSet) * 100) : 0
-    }));
-    cycleRates.sort((a, b) => b.rate - a.rate);
-    if (cycleRates.length > 0) bestCycle = `${cycleRates[0].name} (${cycleRates[0].rate}%)`;
-    if (cycleRates.length > 1) worstCycle = `${cycleRates[cycleRates.length-1].name} (${cycleRates[cycleRates.length-1].rate}%)`;
   }
 
-  const warnings: string[] = [];
-  for (const c of activeCycles) {
-    const temp = c.temperature ? Number(c.temperature) : null;
-    const hum = c.humidity ? Number(c.humidity) : null;
-    if (temp !== null) {
-      if (temp > 38.5) warnings.push(`⚠️ خطر! الدفعة "${c.batchName}" حرارتها عالية جداً (${temp}°م) — الحد الأقصى 38.3°م`);
-      else if (temp < 37.0) warnings.push(`⚠️ الدفعة "${c.batchName}" حرارتها منخفضة (${temp}°م) — الحد الأدنى 37.5°م`);
-      else if (temp > 38.0 && c.status === "hatching") warnings.push(`⚠️ الدفعة "${c.batchName}" في مرحلة الإقفال والحرارة عالية (${temp}°م) — يجب تخفيضها لـ 37.0-37.2°م`);
-    }
-    if (hum !== null) {
-      if (c.status === "hatching" && hum < 65) warnings.push(`⚠️ رطوبة الدفعة "${c.batchName}" منخفضة في الإقفال (${hum}%) — يجب 65-75%`);
-      if (c.status === "incubating" && hum > 65) warnings.push(`⚠️ رطوبة الدفعة "${c.batchName}" عالية في التحضين (${hum}%) — يجب 50-60%`);
-    }
-  }
-
-  if (overdueTasks.length > 0) warnings.push(`⚠️ لديك ${overdueTasks.length} مهام متأخرة لم تُنجز!`);
-
-  const completedGoals = goals.filter(g => g.completed);
-  const activeGoals = goals.filter(g => !g.completed);
-
-  return `
-══════════════════════════════════════
-📊 تحليل بيانات المزرعة الشامل — ${today}
-══════════════════════════════════════
-
-🐔 القطعان (${flocks.length} مجموعة — ${flocks.reduce((a, f) => a + f.count, 0)} طير إجمالاً):
-${flocks.map(f => `  • ${f.name}: ${f.breed}، ${f.count} طير، عمر ${f.ageDays} يوم، غرض: ${f.purpose}${f.notes ? `، ملاحظات: ${f.notes}` : ""}`).join("\n") || "  لا توجد قطعان مسجلة"}
-
-🥚 التفقيس:
-  - دورات نشطة: ${activeCycles.length}
-  - دورات مكتملة: ${completedCycles.length}
-  - معدل الفقس الإجمالي: ${overallHatchRate}%${overallHatchRate < 75 ? " ⚠️ منخفض!" : overallHatchRate >= 85 ? " ✅ ممتاز" : " — مقبول"}
-  ${bestCycle ? `- أفضل دفعة: ${bestCycle}` : ""}
-  ${worstCycle ? `- أضعف دفعة: ${worstCycle}` : ""}
-  الدورات الحالية:
-${hatchingCycles.map(c => `  • ${c.batchName}: ${c.eggsSet} بيضة، حالة: ${c.status}، حرارة: ${c.temperature ?? "—"}°م، رطوبة: ${c.humidity ?? "—"}%، تاريخ وضع: ${c.eggDate ?? "—"}، تاريخ فقس متوقع: ${c.expectedHatchDate ?? "—"}${c.eggsHatched != null ? `، فقست: ${c.eggsHatched}` : ""}`).join("\n") || "  لا توجد دورات"}
-
-✅ المهام:
-  - إجمالي المهام: ${tasks.length}
-  - مكتملة: ${tasks.filter(t => t.completed).length}
-  - معلقة: ${pendingTasks.length}
-  - مهام اليوم: ${todayTasks.length}
-  - متأخرة: ${overdueTasks.length}${overdueTasks.length > 0 ? " ⚠️" : ""}
-${overdueTasks.length > 0 ? `  المتأخرة: ${overdueTasks.map(t => `"${t.title}" (مستحقة ${t.dueDate})`).join("، ")}` : ""}
-
-🎯 الأهداف:
-  - إجمالي: ${goals.length}، محققة: ${completedGoals.length}، جارية: ${activeGoals.length}
-${activeGoals.map(g => `  • ${g.title}: ${g.currentValue}/${g.targetValue} ${g.unit} (${g.targetValue > 0 ? Math.round((g.currentValue / g.targetValue) * 100) : 0}%)${g.deadline ? ` — موعد: ${g.deadline}` : ""}`).join("\n") || "  لا توجد أهداف جارية"}
-
-📝 آخر الملاحظات (${notes.length}):
-${notes.slice(0, 10).map(n => `  • [${n.date}] ${n.category ? `(${n.category}) ` : ""}${n.content}`).join("\n") || "  لا توجد ملاحظات"}
-
-${warnings.length > 0 ? `\n🚨 تنبيهات تلقائية:\n${warnings.join("\n")}` : "\n✅ لا توجد تنبيهات حرجة"}
-══════════════════════════════════════`;
+  return `📊 المزرعة — ${t}\n🐔 قطعان: ${raw.flocks.length} (${raw.flocks.reduce((a: number, f: any) => a + f.count, 0)} طير)\n🥚 دورات نشطة: ${activeCycles.length} | مكتملة: ${completedCycles.length} | فقس: ${overallHatchRate}%\n✅ مهام: ${raw.tasks.length} | متأخرة: ${overdueTasks.length}\n🎯 أهداف: ${raw.goals.length}\n📝 ملاحظات: ${raw.notes.length}`;
 }
 
 router.post("/ai/chat", requireAdmin, async (req: Request, res: Response) => {
@@ -789,7 +593,8 @@ ${farmData}
       history = history.slice(-30);
     }
 
-    const localReply = buildDeepLocalReply(message, farmData, systemPrompt, history);
+    const rawData = await getRawFarmData();
+    const localReply = buildExpertChatReply(message, rawData);
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -816,49 +621,9 @@ ${farmData}
 
 router.post("/ai/analyze-farm", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const farmData = await getFarmAnalysis();
-
-    const systemPrompt = `أنت "الدكتور نصار" — محلل بيانات مزارع دواجن خبير.
-حلل البيانات التالية وأعطِ تقريراً شاملاً.
-
-${POULTRY_MEGA_ENCYCLOPEDIA}
-
-ردك يجب أن يكون بصيغة JSON فقط:
-{
-  "score": 0-100,
-  "scoreLabel": "ممتاز|جيد جداً|جيد|مقبول|ضعيف|حرج",
-  "alerts": [{"type": "danger|warning|info|success", "title": "...", "description": "..."}],
-  "sections": [{"icon": "emoji", "title": "...", "items": [{"label": "...", "value": "...", "status": "good|warning|danger|neutral"}]}],
-  "duties": [{"priority": "urgent|high|medium|low", "title": "...", "description": "..."}],
-  "predictions": [{"title": "...", "description": "...", "confidence": "high|medium|low"}],
-  "errors": [{"title": "...", "description": "...", "solution": "..."}],
-  "topPriority": "أهم شيء يجب فعله الآن"
-}
-
-قواعد:
-- قارن كل رقم بالمعايير العلمية
-- اكتشف الأخطاء حتى الصغيرة منها
-- أعطِ واجبات عملية مرتبة بالأولوية
-- أعطِ توقعات بناءً على البيانات
-- كن دقيقاً ومحدداً
-- رد بـ JSON فقط بدون أي نص إضافي`;
-
-    try {
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        max_tokens: 4096,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: farmData },
-        ],
-        response_format: { type: "json_object" },
-      });
-      const content = response.choices[0]?.message?.content;
-      const analysis = content ? JSON.parse(content) : buildDeepLocalAnalysis(farmData);
-      res.json({ analysis, timestamp: new Date().toISOString(), mode: content ? "ai" : "local" });
-    } catch {
-      res.status(200).json({ analysis: buildDeepLocalAnalysis(farmData), timestamp: new Date().toISOString(), mode: "local" });
-    }
+    const rawData = await getRawFarmData();
+    const analysis = runFullAnalysis(rawData);
+    res.json({ analysis, timestamp: new Date().toISOString(), mode: "expert-local" });
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
     res.status(500).json({ error: "فشل التحليل: " + (err?.message ?? "خطأ غير معروف") });

@@ -66,7 +66,18 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Logs** (سجل النشاط) — activity log
 - **Settings** — account info, role display, change password, logout
 - **Language switcher** — AR/SV toggle in sidebar and mobile header
-- **AI Analysis** (تحليل ذكي) — admin-only, uses OpenAI to analyze farm data (flocks, hatching, tasks, goals, notes)
+- **AI Analysis** (محرك التحليل الذكي) — admin-only, professional expert analysis engine:
+  - Reads raw DB objects directly (not text parsing)
+  - Multi-dimensional scoring: Environment (35%), Biological (35%), Operations (20%), Data Quality (10%)
+  - Anomaly detection with statistical analysis (z-scores, standard deviation)
+  - Scientific thresholds from poultry encyclopedia (temperature, humidity, hatch rates)
+  - Trend analysis comparing historical vs current cycles
+  - Predictive analytics with confidence levels and timeframes
+  - Actionable recommendations with reason, impact, and confidence percentage
+  - Disease keyword detection in notes
+  - Data quality assessment
+  - Chat mode: context-aware expert replies based on actual farm data
+  - Engine file: `artifacts/api-server/src/lib/ai-engine.ts`
 
 ### Swedish Web App (artifacts/poultry-manager-sv)
 - **Login page** — Swedish LTR, same chicken logo, "Gårdsförvaltare" title

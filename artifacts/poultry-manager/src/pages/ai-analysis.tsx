@@ -8,7 +8,9 @@ import {
   Send, ShieldAlert, Trash2, Loader2, Stethoscope,
   BookOpen, ChevronDown, ChevronUp, Sparkles, Bot, User,
   BarChart3, AlertTriangle, CheckCircle2, Info, Zap,
-  ClipboardList, TrendingUp, XCircle,
+  ClipboardList, TrendingUp, XCircle, Activity,
+  Thermometer, Bug, Settings, Database, Shield,
+  Target, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,15 +27,83 @@ interface EncSection {
   topics: { title: string; summary: string }[];
 }
 
+interface Alert {
+  type: string;
+  title: string;
+  description: string;
+  category?: string;
+  severity?: number;
+}
+
+interface Anomaly {
+  title: string;
+  description: string;
+  severity: string;
+  metric: string;
+  currentValue: string;
+  expectedRange: string;
+  category: string;
+}
+
+interface Recommendation {
+  priority: string;
+  title: string;
+  description: string;
+  reason: string;
+  impact: string;
+  confidence: number;
+  category: string;
+}
+
+interface Prediction {
+  title: string;
+  description: string;
+  confidence: string;
+  probability?: number;
+  timeframe?: string;
+  category?: string;
+}
+
+interface SectionItem {
+  label: string;
+  value: string;
+  status: string;
+  detail?: string;
+}
+
+interface Section {
+  icon: string;
+  title: string;
+  category: string;
+  items: SectionItem[];
+  healthScore: number;
+}
+
+interface TrendPoint {
+  label: string;
+  value: number;
+}
+
 interface FarmAnalysis {
   score: number;
   scoreLabel: string;
-  alerts: { type: string; title: string; description: string }[];
-  sections: { icon: string; title: string; items: { label: string; value: string; status: string }[] }[];
-  duties: { priority: string; title: string; description: string }[];
-  predictions: { title: string; description: string; confidence: string }[];
+  scoreBreakdown?: { category: string; score: number; weight: number; label: string }[];
+  alerts: Alert[];
+  anomalies?: Anomaly[];
+  sections: Section[];
+  recommendations?: Recommendation[];
+  predictions: Prediction[];
   errors: { title: string; description: string; solution: string }[];
+  trends?: {
+    hatchRates: TrendPoint[];
+    taskCompletion: TrendPoint[];
+    flockGrowth: TrendPoint[];
+    documentationFreq: TrendPoint[];
+  };
   topPriority: string;
+  summary?: string;
+  dataQuality?: { score: number; label: string; issues: string[] };
+  duties?: { priority: string; title: string; description: string }[];
 }
 
 type TabType = "chat" | "analyze";
@@ -54,12 +124,33 @@ export default function AiAnalysis() {
   const [encLoading, setEncLoading] = useState(false);
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeStep, setAnalyzeStep] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!analyzing) return;
+    const steps = [
+      "قراءة بيانات القطعان...",
+      "تحليل دورات التفقيس...",
+      "فحص المعايير البيئية...",
+      "تحليل المهام والأهداف...",
+      "مسح الملاحظات اليومية...",
+      "كشف الشذوذ والانحرافات...",
+      "توليد التوقعات...",
+      "حساب النتيجة النهائية...",
+    ];
+    let step = 0;
+    const interval = setInterval(() => {
+      step = (step + 1) % steps.length;
+      setAnalyzeStep(step);
+    }, 600);
+    return () => clearInterval(interval);
+  }, [analyzing]);
 
   if (!isAdmin) {
     return (
@@ -80,15 +171,11 @@ export default function AiAnalysis() {
     setLoading(true);
     try {
       const res = await fetch("/api/ai/chat", {
-        method: "POST",
-        credentials: "include",
+        method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: msg, newChat: messages.length === 0 }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "فشل الاتصال");
-      }
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error ?? "فشل الاتصال"); }
       const data = await res.json();
       setMessages(prev => [...prev, { role: "assistant", content: data.reply, timestamp: data.timestamp }]);
     } catch (err: any) {
@@ -108,6 +195,7 @@ export default function AiAnalysis() {
 
   const runAnalysis = async () => {
     setAnalyzing(true);
+    setAnalyzeStep(0);
     try {
       const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
@@ -161,22 +249,25 @@ export default function AiAnalysis() {
       if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-bold mt-2">{line.replace(/\*\*/g, "")}</p>;
       if (line.startsWith("|")) return null;
       if (line.trim() === "") return <br key={i} />;
-      const formatted = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-      return <p key={i} className="leading-relaxed" dangerouslySetInnerHTML={{ __html: formatted }} />;
+      const parts = line.split(/\*\*(.*?)\*\*/g);
+      return <p key={i} className="leading-relaxed">{parts.map((part, j) => j % 2 === 1 ? <strong key={j}>{part}</strong> : part)}</p>;
     });
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-emerald-600";
-    if (score >= 60) return "text-amber-600";
-    return "text-red-600";
-  };
+  const analyzeSteps = [
+    "قراءة بيانات القطعان...",
+    "تحليل دورات التفقيس...",
+    "فحص المعايير البيئية...",
+    "تحليل المهام والأهداف...",
+    "مسح الملاحظات اليومية...",
+    "كشف الشذوذ والانحرافات...",
+    "توليد التوقعات...",
+    "حساب النتيجة النهائية...",
+  ];
 
-  const getScoreBg = (score: number) => {
-    if (score >= 80) return "from-emerald-500 to-teal-600";
-    if (score >= 60) return "from-amber-500 to-orange-600";
-    return "from-red-500 to-rose-600";
-  };
+  const getScoreColor = (score: number) => score >= 80 ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-600";
+  const getScoreBg = (score: number) => score >= 80 ? "from-emerald-500 to-teal-600" : score >= 60 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600";
+  const getScoreRingColor = (score: number) => score >= 80 ? "stroke-emerald-500" : score >= 60 ? "stroke-amber-500" : "stroke-red-500";
 
   const alertIcon = (type: string) => {
     switch (type) {
@@ -197,12 +288,7 @@ export default function AiAnalysis() {
   };
 
   const priorityColor = (p: string) => {
-    switch (p) {
-      case "urgent": return "bg-red-500 text-white";
-      case "high": return "bg-orange-500 text-white";
-      case "medium": return "bg-amber-500 text-white";
-      default: return "bg-blue-500 text-white";
-    }
+    switch (p) { case "urgent": return "bg-red-500 text-white"; case "high": return "bg-orange-500 text-white"; case "medium": return "bg-amber-500 text-white"; default: return "bg-blue-500 text-white"; }
   };
 
   const priorityLabel = (p: string) => {
@@ -210,13 +296,67 @@ export default function AiAnalysis() {
   };
 
   const statusDot = (s: string) => {
-    switch (s) {
-      case "good": return "bg-emerald-500";
-      case "warning": return "bg-amber-500";
-      case "danger": return "bg-red-500";
-      default: return "bg-gray-400";
+    switch (s) { case "good": return "bg-emerald-500"; case "warning": return "bg-amber-500"; case "danger": return "bg-red-500"; default: return "bg-gray-400"; }
+  };
+
+  const categoryIcon = (cat: string) => {
+    switch (cat) {
+      case "environment": return <Thermometer className="w-4 h-4" />;
+      case "biological": return <Bug className="w-4 h-4" />;
+      case "operational": return <Settings className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
     }
   };
+
+  const severityColor = (s: string) => {
+    switch (s) { case "critical": return "bg-red-100 text-red-700 border-red-300"; case "high": return "bg-orange-100 text-orange-700 border-orange-300"; case "medium": return "bg-amber-100 text-amber-700 border-amber-300"; default: return "bg-blue-100 text-blue-700 border-blue-300"; }
+  };
+
+  const severityLabel = (s: string) => {
+    switch (s) { case "critical": return "حرج"; case "high": return "عالي"; case "medium": return "متوسط"; default: return "منخفض"; }
+  };
+
+  const MiniTrendChart = ({ data, color = "emerald" }: { data: TrendPoint[]; color?: string }) => {
+    if (!data || data.length < 2) return null;
+    const max = Math.max(...data.map(d => d.value), 1);
+    const h = 32;
+    const w = 80;
+    const points = data.map((d, i) => `${(i / (data.length - 1)) * w},${h - (d.value / max) * h}`).join(" ");
+    const trend = data[data.length - 1].value - data[0].value;
+    const TrendIcon = trend > 0 ? ArrowUpRight : trend < 0 ? ArrowDownRight : Minus;
+    const trendColor = trend > 0 ? "text-emerald-500" : trend < 0 ? "text-red-500" : "text-gray-400";
+    return (
+      <div className="flex items-center gap-1">
+        <svg width={w} height={h} className="opacity-60">
+          <polyline fill="none" stroke={`var(--color-${color}-500, #10b981)`} strokeWidth="2" points={points} />
+        </svg>
+        <TrendIcon className={cn("w-3.5 h-3.5", trendColor)} />
+      </div>
+    );
+  };
+
+  const ScoreRing = ({ score, size = 80 }: { score: number; size?: number }) => {
+    const r = (size - 8) / 2;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (score / 100) * circ;
+    return (
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/30" />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth="6" strokeLinecap="round"
+            className={getScoreRingColor(score)}
+            strokeDasharray={circ} strokeDashoffset={offset}
+            style={{ transition: "stroke-dashoffset 1s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={cn("text-xl font-bold", getScoreColor(score))}>{score}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const recs = analysis?.recommendations || analysis?.duties?.map(d => ({ ...d, reason: "", impact: "", confidence: 0, category: "" })) || [];
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] md:h-[calc(100vh-5rem)]">
@@ -226,8 +366,8 @@ export default function AiAnalysis() {
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">أداة تحليل المزرعة الذكية</h1>
-            <p className="text-xs text-muted-foreground">تحليل دوري للقطيع، التفقيس، المهام، الأهداف، والملاحظات</p>
+            <h1 className="text-xl font-bold flex items-center gap-2">محرك التحليل الذكي</h1>
+            <p className="text-xs text-muted-foreground">تحليل عميق بالمعايير العلمية — كشف شذوذ — توقعات — توصيات</p>
           </div>
         </div>
       </div>
@@ -246,53 +386,108 @@ export default function AiAnalysis() {
           {!analysis && !analyzing && (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-6">
               <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
-                <BarChart3 className="w-12 h-12 text-emerald-600" />
+                <Activity className="w-12 h-12 text-emerald-600" />
               </div>
               <div className="space-y-2 max-w-md">
-                <h2 className="text-lg font-bold">تحليل شامل وقابل للتنفيذ</h2>
+                <h2 className="text-lg font-bold">محرك تحليل خبير</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  تقرأ الأداة كل البيانات المتاحة وتحوّلها إلى: مخاطر، أولويات، أخطاء محتملة، واجبات عملية، وتوقعات تشغيلية.
+                  يقرأ كل البيانات ويحللها بالمعايير العلمية: كشف الشذوذ، التوقعات، مؤشرات المخاطر، والتوصيات العملية.
                 </p>
               </div>
               <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
                 <Sparkles className="w-5 h-5" />
-                ابدأ التحليل
+                ابدأ التحليل العميق
               </Button>
             </div>
           )}
 
           {analyzing && (
             <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse">
-                <Stethoscope className="w-10 h-10 text-emerald-600" />
+              <div className="relative w-24 h-24">
+                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 animate-pulse" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Stethoscope className="w-10 h-10 text-emerald-600 animate-bounce" />
+                </div>
               </div>
-              <p className="font-semibold text-lg">جارٍ تحليل بيانات المزرعة...</p>
-              <p className="text-sm text-muted-foreground">يفحص الفقاسات، الدجاجات، المهام، الأهداف، والملاحظات</p>
-              <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse" style={{ width: "65%" }} />
+              <p className="font-semibold text-lg">جارٍ التحليل العميق...</p>
+              <p className="text-sm text-emerald-600 font-medium animate-pulse min-h-[20px]">
+                {analyzeSteps[analyzeStep]}
+              </p>
+              <div className="w-64 h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                  style={{ width: `${((analyzeStep + 1) / analyzeSteps.length) * 100}%` }} />
               </div>
             </div>
           )}
 
           {analysis && !analyzing && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={cn("w-16 h-16 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white shadow-lg", getScoreBg(analysis.score))}>
-                    <span className="text-2xl font-bold">{analysis.score}</span>
-                  </div>
-                  <div>
-                    <p className={cn("text-lg font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
-                    <p className="text-xs text-muted-foreground">تقييم صحة المزرعة</p>
-                  </div>
-                </div>
-                <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> إعادة التحليل
-                </Button>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Card className="md:col-span-2">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <ScoreRing score={analysis.score} size={80} />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className={cn("text-lg font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
+                            <p className="text-xs text-muted-foreground">تقييم شامل لصحة المزرعة</p>
+                          </div>
+                          <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" /> إعادة
+                          </Button>
+                        </div>
+                        {analysis.scoreBreakdown && (
+                          <div className="mt-3 space-y-1.5">
+                            {analysis.scoreBreakdown.map((s, i) => (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <span className="w-16 text-muted-foreground truncate">{s.category}</span>
+                                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div className={cn("h-full rounded-full transition-all", s.score >= 80 ? "bg-emerald-500" : s.score >= 60 ? "bg-amber-500" : "bg-red-500")}
+                                    style={{ width: `${s.score}%` }} />
+                                </div>
+                                <span className="w-8 text-end font-medium">{s.score}</span>
+                                <span className="w-8 text-muted-foreground">({s.weight}%)</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-emerald-500/20">
+                  <CardContent className="p-4 space-y-3">
+                    {analysis.dataQuality && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Database className="w-4 h-4 text-blue-500" />
+                          <span className="text-xs font-bold">جودة البيانات</span>
+                          <span className={cn("text-xs px-1.5 py-0.5 rounded-full", analysis.dataQuality.score >= 70 ? "bg-emerald-100 text-emerald-700" : analysis.dataQuality.score >= 40 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700")}>
+                            {analysis.dataQuality.label}
+                          </span>
+                        </div>
+                        {analysis.dataQuality.issues.length > 0 && (
+                          <div className="space-y-0.5">
+                            {analysis.dataQuality.issues.slice(0, 3).map((issue, i) => (
+                              <p key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
+                                <span className="text-amber-500 mt-0.5">•</span> {issue}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {analysis.summary && (
+                      <p className="text-xs text-muted-foreground border-t pt-2">{analysis.summary}</p>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
               {analysis.topPriority && (
-                <Card className="border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20">
+                <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20">
                   <CardContent className="p-3 flex items-start gap-3">
                     <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
@@ -303,14 +498,48 @@ export default function AiAnalysis() {
                 </Card>
               )}
 
+              {(analysis.anomalies?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-red-500" />
+                    شذوذ مكتشف ({analysis.anomalies!.length})
+                  </h3>
+                  {analysis.anomalies!.map((a, i) => (
+                    <Card key={i} className={cn("border", severityColor(a.severity))}>
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2">
+                            {categoryIcon(a.category)}
+                            <div>
+                              <p className="text-sm font-semibold">{a.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
+                              <div className="flex gap-3 mt-1.5 text-[10px]">
+                                <span>القيمة: <strong>{a.currentValue}</strong></span>
+                                <span>المتوقع: <strong>{a.expectedRange}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border", severityColor(a.severity))}>
+                            {severityLabel(a.severity)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
               {analysis.alerts?.length > 0 && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> التنبيهات ({analysis.alerts.length})</h3>
                   {analysis.alerts.map((a, i) => (
                     <div key={i} className={cn("border rounded-xl p-3 flex items-start gap-2.5", alertBg(a.type))}>
                       {alertIcon(a.type)}
-                      <div>
-                        <p className="text-sm font-semibold">{a.title}</p>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between">
+                          <p className="text-sm font-semibold">{a.title}</p>
+                          {a.category && <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{a.category === "environment" ? "بيئة" : a.category === "biological" ? "أحياء" : "عمليات"}</span>}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
                       </div>
                     </div>
@@ -333,29 +562,48 @@ export default function AiAnalysis() {
                 </div>
               )}
 
-              {analysis.duties?.length > 0 && (
+              {recs.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><ClipboardList className="w-4 h-4 text-blue-600" /> الواجبات ({analysis.duties.length})</h3>
-                  {analysis.duties.map((d, i) => (
-                    <div key={i} className="border rounded-xl p-3 flex items-start gap-2.5">
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 mt-0.5", priorityColor(d.priority))}>{priorityLabel(d.priority)}</span>
-                      <div>
-                        <p className="text-sm font-semibold">{d.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
-                      </div>
-                    </div>
+                  <h3 className="text-sm font-bold flex items-center gap-2"><Target className="w-4 h-4 text-blue-600" /> التوصيات ({recs.length})</h3>
+                  {recs.map((d, i) => (
+                    <Card key={i} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-2.5">
+                          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 mt-0.5", priorityColor(d.priority))}>{priorityLabel(d.priority)}</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold">{d.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
+                            {(d.reason || d.impact) && (
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px]">
+                                {d.reason && <span className="text-blue-600">💡 {d.reason}</span>}
+                                {d.impact && <span className="text-emerald-600">📈 {d.impact}</span>}
+                                {d.confidence > 0 && <span className="text-purple-600">🎯 ثقة {d.confidence}%</span>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               )}
 
               {analysis.sections?.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold">التحليل التفصيلي</h3>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> التحليل التفصيلي</h3>
+                  <div className="grid gap-3 md:grid-cols-3">
                     {analysis.sections.map((s, i) => (
-                      <Card key={i}>
+                      <Card key={i} className="hover:shadow-md transition-shadow">
                         <CardContent className="p-3">
-                          <p className="text-sm font-bold mb-2 flex items-center gap-1.5"><span>{s.icon}</span> {s.title}</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-bold flex items-center gap-1.5"><span>{s.icon}</span> {s.title}</p>
+                            {s.healthScore !== undefined && (
+                              <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+                                s.healthScore >= 80 ? "bg-emerald-100 text-emerald-700" :
+                                s.healthScore >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+                              )}>{s.healthScore}/100</span>
+                            )}
+                          </div>
                           <div className="space-y-1.5">
                             {s.items?.map((item, j) => (
                               <div key={j} className="flex items-center justify-between text-xs">
@@ -363,7 +611,10 @@ export default function AiAnalysis() {
                                   <span className={cn("w-2 h-2 rounded-full", statusDot(item.status))} />
                                   {item.label}
                                 </span>
-                                <span className="font-medium">{item.value}</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium">{item.value}</span>
+                                  {item.detail && <span className="text-[9px] text-muted-foreground">({item.detail})</span>}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -374,16 +625,75 @@ export default function AiAnalysis() {
                 </div>
               )}
 
+              {analysis.trends && (
+                <div className="space-y-3">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-600" /> الاتجاهات</h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {analysis.trends.hatchRates.length >= 2 && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold">معدل الفقس</p>
+                            <MiniTrendChart data={analysis.trends.hatchRates} color="emerald" />
+                          </div>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {analysis.trends.hatchRates.map((p, i) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value}%</span>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    {analysis.trends.documentationFreq.length >= 2 && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold">التوثيق الأسبوعي</p>
+                            <MiniTrendChart data={analysis.trends.documentationFreq} color="blue" />
+                          </div>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {analysis.trends.documentationFreq.map((p, i) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value} أيام</span>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    {analysis.trends.taskCompletion.length >= 2 && (
+                      <Card>
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-bold">إنجاز المهام</p>
+                            <MiniTrendChart data={analysis.trends.taskCompletion} color="amber" />
+                          </div>
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {analysis.trends.taskCompletion.map((p, i) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value}%</span>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {analysis.predictions?.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-600" /> التوقعات</h3>
+                  <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-600" /> التوقعات ({analysis.predictions.length})</h3>
                   {analysis.predictions.map((p, i) => (
-                    <Card key={i} className="border-purple-200/50 dark:border-purple-800/50">
+                    <Card key={i} className="border-purple-200/50 dark:border-purple-800/50 hover:shadow-md transition-shadow">
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
+                          <div className="flex-1">
                             <p className="text-sm font-semibold">{p.title}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>
+                            {(p.timeframe || p.probability) && (
+                              <div className="flex gap-3 mt-1.5 text-[10px]">
+                                {p.timeframe && <span className="text-blue-600">⏱ {p.timeframe}</span>}
+                                {p.probability !== undefined && <span className="text-purple-600">📊 احتمال {p.probability}%</span>}
+                              </div>
+                            )}
                           </div>
                           <span className={cn("text-[10px] px-2 py-0.5 rounded-full shrink-0",
                             p.confidence === "high" ? "bg-emerald-100 text-emerald-700" :
@@ -501,7 +811,7 @@ export default function AiAnalysis() {
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                     </div>
-                    <span className="text-xs text-muted-foreground">الدكتور نصار يفكر...</span>
+                    <span className="text-xs text-muted-foreground">الدكتور نصار يحلل بياناتك...</span>
                   </div>
                 </div>
               </div>
@@ -527,7 +837,7 @@ export default function AiAnalysis() {
               </Button>
             </div>
             <p className="text-[9px] text-muted-foreground text-center mt-1.5 opacity-50">
-              الدكتور نصار — خبير 6000+ مرجع علمي | الإجابات استرشادية
+              محرك التحليل الذكي — معايير علمية + كشف شذوذ + توقعات | الإجابات استرشادية
             </p>
           </div>
         </>
