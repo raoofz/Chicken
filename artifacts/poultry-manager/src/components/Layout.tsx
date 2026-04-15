@@ -22,6 +22,7 @@ const NAV_KEYS = [
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
   { href: "/ai", key: "nav.ai", icon: BrainCircuit, adminOnly: true },
   { href: "/ai/advanced", key: "nav.aiAdvanced", icon: FlaskConical, adminOnly: true },
+  { href: "/ai/precision", key: "nav.aiPrecision", icon: BrainCircuit, adminOnly: true },
   { href: "/notes", key: "nav.notes", icon: FileText, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
   { href: "/settings", key: "nav.settings", icon: Settings, adminOnly: false },

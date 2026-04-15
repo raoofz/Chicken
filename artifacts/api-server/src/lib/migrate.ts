@@ -43,6 +43,28 @@ export async function runMigrations() {
       }
     }
 
+    // Fix 3: Create prediction_logs table for self-monitoring
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS prediction_logs (
+        id SERIAL PRIMARY KEY,
+        engine_version TEXT NOT NULL DEFAULT '2.0',
+        analysis_type TEXT NOT NULL,
+        input_hash TEXT NOT NULL,
+        predicted_hatch_rate NUMERIC(6,3),
+        predicted_risk_score INTEGER,
+        confidence_score INTEGER,
+        actual_hatch_rate NUMERIC(6,3),
+        actual_risk_materialized TEXT,
+        prediction_error NUMERIC(6,3),
+        features_snapshot JSONB,
+        model_metrics JSONB,
+        data_quality_score INTEGER,
+        anomalies_detected JSONB,
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     logger.info("Migrations complete");
   } catch (err) {
     logger.error({ err }, "Migration failed");
