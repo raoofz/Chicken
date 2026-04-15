@@ -1,6 +1,5 @@
 /**
- * صفحة المسح الشامل للمزرعة
- * تعرض كل شيء دفعة واحدة بشكل احترافي
+ * صفحة فحص المزرعة — فحص شامل لكل بيانات المزرعة
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,7 +11,7 @@ import {
   Thermometer, Droplets, TrendingUp, TrendingDown, Minus,
   Shield, RefreshCw, Loader2, ChevronDown, ChevronUp,
   Zap, Activity, Star, Calendar, Users,
-  ArrowRight, Bell,
+  ArrowRight, Bell, Lock,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,7 +27,17 @@ interface FarmScan {
   precision: Precision | null;
 }
 interface FLock { id: number; name: string; breed: string | null; count: number; age: number | null; purpose: string | null; }
-interface Cycle { id: number; name: string; status: string; statusLabel: string; eggsSet: number; eggsHatched: number | null; hatchRate: number | null; hatchLabel: string | null; startDate: string | null; daysRunning: number | null; temperature: number | null; humidity: number | null; tempStatus: "good" | "warn" | "bad" | null; humidStatus: "good" | "warn" | "bad" | null; breed: string | null; }
+interface Cycle {
+  id: number; name: string; status: string; statusLabel: string;
+  eggsSet: number; eggsHatched: number | null; hatchRate: number | null; hatchLabel: string | null;
+  startDate: string | null; daysRunning: number | null;
+  temperature: number | null; humidity: number | null;
+  tempStatus: "good" | "warn" | "bad" | null; humidStatus: "good" | "warn" | "bad" | null;
+  lockdownTemperature: number | null; lockdownHumidity: number | null;
+  lockdownTempStatus: "good" | "warn" | "bad" | null; lockdownHumidStatus: "good" | "warn" | "bad" | null;
+  isLockdownPhase: boolean;
+  breed: string | null;
+}
 interface Task { id: number; title: string; completed: boolean; dueDate: string | null; priority: string; category: string | null; isOverdue: boolean; isToday: boolean; daysOverdue: number; statusLabel: string; statusType: "overdue" | "today" | "upcoming" | "done"; }
 interface Note { id: number; date: string; content: string; author: string | null; }
 interface Goal { id: number; title: string; completed: boolean; targetValue: number | null; currentValue: number | null; unit: string | null; progress: number | null; dueDate: string | null; }
@@ -96,6 +105,63 @@ function Section({ title, icon: Icon, color, children, defaultOpen = true }: {
   );
 }
 
+// ─── Phase chip helper ────────────────────────────────────────────────────────
+function PhaseRow({
+  label, temp, humidity, tempStatus, humidStatus, icon: PhaseIcon, phaseColor,
+}: {
+  label: string;
+  temp: number | null; humidity: number | null;
+  tempStatus: "good" | "warn" | "bad" | null;
+  humidStatus: "good" | "warn" | "bad" | null;
+  icon: any; phaseColor: string;
+}) {
+  if (temp == null && humidity == null) return null;
+  const statusColor = (s: "good" | "warn" | "bad" | null) =>
+    s === "good" ? { bg: "bg-green-50 border-green-200", text: "text-green-700", badge: "text-green-600" }
+    : s === "warn" ? { bg: "bg-yellow-50 border-yellow-200", text: "text-yellow-700", badge: "text-yellow-600" }
+    : { bg: "bg-red-50 border-red-200", text: "text-red-700", badge: "text-red-600" };
+
+  const statusLabel = (s: "good" | "warn" | "bad" | null) =>
+    s === "good" ? "✓ ممتاز" : s === "warn" ? "⚠ على الحدود" : "✗ خارج النطاق";
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-2.5">
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className="w-5 h-5 rounded-lg flex items-center justify-center" style={{ backgroundColor: phaseColor + "25" }}>
+          <PhaseIcon className="h-3 w-3" style={{ color: phaseColor }} />
+        </div>
+        <span className="text-xs font-bold text-gray-600">{label}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {temp != null && (() => {
+          const c = statusColor(tempStatus);
+          return (
+            <div className={cn("flex items-center gap-1.5 rounded-lg p-2 border", c.bg)}>
+              <Thermometer className={cn("h-3.5 w-3.5 flex-shrink-0", c.text)} />
+              <div className="flex-1 min-w-0">
+                <div className={cn("font-black text-sm", c.text)}>{temp}°C</div>
+                <div className={cn("text-[9px]", c.badge)}>{statusLabel(tempStatus)}</div>
+              </div>
+            </div>
+          );
+        })()}
+        {humidity != null && (() => {
+          const c = statusColor(humidStatus);
+          return (
+            <div className={cn("flex items-center gap-1.5 rounded-lg p-2 border", c.bg)}>
+              <Droplets className={cn("h-3.5 w-3.5 flex-shrink-0", c.text)} />
+              <div className="flex-1 min-w-0">
+                <div className={cn("font-black text-sm", c.text)}>{humidity}%</div>
+                <div className={cn("text-[9px]", c.badge)}>{statusLabel(humidStatus)}</div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function FarmScanPage() {
   const { user } = useAuth();
@@ -110,7 +176,6 @@ export default function FarmScanPage() {
   const fetchScan = useCallback(async (silent = false) => {
     if (!silent) { setScanning(true); setScanStep(0); setScan(null); }
     try {
-      // Animate through scan steps
       if (!silent) {
         for (let i = 0; i < SCAN_STEPS.length; i++) {
           await new Promise(r => setTimeout(r, 320));
@@ -160,16 +225,13 @@ export default function FarmScanPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 flex flex-col items-center justify-center p-8" dir="rtl">
         <div className="w-full max-w-sm">
-          {/* Logo area */}
           <div className="flex flex-col items-center mb-10">
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-200 mb-4">
               <Activity className="h-10 w-10 text-white" />
             </div>
-            <h1 className="text-2xl font-black text-gray-900">مسح المزرعة</h1>
+            <h1 className="text-2xl font-black text-gray-900">فحص المزرعة</h1>
             <p className="text-gray-400 text-sm mt-1">جارٍ فحص كل البيانات...</p>
           </div>
-
-          {/* Scan steps */}
           <div className="space-y-3">
             {SCAN_STEPS.map((step, i) => {
               const Icon = step.icon;
@@ -212,7 +274,7 @@ export default function FarmScanPage() {
       <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
         <button onClick={() => fetchScan(false)}
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95">
-          <Activity className="h-5 w-5" />ابدأ مسح المزرعة
+          <Activity className="h-5 w-5" />ابدأ فحص المزرعة
         </button>
       </div>
     );
@@ -230,12 +292,12 @@ export default function FarmScanPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-black text-gray-900">مسح شامل للمزرعة</h1>
+            <h1 className="text-base font-black text-gray-900">فحص المزرعة</h1>
             {lastAt && <p className="text-xs text-gray-400">آخر تحديث: {lastAt} · تلقائي كل 30 ث</p>}
           </div>
           <button onClick={() => fetchScan(false)}
             className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm shadow-amber-200 transition-all">
-            <RefreshCw className="h-3.5 w-3.5" />مسح الآن
+            <RefreshCw className="h-3.5 w-3.5" />فحص الآن
           </button>
         </div>
       </div>
@@ -305,32 +367,35 @@ export default function FarmScanPage() {
         {/* ── TASKS ── */}
         <Section title={`المهام — ${tasks.overdue > 0 ? `⚠️ ${tasks.overdue} متأخرة` : `${tasks.pending} قادمة`}`}
           icon={ClipboardList} color="#f59e0b">
-          {/* Summary row */}
+          {/* Summary tiles — clickable */}
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
-              { n: tasks.overdue, label: "متأخرة", bg: "bg-red-100", text: "text-red-700" },
-              { n: tasks.today,   label: "اليوم",  bg: "bg-amber-100", text: "text-amber-700" },
-              { n: tasks.pending, label: "قادمة",  bg: "bg-blue-100", text: "text-blue-700" },
-              { n: tasks.completed, label: "مكتملة", bg: "bg-green-100", text: "text-green-700" },
+              { n: tasks.overdue,   label: "متأخرة",  bg: "bg-red-100",   text: "text-red-700",   filter: "overdue"  },
+              { n: tasks.today,     label: "اليوم",   bg: "bg-amber-100", text: "text-amber-700", filter: "today"    },
+              { n: tasks.pending,   label: "قادمة",   bg: "bg-blue-100",  text: "text-blue-700",  filter: "upcoming" },
+              { n: tasks.completed, label: "مكتملة",  bg: "bg-green-100", text: "text-green-700", filter: "done"     },
             ].map((s, i) => (
-              <div key={i} className={cn("rounded-xl py-2 px-1 text-center", s.bg)}>
+              <a key={i} href="/tasks"
+                className={cn("rounded-xl py-2 px-1 text-center cursor-pointer hover:opacity-80 active:scale-95 transition-all", s.bg)}>
                 <div className={cn("text-xl font-black", s.text)}>{s.n}</div>
                 <div className={cn("text-[10px] font-medium", s.text)}>{s.label}</div>
-              </div>
+              </a>
             ))}
           </div>
 
-          {/* Task list */}
+          {/* Task list — clickable items */}
           {tasks.list.length === 0 ? (
             <div className="text-center py-4 text-gray-400 text-sm">لا توجد مهام مسجلة</div>
           ) : (
             <div className="space-y-2">
               {tasks.list.map(t => (
-                <div key={t.id} className={cn("flex items-center gap-3 rounded-xl px-3.5 py-3 border",
-                  t.statusType === "overdue" ? "bg-red-50 border-red-200" :
-                  t.statusType === "today" ? "bg-amber-50 border-amber-200" :
-                  t.statusType === "done" ? "bg-gray-50 border-gray-100" : "bg-white border-gray-100"
-                )}>
+                <a key={t.id} href="/tasks"
+                  className={cn("flex items-center gap-3 rounded-xl px-3.5 py-3 border cursor-pointer hover:shadow-sm active:scale-[0.99] transition-all",
+                    t.statusType === "overdue" ? "bg-red-50 border-red-200 hover:bg-red-100" :
+                    t.statusType === "today" ? "bg-amber-50 border-amber-200 hover:bg-amber-100" :
+                    t.statusType === "done" ? "bg-gray-50 border-gray-100 hover:bg-gray-100" :
+                    "bg-white border-gray-100 hover:bg-blue-50"
+                  )}>
                   <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
                     t.statusType === "overdue" ? "bg-red-500" :
                     t.statusType === "today" ? "bg-amber-500" :
@@ -352,7 +417,8 @@ export default function FarmScanPage() {
                   )}>
                     {t.statusLabel}
                   </span>
-                </div>
+                  <ArrowRight className="h-3.5 w-3.5 text-gray-300 flex-shrink-0" />
+                </a>
               ))}
             </div>
           )}
@@ -382,17 +448,24 @@ export default function FarmScanPage() {
                   c.status === "completed" ? "bg-gray-50 border-gray-100" :
                   c.status === "hatching" ? "bg-emerald-50 border-emerald-200" : "bg-purple-50 border-purple-200"
                 )}>
+                  {/* Header */}
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <div className="font-bold text-sm text-gray-900">{c.name}</div>
                       {c.breed && <div className="text-xs text-gray-400">{c.breed}</div>}
                     </div>
-                    <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg",
-                      c.status === "completed" ? "bg-gray-200 text-gray-600" :
-                      c.status === "hatching" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
-                    )}>{c.statusLabel}</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg",
+                        c.status === "completed" ? "bg-gray-200 text-gray-600" :
+                        c.status === "hatching" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
+                      )}>{c.statusLabel}</span>
+                      {c.daysRunning != null && c.status !== "completed" && (
+                        <span className="text-[10px] text-gray-400">اليوم {c.daysRunning} من 21</span>
+                      )}
+                    </div>
                   </div>
 
+                  {/* Eggs stats */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-white rounded-xl p-2.5 border text-center">
                       <div className="text-xs text-gray-400 mb-0.5">البيض المحضون</div>
@@ -411,48 +484,54 @@ export default function FarmScanPage() {
                     ) : c.daysRunning != null ? (
                       <div className="bg-white rounded-xl p-2.5 border text-center">
                         <div className="text-xs text-gray-400 mb-0.5">أيام منذ البداية</div>
-                        <div className="text-lg font-black text-gray-800">{c.daysRunning}</div>
+                        <div className="text-lg font-black text-gray-800">{c.daysRunning} / 21</div>
                       </div>
                     ) : null}
                   </div>
 
-                  {/* Temp + Humidity */}
-                  {(c.temperature != null || c.humidity != null) && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {c.temperature != null && (
-                        <div className={cn("flex items-center gap-2 rounded-xl p-2.5 border",
-                          c.tempStatus === "good" ? "bg-green-50 border-green-200" :
-                          c.tempStatus === "warn" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
+                  {/* Two-phase temperature & humidity display */}
+                  {c.status !== "completed" && (c.temperature != null || c.humidity != null || c.lockdownTemperature != null || c.lockdownHumidity != null) && (
+                    <div className="space-y-2">
+                      {/* Phase label */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <span className="text-[10px] text-gray-400 font-bold">درجات الحرارة والرطوبة</span>
+                        <div className="flex-1 h-px bg-gray-200" />
+                      </div>
+
+                      {/* Phase 1: Incubation (day 1-18) */}
+                      <PhaseRow
+                        label="مرحلة الحضانة (اليوم 1 – 18)"
+                        temp={c.temperature}
+                        humidity={c.humidity}
+                        tempStatus={c.tempStatus}
+                        humidStatus={c.humidStatus}
+                        icon={Thermometer}
+                        phaseColor="#8b5cf6"
+                      />
+
+                      {/* Phase 2: Lockdown (day 18-21) */}
+                      <PhaseRow
+                        label="مرحلة الفقس (اليوم 18 – 21)"
+                        temp={c.lockdownTemperature}
+                        humidity={c.lockdownHumidity}
+                        tempStatus={c.lockdownTempStatus}
+                        humidStatus={c.lockdownHumidStatus}
+                        icon={Lock}
+                        phaseColor="#10b981"
+                      />
+
+                      {/* Current phase indicator */}
+                      {c.daysRunning != null && (
+                        <div className={cn("text-[10px] text-center rounded-lg py-1.5 px-2 font-semibold",
+                          c.isLockdownPhase
+                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            : "bg-purple-100 text-purple-700 border border-purple-200"
                         )}>
-                          <Thermometer className={cn("h-4 w-4 flex-shrink-0",
-                            c.tempStatus === "good" ? "text-green-600" : c.tempStatus === "warn" ? "text-yellow-600" : "text-red-600")} />
-                          <div>
-                            <div className="text-xs text-gray-500">الحرارة</div>
-                            <div className={cn("font-black text-sm",
-                              c.tempStatus === "good" ? "text-green-700" : c.tempStatus === "warn" ? "text-yellow-700" : "text-red-700"
-                            )}>{c.temperature}°C</div>
-                          </div>
-                          <span className={cn("mr-auto text-xs font-bold",
-                            c.tempStatus === "good" ? "text-green-600" : c.tempStatus === "warn" ? "text-yellow-600" : "text-red-600"
-                          )}>{c.tempStatus === "good" ? "✓ ممتاز" : c.tempStatus === "warn" ? "⚠ حدود" : "✗ خطأ"}</span>
-                        </div>
-                      )}
-                      {c.humidity != null && (
-                        <div className={cn("flex items-center gap-2 rounded-xl p-2.5 border",
-                          c.humidStatus === "good" ? "bg-blue-50 border-blue-200" :
-                          c.humidStatus === "warn" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
-                        )}>
-                          <Droplets className={cn("h-4 w-4 flex-shrink-0",
-                            c.humidStatus === "good" ? "text-blue-600" : c.humidStatus === "warn" ? "text-yellow-600" : "text-red-600")} />
-                          <div>
-                            <div className="text-xs text-gray-500">الرطوبة</div>
-                            <div className={cn("font-black text-sm",
-                              c.humidStatus === "good" ? "text-blue-700" : c.humidStatus === "warn" ? "text-yellow-700" : "text-red-700"
-                            )}>{c.humidity}%</div>
-                          </div>
-                          <span className={cn("mr-auto text-xs font-bold",
-                            c.humidStatus === "good" ? "text-blue-600" : c.humidStatus === "warn" ? "text-yellow-600" : "text-red-600"
-                          )}>{c.humidStatus === "good" ? "✓ ممتاز" : c.humidStatus === "warn" ? "⚠ حدود" : "✗ خطأ"}</span>
+                          {c.isLockdownPhase
+                            ? "🔒 الآن في مرحلة الفقس — لا تفتح الحاضنة"
+                            : `📅 الآن في مرحلة الحضانة — اليوم ${c.daysRunning}`
+                          }
                         </div>
                       )}
                     </div>
@@ -527,8 +606,10 @@ export default function FarmScanPage() {
             icon={Target} color="#f97316">
             <div className="space-y-3">
               {goals.list.map(g => (
-                <div key={g.id} className={cn("rounded-xl border p-3.5",
-                  g.completed ? "bg-green-50 border-green-200" : "bg-white border-gray-100")}>
+                <a key={g.id} href="/goals"
+                  className={cn("block rounded-xl border p-3.5 cursor-pointer hover:shadow-sm active:scale-[0.99] transition-all",
+                    g.completed ? "bg-green-50 border-green-200 hover:bg-green-100" : "bg-white border-gray-100 hover:bg-orange-50"
+                  )}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold text-gray-800">{g.title}</span>
                     {g.completed
@@ -544,7 +625,7 @@ export default function FarmScanPage() {
                       <Bar value={g.progress} color={g.progress >= 75 ? "#22c55e" : g.progress >= 40 ? "#f59e0b" : "#ef4444"} />
                     </div>
                   )}
-                </div>
+                </a>
               ))}
             </div>
           </Section>
@@ -628,7 +709,7 @@ export default function FarmScanPage() {
         )}
 
         <div className="text-center text-xs text-gray-300 pb-4">
-          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — بصمة المزرعة
+          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — فحص المزرعة
         </div>
       </div>
     </div>

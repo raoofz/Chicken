@@ -22,7 +22,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.logs": { ar: "سجل النشاط", sv: "Aktivitetslogg" },
   "nav.ai": { ar: "مراقبة بالصور", sv: "Fotoövervakning" },
   "nav.aiAdvanced": { ar: "ذكاء اصطناعي متقدم", sv: "Avancerad AI" },
-  "nav.aiPrecision": { ar: "محرك الدقة v2", sv: "Precision Engine v2" },
+  "nav.aiPrecision": { ar: "فحص المزرعة", sv: "فحص المزرعة" },
   "nav.dailyPlan": { ar: "الخطة اليومية", sv: "Dagsplan" },
 
   "ai.engineTitle": { ar: "محرك تحليل خبير", sv: "Expert-analysmotor" },
