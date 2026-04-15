@@ -636,7 +636,8 @@ router.post("/ai/daily-plan", requireAdmin, async (req: Request, res: Response) 
   try {
     const rawData = await getRawFarmData();
     const { buildDailyPlan } = await import("../lib/ai-engine.js");
-    const plan = buildDailyPlan(rawData);
+    const lang = String(req.body?.lang ?? "").toLowerCase() === "sv" ? "sv" : "ar";
+    const plan = buildDailyPlan(rawData, lang);
     res.json({ plan, timestamp: new Date().toISOString() });
   } catch (err: any) {
     logger.error({ err }, "Daily plan failed");

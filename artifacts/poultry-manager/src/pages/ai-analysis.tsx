@@ -86,24 +86,35 @@ interface FarmAnalysis {
 
 export default function AiAnalysis() {
   const { isAdmin } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { toast } = useToast();
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
 
+  const analyzeSteps = lang === "sv" ? [
+    "Läser flockdata...",
+    "Analyserar kläckcykler...",
+    "Kontrollerar miljöparametrar...",
+    "Analyserar uppgifter och mål...",
+    "Skannar dagliga anteckningar...",
+    "Identifierar avvikelser...",
+    "Genererar prognoser...",
+    "Beräknar slutpoäng...",
+  ] : [
+    "قراءة بيانات القطعان...",
+    "تحليل دورات التفقيس...",
+    "فحص المعايير البيئية...",
+    "تحليل المهام والأهداف...",
+    "مسح الملاحظات اليومية...",
+    "كشف الشذوذ والانحرافات...",
+    "توليد التوقعات...",
+    "حساب النتيجة النهائية...",
+  ];
+
   useEffect(() => {
     if (!analyzing) return;
-    const steps = [
-      "قراءة بيانات القطعان...",
-      "تحليل دورات التفقيس...",
-      "فحص المعايير البيئية...",
-      "تحليل المهام والأهداف...",
-      "مسح الملاحظات اليومية...",
-      "كشف الشذوذ والانحرافات...",
-      "توليد التوقعات...",
-      "حساب النتيجة النهائية...",
-    ];
+    const steps = analyzeSteps;
     let step = 0;
     const interval = setInterval(() => {
       step = (step + 1) % steps.length;
@@ -126,27 +137,12 @@ export default function AiAnalysis() {
     setAnalyzing(true);
     setAnalyzeStep(0);
     try {
-      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: "ar" }) });
+      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
       const data = await res.json();
       setAnalysis(data.analysis);
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  const runFutureRisk = async () => {
-    setAnalyzing(true);
-    setAnalyzeStep(0);
-    try {
-      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: "sv" }) });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
-      const data = await res.json();
-      setAnalysis(data.analysis);
-    } catch (err: any) {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: lang === "sv" ? "Fel" : "خطأ", description: err.message, variant: "destructive" });
     } finally {
       setAnalyzing(false);
     }
@@ -203,14 +199,14 @@ export default function AiAnalysis() {
               <Activity className="w-12 h-12 text-emerald-600" />
             </div>
             <div className="space-y-2 max-w-md">
-              <h2 className="text-lg font-bold">محرك تحليل خبير</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">يقرأ كل البيانات ويحللها بالمعايير العلمية: كشف الشذوذ، التوقعات، مؤشرات المخاطر، والتوصيات العملية.</p>
+              <h2 className="text-lg font-bold">{t("ai.engineTitle")}</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">{t("ai.engineDesc")}</p>
             </div>
             <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
-              <Sparkles className="w-5 h-5" /> ابدأ التحليل العميق
+              <Sparkles className="w-5 h-5" /> {t("ai.startBtn")}
             </Button>
-            <Button onClick={runFutureRisk} size="lg" className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg">
-              <AlertTriangle className="w-5 h-5" /> تحليل المخاطر المستقبلية
+            <Button onClick={runAnalysis} size="lg" variant="outline" className="gap-2">
+              <AlertTriangle className="w-5 h-5" /> {t("ai.riskBtn")}
             </Button>
           </div>
         )}
@@ -223,8 +219,8 @@ export default function AiAnalysis() {
                 <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
               </div>
             </div>
-            <p className="font-semibold text-lg">جارٍ التحليل العميق...</p>
-            <p className="text-sm text-emerald-600 font-medium animate-pulse min-h-[20px]">{["قراءة بيانات القطعان...", "تحليل دورات التفقيس...", "فحص المعايير البيئية...", "تحليل المهام والأهداف...", "مسح الملاحظات اليومية...", "كشف الشذوذ والانحرافات...", "توليد التوقعات...", "حساب النتيجة النهائية..."][analyzeStep]}</p>
+            <p className="font-semibold text-lg">{t("ai.analyzing")}</p>
+            <p className="text-sm text-emerald-600 font-medium animate-pulse min-h-[20px]">{analyzeSteps[analyzeStep]}</p>
           </div>
         )}
 

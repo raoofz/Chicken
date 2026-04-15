@@ -27,7 +27,7 @@ interface DailyPlan {
 
 export default function DailyPlanPage() {
   const { isAdmin } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { toast } = useToast();
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,6 +50,7 @@ export default function DailyPlanPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -67,7 +68,7 @@ export default function DailyPlanPage() {
 
   useEffect(() => {
     fetchPlan();
-  }, []);
+  }, [lang]);
 
   const toggleSlot = (idx: number) => {
     setCheckedSlots(prev => {

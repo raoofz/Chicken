@@ -22,6 +22,12 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.logs": { ar: "سجل النشاط", sv: "Aktivitetslogg" },
   "nav.ai": { ar: "د. نصار", sv: "Dr. Nassar" },
   "nav.dailyPlan": { ar: "الخطة اليومية", sv: "Dagsplan" },
+
+  "ai.engineTitle": { ar: "محرك تحليل خبير", sv: "Expert-analysmotor" },
+  "ai.engineDesc": { ar: "يقرأ كل البيانات ويحللها بالمعايير العلمية: كشف الشذوذ، التوقعات، مؤشرات المخاطر، والتوصيات العملية.", sv: "Läser och analyserar all data efter vetenskapliga kriterier: avvikelsedetektering, prognoser, riskindikatorer och praktiska rekommendationer." },
+  "ai.startBtn": { ar: "ابدأ التحليل العميق", sv: "Starta djupanalys" },
+  "ai.riskBtn": { ar: "تحليل المخاطر المستقبلية", sv: "Framtida riskanalys" },
+  "ai.analyzing": { ar: "جارٍ التحليل العميق...", sv: "Djupanalys pågår..." },
   "nav.settings": { ar: "الإعدادات", sv: "Inställningar" },
 
   "sidebar.whatsapp": { ar: "مجموعة الواتساب", sv: "WhatsApp-grupp" },

@@ -1033,9 +1033,10 @@ export interface DailyPlanResult {
   tip: string;
 }
 
-export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
+export function buildDailyPlan(data: RawFarmData, lang: EngineLang = "ar"): DailyPlanResult {
   const t = today();
   const slots: DailyPlanSlot[] = [];
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
 
   const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
   const overdueTasks = data.tasks.filter(tk => tk.dueDate && tk.dueDate <= t && !tk.completed);
@@ -1046,10 +1047,13 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "05:30",
     icon: "🌅",
-    title: "جولة الصباح الأولى",
+    title: L("جولة الصباح الأولى", "Morgonrunda"),
     description: totalBirds > 0
-      ? `تفقّد ${totalBirds} طير: سلوك، حركة، أصوات غير طبيعية. افحص أي نفوق ليلي وسجّله فوراً.`
-      : "تفقّد العنابر: سلوك الطيور، نفوق ليلي، أي أعراض غير طبيعية.",
+      ? L(
+          `تفقّد ${totalBirds} طير: سلوك، حركة، أصوات غير طبيعية. افحص أي نفوق ليلي وسجّله فوراً.`,
+          `Inspektera ${totalBirds} fåglar: beteende, rörelse, ovanliga ljud. Kontrollera nattlig dödlighet och registrera direkt.`,
+        )
+      : L("تفقّد العنابر: سلوك الطيور، نفوق ليلي، أي أعراض غير طبيعية.", "Inspektera stallar: fåglarnas beteende, nattlig dödlighet, ovanliga symptom."),
     priority: "critical",
     source: "system",
   });
@@ -1057,13 +1061,19 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "06:00",
     icon: "🌡️",
-    title: "فحص الحرارة والرطوبة",
+    title: L("فحص الحرارة والرطوبة", "Temperatur- och fuktkontroll"),
     description: activeCycles.length > 0
-      ? `لديك ${activeCycles.length} فقاسة نشطة — تأكد من الحرارة (37.5-37.8°م) والرطوبة (55-60%). ${activeCycles.map(c => {
-          const daysLeft = daysBetween(t, c.expectedHatchDate);
-          return `"${c.batchName}": ${daysLeft > 0 ? `متبقي ${daysLeft} يوم` : "موعد الفقس اليوم!"}`;
-        }).join(" | ")}`
-      : "افحص حرارة العنابر والتأكد من التهوية. سجّل القراءات.",
+      ? L(
+          `لديك ${activeCycles.length} فقاسة نشطة — تأكد من الحرارة (37.5-37.8°م) والرطوبة (55-60%). ${activeCycles.map(c => {
+            const daysLeft = daysBetween(t, c.expectedHatchDate);
+            return `"${c.batchName}": ${daysLeft > 0 ? `متبقي ${daysLeft} يوم` : "موعد الفقس اليوم!"}`;
+          }).join(" | ")}`,
+          `Du har ${activeCycles.length} aktiv(a) kläckmaskin(er) — kontrollera temp (37,5-37,8°C) och fukt (55-60%). ${activeCycles.map(c => {
+            const daysLeft = daysBetween(t, c.expectedHatchDate);
+            return `"${c.batchName}": ${daysLeft > 0 ? `${daysLeft} dagar kvar` : "Kläckning idag!"}`;
+          }).join(" | ")}`,
+        )
+      : L("افحص حرارة العنابر والتأكد من التهوية. سجّل القراءات.", "Kontrollera stalltemperaturen och ventilationen. Registrera avläsningarna."),
     priority: activeCycles.length > 0 ? "critical" : "normal",
     source: "cycle",
   });
@@ -1071,10 +1081,13 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "06:30",
     icon: "🥣",
-    title: "تقديم العلف الصباحي",
+    title: L("تقديم العلف الصباحي", "Morgonmatning"),
     description: totalBirds > 0
-      ? `وزّع العلف على ${data.flocks.length} قطيع. تأكد من توزيع متساوي ونظافة المعالف.`
-      : "جهّز العلف ووزّعه بالتساوي. نظّف المعالف قبل التعبئة.",
+      ? L(
+          `وزّع العلف على ${data.flocks.length} قطيع. تأكد من توزيع متساوي ونظافة المعالف.`,
+          `Fördela foder till ${data.flocks.length} flock(ar). Se till att fördelningen är jämn och matarna är rena.`,
+        )
+      : L("جهّز العلف ووزّعه بالتساوي. نظّف المعالف قبل التعبئة.", "Förbered och fördela fodret jämnt. Rengör matarna före påfyllning."),
     priority: "high",
     source: "system",
   });
@@ -1082,8 +1095,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "07:00",
     icon: "💧",
-    title: "فحص الماء والمساقي",
-    description: "تأكد من تدفق الماء في كل المساقي. نظّف أي مساقي متسخة. راقب استهلاك الماء — انخفاضه إشارة مرضية.",
+    title: L("فحص الماء والمساقي", "Vatten- och drickarkontroll"),
+    description: L(
+      "تأكد من تدفق الماء في كل المساقي. نظّف أي مساقي متسخة. راقب استهلاك الماء — انخفاضه إشارة مرضية.",
+      "Kontrollera vattenflödet i alla drickare. Rengör smutsiga drickare. Övervaka vattenförbrukningen — minskning är ett sjukdomstecken.",
+    ),
     priority: "high",
     source: "system",
   });
@@ -1093,7 +1109,7 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "07:30",
       icon: "⚠️",
-      title: `${overdueTasks.length} مهمة متأخرة — أنجزها اليوم`,
+      title: L(`${overdueTasks.length} مهمة متأخرة — أنجزها اليوم`, `${overdueTasks.length} försenade uppgifter — klara dem idag`),
       description: top3.map(tk => `• ${tk.title}`).join("\n"),
       priority: "critical",
       source: "task",
@@ -1104,7 +1120,7 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "08:00",
       icon: "📋",
-      title: `مهام اليوم (${todayTasks.length})`,
+      title: L(`مهام اليوم (${todayTasks.length})`, `Dagens uppgifter (${todayTasks.length})`),
       description: todayTasks.slice(0, 5).map(tk => `• ${tk.title}`).join("\n"),
       priority: "high",
       source: "task",
@@ -1118,7 +1134,7 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "08:30",
       icon: "💉",
-      title: "تحصينات مطلوبة",
+      title: L("تحصينات مطلوبة", "Vaccinationer krävs"),
       description: needsVaccine.map(tk => `• ${tk.title}`).join("\n"),
       priority: "critical",
       source: "task",
@@ -1133,10 +1149,10 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "09:00",
       icon: "🐣",
-      title: "دورات قريبة من الفقس!",
+      title: L("دورات قريبة من الفقس!", "Kläckning nära!"),
       description: cyclesNearHatch.map(c => {
         const daysLeft = daysBetween(t, c.expectedHatchDate);
-        return `• "${c.batchName}" (${c.eggsSet} بيضة) — ${daysLeft === 0 ? "الفقس اليوم!" : `متبقي ${daysLeft} يوم`}`;
+        return `• "${c.batchName}" (${c.eggsSet} ${L("بيضة", "ägg")}) — ${daysLeft === 0 ? L("الفقس اليوم!", "Kläckning idag!") : L(`متبقي ${daysLeft} يوم`, `${daysLeft} dagar kvar`)}`;
       }).join("\n"),
       priority: "critical",
       source: "cycle",
@@ -1146,8 +1162,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "10:00",
     icon: "🧹",
-    title: "تنظيف العنابر",
-    description: "أزل الفرشة المبللة. نظّف حول المعالف والمساقي. تأكد من جفاف الأرضية.",
+    title: L("تنظيف العنابر", "Stallstädning"),
+    description: L(
+      "أزل الفرشة المبللة. نظّف حول المعالف والمساقي. تأكد من جفاف الأرضية.",
+      "Ta bort blöt strö. Rengör runt matare och drickare. Se till att golvet är torrt.",
+    ),
     priority: "normal",
     source: "system",
   });
@@ -1156,8 +1175,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "11:00",
       icon: "🔄",
-      title: "فحص التقليب والفقاسات",
-      description: "تأكد من عمل التقليب التلقائي. افحص مستوى الماء في صواني الرطوبة. سجّل القراءات.",
+      title: L("فحص التقليب والفقاسات", "Kontrollera vändning och kläckmaskin"),
+      description: L(
+        "تأكد من عمل التقليب التلقائي. افحص مستوى الماء في صواني الرطوبة. سجّل القراءات.",
+        "Kontrollera att automatisk vändning fungerar. Kontrollera vattennivån i fuktighetsbrickorna. Registrera avläsningarna.",
+      ),
       priority: "high",
       source: "cycle",
     });
@@ -1166,8 +1188,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "12:00",
     icon: "🥣",
-    title: "العلف الظهري",
-    description: "قدّم الوجبة الثانية. راقب شهية الطيور — ضعف الأكل إشارة مبكرة للمرض.",
+    title: L("العلف الظهري", "Lunchmatning"),
+    description: L(
+      "قدّم الوجبة الثانية. راقب شهية الطيور — ضعف الأكل إشارة مبكرة للمرض.",
+      "Ge den andra måltiden. Övervaka fåglarnas aptit — dålig aptit är ett tidigt sjukdomstecken.",
+    ),
     priority: "high",
     source: "system",
   });
@@ -1175,8 +1200,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "14:00",
     icon: "🔍",
-    title: "جولة فحص منتصف اليوم",
-    description: "تفقّد صحة الطيور: أعراض تنفسية، إسهال، خمول. افحص التهوية خصوصاً في الحر.",
+    title: L("جولة فحص منتصف اليوم", "Middagsrunda"),
+    description: L(
+      "تفقّد صحة الطيور: أعراض تنفسية، إسهال، خمول. افحص التهوية خصوصاً في الحر.",
+      "Kontrollera fåglarnas hälsa: andningssymptom, diarré, slöhet. Kontrollera ventilationen, särskilt vid värme.",
+    ),
     priority: "high",
     source: "system",
   });
@@ -1184,8 +1212,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "16:00",
     icon: "⚙️",
-    title: "صيانة المعدات",
-    description: "افحص المراوح، المدفئات، نظام الإضاءة. تأكد من عمل كل شيء قبل الليل.",
+    title: L("صيانة المعدات", "Utrustningsunderhåll"),
+    description: L(
+      "افحص المراوح، المدفئات، نظام الإضاءة. تأكد من عمل كل شيء قبل الليل.",
+      "Kontrollera fläktar, värmare och belysningssystem. Se till att allt fungerar innan natten.",
+    ),
     priority: "normal",
     source: "system",
   });
@@ -1193,8 +1224,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "17:00",
     icon: "🥣",
-    title: "العلف المسائي",
-    description: "الوجبة الأخيرة في اليوم. تأكد من كفاية العلف للّيل.",
+    title: L("العلف المسائي", "Kvällsmatning"),
+    description: L(
+      "الوجبة الأخيرة في اليوم. تأكد من كفاية العلف للّيل.",
+      "Dagens sista måltid. Se till att det finns tillräckligt med foder för natten.",
+    ),
     priority: "high",
     source: "system",
   });
@@ -1203,8 +1237,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     slots.push({
       time: "18:00",
       icon: "🌡️",
-      title: "فحص الفقاسات المسائي",
-      description: "قراءة الحرارة والرطوبة. مقارنة مع قراءات الصباح. تسجيل أي فرق.",
+      title: L("فحص الفقاسات المسائي", "Kvällskontroll av kläckmaskiner"),
+      description: L(
+        "قراءة الحرارة والرطوبة. مقارنة مع قراءات الصباح. تسجيل أي فرق.",
+        "Avläs temperatur och fuktighet. Jämför med morgonens avläsningar. Registrera eventuella skillnader.",
+      ),
       priority: "critical",
       source: "cycle",
     });
@@ -1213,8 +1250,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "19:00",
     icon: "📝",
-    title: "تسجيل الملاحظات اليومية",
-    description: "سجّل كل ما لاحظته اليوم: نفوق، أعراض، استهلاك علف وماء، سلوك غير طبيعي.",
+    title: L("تسجيل الملاحظات اليومية", "Dagliga anteckningar"),
+    description: L(
+      "سجّل كل ما لاحظته اليوم: نفوق، أعراض، استهلاك علف وماء، سلوك غير طبيعي.",
+      "Registrera allt du observerat idag: dödlighet, symptom, foder- och vattenförbrukning, ovanligt beteende.",
+    ),
     priority: "high",
     source: "system",
   });
@@ -1222,8 +1262,11 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
   slots.push({
     time: "20:00",
     icon: "🔒",
-    title: "إغلاق العنابر",
-    description: "تأكد من إغلاق الأبواب والنوافذ. اضبط التدفئة/التبريد الليلي. فحص أخير للماء.",
+    title: L("إغلاق العنابر", "Stäng stallar"),
+    description: L(
+      "تأكد من إغلاق الأبواب والنوافذ. اضبط التدفئة/التبريد الليلي. فحص أخير للماء.",
+      "Se till att dörrar och fönster är stängda. Ställ in nattuppvärmning/kylning. Sista vattenkontroll.",
+    ),
     priority: "normal",
     source: "system",
   });
@@ -1236,7 +1279,7 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     KEYWORDS_DISEASE.some(k => n.content.toLowerCase().includes(k))
   );
 
-  const tips = [
+  const tipsAr = [
     "الملاحظة اليومية الدقيقة هي أقوى أداة وقائية — لا تهملها.",
     "التحصينات في وقتها أهم من العلاج بعد المرض.",
     "الحرارة المستقرة أهم من الحرارة المثالية — التقلبات هي العدو.",
@@ -1244,20 +1287,41 @@ export function buildDailyPlan(data: RawFarmData): DailyPlanResult {
     "النظافة 80% من الوقاية — نظّف قبل أن تعالج.",
     "سجّل كل شيء — الذاكرة تخون لكن السجل لا يكذب.",
   ];
+  const tipsSv = [
+    "Noggranna dagliga observationer är det starkaste förebyggande verktyget — försumma det inte.",
+    "Vaccination i tid är viktigare än behandling efter sjukdom.",
+    "Stabil temperatur är viktigare än idealisk temperatur — variationer är fienden.",
+    "Vattenförbrukning är den viktigaste tidiga sjukdomsindikator — övervaka den dagligen.",
+    "Renlighet är 80% av förebyggande — rengör innan du behandlar.",
+    "Registrera allt — minnet sviker men journalen ljuger inte.",
+  ];
   if (diseaseKeywordsFound) {
-    tips.unshift("تنبيه: ملاحظاتك الأخيرة تحتوي إشارات مرضية — ركّز على العزل والمراقبة اليوم.");
+    tipsAr.unshift("تنبيه: ملاحظاتك الأخيرة تحتوي إشارات مرضية — ركّز على العزل والمراقبة اليوم.");
+    tipsSv.unshift("Varning: Dina senaste anteckningar innehåller sjukdomstecken — fokusera på isolering och övervakning idag.");
   }
-  const tip = tips[Math.floor(Math.random() * Math.min(tips.length, 3))];
+  const tipIdx = Math.floor(Math.random() * Math.min(tipsAr.length, 3));
+  const tip = lang === "sv" ? tipsSv[tipIdx] : tipsAr[tipIdx];
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "صباح الخير" : hour < 17 ? "مرحباً" : "مساء الخير";
+  const greeting = lang === "sv"
+    ? (hour < 12 ? "God morgon" : hour < 17 ? "God dag" : "God kväll")
+    : (hour < 12 ? "صباح الخير" : hour < 17 ? "مرحباً" : "مساء الخير");
+
+  const riskSummaryAr = risk?.summary ?? "لا توجد مخاطر كبيرة حالياً.";
+  const riskSummary = lang === "sv"
+    ? (riskLevel === "low"
+        ? "Inga stora risker för tillfället, men fortsätt med daglig övervakning."
+        : riskLevel === "medium"
+        ? "Inga kritiska tecken för tillfället, men fortsatt daglig övervakning krävs."
+        : "Aktuell data tyder på risk för nedgång om ingen snabb åtgärd vidtas.")
+    : riskSummaryAr;
 
   return {
     date: t,
-    greeting: `${greeting} — هذه خطتك لليوم`,
+    greeting: L(`${greeting} — هذه خطتك لليوم`, `${greeting} — Din plan för dagen`),
     slots,
     riskLevel,
-    riskSummary: risk?.summary ?? "لا توجد مخاطر كبيرة حالياً.",
+    riskSummary,
     tip,
   };
 }
