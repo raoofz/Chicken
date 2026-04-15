@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -10,7 +10,7 @@ import {
   Zap, Activity, TrendingUp, TrendingDown, Minus,
   Shield, Target, RefreshCw, ArrowUpRight, Clock, Flame,
   BarChart3, Database, ChevronRight, AlertCircle,
-  ExternalLink, ClipboardList, Star, X, Lightbulb,
+  ExternalLink, ClipboardList, Star, X, Lightbulb, Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +65,10 @@ export default function AiAnalysis() {
     summary: string; timeframe: string; relatedFacts: string[];
   } | null>(null);
   const [quickSolving, setQuickSolving] = useState(false);
+  const [dataChanged, setDataChanged] = useState(false);
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+  const fingerprintRef = useRef<string | null>(null);
+  const analyzeRef = useRef<((t: ToolMode, silent?: boolean) => Promise<void>) | null>(null);
 
   const isSv = lang === "sv";
 
@@ -103,6 +107,28 @@ export default function AiAnalysis() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
+  // ── فحص تغيّر البيانات كل 30 ثانية (يجب أن يكون قبل أي early return) ──
+  useEffect(() => {
+    if (!isAdmin) return;
+    const checkFingerprint = async () => {
+      try {
+        const resp = await fetch("/api/ai/fingerprint", { credentials: "include" });
+        if (!resp.ok) return;
+        const { fingerprint } = await resp.json();
+        if (fingerprintRef.current && fingerprint !== fingerprintRef.current) {
+          fingerprintRef.current = fingerprint;
+          setDataChanged(true);
+          if (analyzeRef.current) await analyzeRef.current(tool ?? "full", true);
+        } else if (!fingerprintRef.current) {
+          fingerprintRef.current = fingerprint;
+        }
+      } catch { /* silent */ }
+    };
+    const id = setInterval(checkFingerprint, 30_000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -113,8 +139,8 @@ export default function AiAnalysis() {
     );
   }
 
-  const runAnalysis = async (selectedTool: ToolMode) => {
-    setTool(selectedTool); setAnalyzing(true); setAnalyzeStep(0); setAnalysis(null);
+  const runAnalysis = async (selectedTool: ToolMode, silent = false) => {
+    if (!silent) { setTool(selectedTool); setAnalyzing(true); setAnalyzeStep(0); setAnalysis(null); }
     try {
       const res = await fetch("/api/ai/analyze-farm", {
         method: "POST", credentials: "include",
@@ -124,11 +150,17 @@ export default function AiAnalysis() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "error"); }
       const data = await res.json();
       setAnalysis(data.analysis);
+      setDataChanged(false);
+      setLastRunAt(new Date().toLocaleTimeString("ar-SA"));
+      if (silent) toast({ title: isSv ? "🔄 Automatisk uppdatering" : "🔄 تحديث تلقائي", description: isSv ? "Data ändrades — analys uppdaterad" : "البيانات تغيّرت — تم تحديث التحليل" });
     } catch (err: any) {
-      toast({ title: isSv ? "Fel" : "خطأ", description: err.message, variant: "destructive" });
-      setTool(null);
-    } finally { setAnalyzing(false); }
+      if (!silent) toast({ title: isSv ? "Fel" : "خطأ", description: err.message, variant: "destructive" });
+      if (!silent) setTool(null);
+    } finally { if (!silent) setAnalyzing(false); }
   };
+
+  // Keep ref in sync for fingerprint polling
+  analyzeRef.current = runAnalysis;
 
   const openQuickSolve = async (issue: { title: string; description: string; category?: string }) => {
     setQuickSolveIssue(issue);
@@ -242,6 +274,19 @@ export default function AiAnalysis() {
           </Button>
         )}
       </div>
+
+      {/* ── إشعار تحديث تلقائي ── */}
+      {dataChanged && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700 mb-2">
+          <Bell className="h-4 w-4 flex-shrink-0 animate-pulse" />
+          {isSv ? "Data ändrades — analys uppdateras automatiskt..." : "البيانات تغيّرت — جارٍ التحديث التلقائي..."}
+        </div>
+      )}
+      {lastRunAt && !dataChanged && analysis && (
+        <div className="text-xs text-gray-400 mb-1">
+          {isSv ? `Senast uppdaterat: ${lastRunAt} · uppdateras var 30:e sekund` : `آخر تحديث: ${lastRunAt} · يتحدث كل 30 ثانية تلقائياً`}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
 

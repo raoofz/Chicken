@@ -138,6 +138,46 @@ router.post("/ai/clear", requireAdmin, (_req: Request, res: Response) => {
 });
 
 // ─────────────────────────────────────────────
+// DATA FINGERPRINT — lightweight change detector
+// Returns a fast hash so the frontend can detect when data has changed
+// ─────────────────────────────────────────────
+router.get("/ai/fingerprint", requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const rawData = await getRawFarmData();
+    const completed = rawData.hatchingCycles.filter((c: any) => c.status === "completed");
+    const active = rawData.hatchingCycles.filter((c: any) => c.status === "incubating" || c.status === "hatching");
+    const today = new Date().toISOString().split("T")[0];
+    const excludedTitles = ["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"];
+    const overdueTasks = (rawData.tasks as any[]).filter(
+      (t: any) => t.dueDate && t.dueDate < today && !t.completed && !excludedTitles.includes((t.title ?? "").trim())
+    );
+
+    // Fast integer fingerprint — any data change changes this value
+    const fp = [
+      rawData.flocks.length,
+      rawData.hatchingCycles.length,
+      completed.length,
+      active.length,
+      rawData.tasks.length,
+      rawData.notes.length,
+      overdueTasks.length,
+      // Sum of eggsHatched to catch result changes
+      completed.reduce((s: number, c: any) => s + (Number(c.eggsHatched) || 0), 0),
+      // Sum of eggsSet
+      rawData.hatchingCycles.reduce((s: number, c: any) => s + (Number(c.eggsSet) || 0), 0),
+    ].join(":");
+
+    // djb2 hash
+    let h = 5381;
+    for (let i = 0; i < fp.length; i++) { h = ((h << 5) + h + fp.charCodeAt(i)) >>> 0; }
+
+    res.json({ fingerprint: h.toString(16), timestamp: Date.now() });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message });
+  }
+});
+
+// ─────────────────────────────────────────────
 // PRECISION ENGINE v2 — Full Mathematical Analysis
 // ─────────────────────────────────────────────
 
