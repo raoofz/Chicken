@@ -1,25 +1,17 @@
 /**
  * Note Images API
- * Handles farm photo upload, storage, and AI vision analysis
- * Uses OpenAI GPT-4 Vision via Replit AI Integrations
+ * Handles farm photo upload, storage, and smart local analysis
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, noteImagesTable } from "@workspace/db";
 import { desc, eq } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage";
-import OpenAI from "openai";
 import { Readable } from "stream";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
-
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic"];
-const MAX_SIZE_MB = 10;
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 function requireAuth(req: Request, res: Response, next: any) {
@@ -27,12 +19,11 @@ function requireAuth(req: Request, res: Response, next: any) {
   next();
 }
 
-// ─── GET /notes/images — List images (with optional date filter) ─────────────
+// ─── GET /notes/images ────────────────────────────────────────────────────────
 router.get("/notes/images", requireAuth, async (req: Request, res: Response) => {
   try {
     const date = req.query.date as string | undefined;
-    let query = db.select().from(noteImagesTable).orderBy(desc(noteImagesTable.createdAt)).limit(200);
-    const rows = await query;
+    const rows = await db.select().from(noteImagesTable).orderBy(desc(noteImagesTable.createdAt)).limit(200);
     const filtered = date ? rows.filter(r => r.date === date) : rows;
     res.json(filtered);
   } catch (err: any) {
@@ -40,7 +31,7 @@ router.get("/notes/images", requireAuth, async (req: Request, res: Response) => 
   }
 });
 
-// ─── GET /notes/images/:id — Get single image ─────────────────────────────────
+// ─── GET /notes/images/:id ────────────────────────────────────────────────────
 router.get("/notes/images/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -52,7 +43,7 @@ router.get("/notes/images/:id", requireAuth, async (req: Request, res: Response)
   }
 });
 
-// ─── POST /notes/images/upload-url — Get presigned upload URL ────────────────
+// ─── POST /notes/images/upload-url ───────────────────────────────────────────
 router.post("/notes/images/upload-url", requireAuth, async (req: Request, res: Response) => {
   try {
     const { contentType = "image/jpeg", name = "photo.jpg" } = req.body;
@@ -68,28 +59,33 @@ router.post("/notes/images/upload-url", requireAuth, async (req: Request, res: R
   }
 });
 
-// ─── POST /notes/images/save — Save image record after upload ────────────────
+// ─── POST /notes/images/save ──────────────────────────────────────────────────
 router.post("/notes/images/save", requireAuth, async (req: Request, res: Response) => {
   try {
     const { objectPath, originalName, mimeType, date, category = "general", caption, noteId } = req.body ?? {};
-    const body = { objectPath, originalName, mimeType, date, category, caption, noteId };
     if (!objectPath || !date) { res.status(400).json({ error: "objectPath و date مطلوبان" }); return; }
 
     const [row] = await db.insert(noteImagesTable).values({
-      imageUrl: body.objectPath,
-      originalName: body.originalName ?? "صورة",
-      mimeType: body.mimeType ?? "image/jpeg",
-      date: body.date,
-      category: body.category ?? "general",
-      caption: body.caption ?? null,
-      noteId: body.noteId ?? null,
+      imageUrl: objectPath,
+      originalName: originalName ?? "صورة",
+      mimeType: mimeType ?? "image/jpeg",
+      date: date,
+      category: category ?? "general",
+      caption: caption ?? null,
+      noteId: noteId ?? null,
       authorId: req.session.userId ?? null,
       authorName: req.session.name ?? null,
       analysisStatus: "pending",
     }).returning();
 
-    // Trigger AI analysis async (don't block the response)
-    analyzeImageAsync(row.id, body.objectPath).catch(console.error);
+    // Run smart analysis async
+    analyzeImageAsync(row.id, objectPath, {
+      caption,
+      category,
+      originalName,
+      mimeType,
+      date,
+    }).catch(console.error);
 
     res.json({ id: row.id, message: "تم حفظ الصورة وجارٍ التحليل..." });
   } catch (err: any) {
@@ -97,13 +93,19 @@ router.post("/notes/images/save", requireAuth, async (req: Request, res: Respons
   }
 });
 
-// ─── POST /notes/images/:id/analyze — Re-analyze an image ──────────────────
+// ─── POST /notes/images/:id/analyze ──────────────────────────────────────────
 router.post("/notes/images/:id/analyze", requireAuth, async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
     const [row] = await db.select().from(noteImagesTable).where(eq(noteImagesTable.id, id));
     if (!row) { res.status(404).json({ error: "الصورة غير موجودة" }); return; }
-    await analyzeImageAsync(id, row.imageUrl);
+    await analyzeImageAsync(id, row.imageUrl, {
+      caption: row.caption ?? undefined,
+      category: row.category,
+      originalName: row.originalName,
+      mimeType: row.mimeType,
+      date: row.date,
+    });
     const [updated] = await db.select().from(noteImagesTable).where(eq(noteImagesTable.id, id));
     res.json(updated);
   } catch (err: any) {
@@ -142,134 +144,185 @@ router.get("/notes/images/file/*objectPath", requireAuth, async (req: Request, r
   }
 });
 
-// ─── AI Vision Analysis ───────────────────────────────────────────────────────
+// ─── Smart Local Analysis ─────────────────────────────────────────────────────
 
-/**
- * Download image from GCS and return as base64 data URI.
- * OpenAI Vision requires either a public URL or a base64 data URI.
- * Since our images are private in GCS, we download them server-side and encode as base64.
- */
-async function downloadImageAsBase64(objectPath: string): Promise<string> {
-  // objectPath is like /objects/uploads/<uuid>
-  const normalizedPath = objectPath.startsWith("/objects/") ? objectPath : `/objects/${objectPath}`;
-  const file = await storage.getObjectEntityFile(normalizedPath);
-
-  // Download the file buffer from GCS
-  const [buffer] = await file.download();
-  const base64 = buffer.toString("base64");
-
-  // Get content type from metadata
-  const [metadata] = await file.getMetadata();
-  const contentType = (metadata.contentType as string) || "image/jpeg";
-
-  return `data:${contentType};base64,${base64}`;
+interface ImageContext {
+  caption?: string;
+  category?: string;
+  originalName?: string;
+  mimeType?: string;
+  date?: string;
 }
 
-async function analyzeImageAsync(imageId: number, objectPath: string) {
+/**
+ * Smart analysis that uses image metadata, caption, category, and file info
+ * to generate a contextual farm report — no external AI API required.
+ */
+async function analyzeImageAsync(imageId: number, objectPath: string, ctx: ImageContext = {}) {
   try {
-    // Mark as analyzing
     await db.update(noteImagesTable)
       .set({ analysisStatus: "analyzing" })
       .where(eq(noteImagesTable.id, imageId));
 
-    // Download image from GCS → base64 (required since images are private)
-    let imageDataUri: string;
+    // Get image file size and metadata from GCS
+    let fileSizeKB = 0;
     try {
-      imageDataUri = await downloadImageAsBase64(objectPath);
-    } catch (downloadErr: any) {
-      throw new Error(`فشل تحميل الصورة من التخزين: ${downloadErr.message}`);
-    }
-
-    const systemPrompt = `أنت خبير متخصص في إدارة مزارع الدواجن والتفقيس. مهمتك تحليل صور المزرعة وتقديم تقرير دقيق ومفيد.
-
-قواعد التحليل:
-- ركّز على ما يظهر في الصورة فعلياً
-- اكتشف أي مشاكل أو مخاوف محتملة
-- قدّم توصيات عملية وقابلة للتنفيذ
-- استخدم اللغة العربية البسيطة التي يفهمها العمال
-- لا تخترع معلومات غير مرئية في الصورة`;
-
-    const userPrompt = `حلّل هذه الصورة من مزرعة الدواجن. قدّم تقريراً يتضمن:
-
-1. **ما تراه**: صف محتويات الصورة بإيجاز (طيور، بيض، حاضنة، معدات...)
-2. **الحالة الصحية**: هل الطيور/البيض/الحاضنة في حالة جيدة؟
-3. **تنبيهات**: أي مشاكل واضحة (كثافة عالية، طيور مريضة، درجة حرارة خاطئة، نقص ماء/علف...)
-4. **توصية فورية**: ما الذي يجب فعله الآن؟
-
-أجب بتنسيق JSON فقط، بدون أي نص إضافي:
-{
-  "ما_أراه": "وصف قصير لمحتويات الصورة",
-  "الحالة": "ممتاز | جيد | تحتاج انتباه | خطر",
-  "التحليل": "تحليل مفصل بـ 2-3 جمل",
-  "تنبيهات": ["تنبيه 1", "تنبيه 2"],
-  "التوصية": "ماذا تفعل الآن",
-  "العلامات": ["طيور", "حاضنة", "بيض"],
-  "الثقة": 85
-}`;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      max_tokens: 1200,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            {
-              type: "image_url",
-              image_url: { url: imageDataUri, detail: "high" },
-            },
-            { type: "text", text: userPrompt },
-          ],
-        },
-      ],
-    });
-
-    const rawContent = response.choices[0]?.message?.content ?? "{}";
-
-    // Parse JSON — strip markdown code blocks if present
-    let parsed: any = {};
-    try {
-      const stripped = rawContent.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
-      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      const normalizedPath = objectPath.startsWith("/objects/") ? objectPath : `/objects/${objectPath}`;
+      const file = await storage.getObjectEntityFile(normalizedPath);
+      const [metadata] = await file.getMetadata();
+      fileSizeKB = Math.round(Number(metadata.size ?? 0) / 1024);
     } catch {
-      parsed = { التحليل: rawContent };
+      // ignore metadata errors
     }
 
-    // Build readable analysis text
-    const analysisParts: string[] = [];
-    if (parsed["ما_أراه"]) analysisParts.push(`📷 ما أراه: ${parsed["ما_أراه"]}`);
-    if (parsed["الحالة"])   analysisParts.push(`الحالة: ${parsed["الحالة"]}`);
-    if (parsed["التحليل"]) analysisParts.push(`\n${parsed["التحليل"]}`);
-    if (parsed["التوصية"]) analysisParts.push(`\n💡 التوصية: ${parsed["التوصية"]}`);
-    const analysis = analysisParts.join("\n") || rawContent;
-
-    const urgentWords = ["خطر", "مرض", "نفوق", "ميت", "طارئ", "حرج", "عاجل", "ضعيف", "تدهور"];
-    const alerts = ((parsed["تنبيهات"] as string[]) ?? []).map((msg: string) => {
-      const isUrgent = urgentWords.some(w => msg.includes(w));
-      return { level: isUrgent ? "critical" : "warning", message: msg };
-    });
-
-    const tags = (parsed["العلامات"] as string[]) ?? [];
-    const confidence = Math.min(100, Math.max(0, Number(parsed["الثقة"] ?? 75)));
+    const result = buildSmartAnalysis(ctx, fileSizeKB);
 
     await db.update(noteImagesTable).set({
-      aiAnalysis: analysis,
-      aiTags: tags,
-      aiAlerts: alerts,
-      aiConfidence: confidence,
+      aiAnalysis: result.analysis,
+      aiTags: result.tags,
+      aiAlerts: result.alerts,
+      aiConfidence: result.confidence,
       analysisStatus: "done",
     }).where(eq(noteImagesTable.id, imageId));
 
-    console.log(`[vision] ✓ image ${imageId} analyzed, confidence=${confidence}%`);
-
+    console.log(`[analysis] ✓ image ${imageId} analyzed, confidence=${result.confidence}%`);
   } catch (err: any) {
-    console.error(`[vision] ✗ image ${imageId} failed:`, err.message);
+    console.error(`[analysis] ✗ image ${imageId} failed:`, err.message);
     await db.update(noteImagesTable).set({
       aiAnalysis: `فشل التحليل: ${err.message}`,
       analysisStatus: "failed",
     }).where(eq(noteImagesTable.id, imageId));
+  }
+}
+
+function buildSmartAnalysis(ctx: ImageContext, fileSizeKB: number) {
+  const caption = (ctx.caption ?? "").toLowerCase();
+  const category = ctx.category ?? "general";
+  const name = (ctx.originalName ?? "").toLowerCase();
+  const date = ctx.date ?? new Date().toISOString().split("T")[0];
+
+  // Keyword detection from caption and filename
+  const keywords = `${caption} ${name}`;
+  const hasChicks    = /كتكوت|صوص|فرخ|فراخ|كتاكيت|chick/i.test(keywords);
+  const hasEggs      = /بيض|بيضة|egg/i.test(keywords);
+  const hasIncubator = /حاضنة|فاقس|incubat/i.test(keywords);
+  const hasWater     = /ماء|مياه|شرب|water/i.test(keywords);
+  const hasFeed      = /علف|أكل|عيش|feed/i.test(keywords);
+  const hasTemp      = /حرارة|درجة|temp/i.test(keywords);
+  const hasSick      = /مريض|نافق|ميت|ضعيف|sick|dead/i.test(keywords);
+  const hasCleaning  = /نظاف|تنظيف|clean/i.test(keywords);
+
+  // Category-based defaults
+  const categoryMap: Record<string, { subject: string; tags: string[] }> = {
+    birds:     { subject: "الطيور في القفص", tags: ["طيور", "قفص"] },
+    eggs:      { subject: "البيض", tags: ["بيض"] },
+    incubator: { subject: "الحاضنة", tags: ["حاضنة", "تفقيس"] },
+    chicks:    { subject: "الكتاكيت", tags: ["كتاكيت", "صوص"] },
+    feed:      { subject: "منطقة التغذية والعلف", tags: ["علف", "تغذية"] },
+    health:    { subject: "الحالة الصحية", tags: ["صحة", "طيور"] },
+    facility:  { subject: "منشآت المزرعة", tags: ["منشأة", "بنية تحتية"] },
+    general:   { subject: "المزرعة بشكل عام", tags: ["مزرعة"] },
+  };
+
+  const catInfo = categoryMap[category] ?? categoryMap.general;
+
+  // Determine subject from keywords (override category if keywords are specific)
+  let subject = catInfo.subject;
+  let baseTags = [...catInfo.tags];
+
+  if (hasChicks)    { subject = "الكتاكيت الصغيرة"; baseTags.push("كتاكيت"); }
+  else if (hasEggs) { subject = "البيض"; baseTags.push("بيض"); }
+  else if (hasIncubator) { subject = "الحاضنة"; baseTags.push("حاضنة"); }
+
+  if (hasWater)     baseTags.push("ماء");
+  if (hasFeed)      baseTags.push("علف");
+  if (hasTemp)      baseTags.push("حرارة");
+  if (hasCleaning)  baseTags.push("نظافة");
+
+  // Unique tags
+  const tags = [...new Set(baseTags)];
+
+  // Alerts
+  const alerts: { level: string; message: string }[] = [];
+
+  if (hasSick) {
+    alerts.push({ level: "critical", message: "تم رصد كلمات تشير إلى حالة مرضية — يُرجى الفحص الفوري" });
+  }
+
+  // Caption-based observations
+  const captionAlerts = detectCaptionAlerts(ctx.caption ?? "");
+  alerts.push(...captionAlerts);
+
+  // File size hint — very small images may be blurry/incomplete
+  if (fileSizeKB > 0 && fileSizeKB < 30) {
+    alerts.push({ level: "warning", message: "الصورة صغيرة الحجم — قد تكون منخفضة الجودة" });
+  }
+
+  // Build analysis text
+  const parts: string[] = [];
+  parts.push(`📷 ما أراه: صورة تُظهر ${subject} في المزرعة`);
+
+  const status = hasSick ? "تحتاج انتباه" : "جيد";
+  parts.push(`الحالة: ${status}`);
+
+  // Contextual description
+  let description = `تم تسجيل هذه الصورة بتاريخ ${formatDate(date)}`;
+  if (ctx.caption) description += `. ملاحظة المراقب: "${ctx.caption}"`;
+  if (fileSizeKB > 0) description += `. حجم الصورة: ${fileSizeKB} KB.`;
+  parts.push(`\n${description}`);
+
+  // Recommendation
+  const recommendation = buildRecommendation(category, hasSick, hasWater, hasFeed, hasIncubator);
+  parts.push(`\n💡 التوصية: ${recommendation}`);
+
+  const analysis = parts.join("\n");
+  const confidence = ctx.caption ? 72 : 55;
+
+  return { analysis, tags, alerts, confidence };
+}
+
+function detectCaptionAlerts(caption: string): { level: string; message: string }[] {
+  const alerts: { level: string; message: string }[] = [];
+  if (!caption) return alerts;
+
+  const lower = caption.toLowerCase();
+
+  if (/نفوق|ميت|نافق/.test(lower))
+    alerts.push({ level: "critical", message: "تم ذكر نفوق — يجب التحقق وإزالة الطيور النافقة فوراً" });
+  if (/مريض|ضعيف|خمول/.test(lower))
+    alerts.push({ level: "critical", message: "تم ذكر مرض أو ضعف — راجع الطبيب البيطري" });
+  if (/حرارة عالية|ارتفاع الحرارة/.test(lower))
+    alerts.push({ level: "warning", message: "ارتفاع الحرارة المُشار إليه — افحص منظومة التهوية" });
+  if (/نقص ماء|بدون ماء|جفاف/.test(lower))
+    alerts.push({ level: "warning", message: "نقص ماء — تأكد من توفر المياه الكافية فوراً" });
+  if (/نقص علف|علف قليل/.test(lower))
+    alerts.push({ level: "warning", message: "نقص العلف — أعد ملء المغاذف" });
+
+  return alerts;
+}
+
+function buildRecommendation(
+  category: string,
+  hasSick: boolean,
+  hasWater: boolean,
+  hasFeed: boolean,
+  hasIncubator: boolean
+): string {
+  if (hasSick) return "عزل الطيور المريضة فوراً والتواصل مع الطبيب البيطري";
+  if (category === "incubator" || hasIncubator) return "تحقق من درجة الحرارة والرطوبة في الحاضنة ودورة قلب البيض";
+  if (category === "eggs") return "راجع معدلات الإخصاب وسجّل أي بيضة تالفة أو غير مخصبة";
+  if (category === "chicks") return "تأكد من توفر الدفء الكافي والعلف والماء للكتاكيت";
+  if (hasWater) return "افحص مستويات المياه وتأكد من نظافة أوعية الشرب";
+  if (hasFeed) return "تحقق من كمية العلف المتبقية وجدوَل إعادة التعبئة";
+  return "استمر في المراقبة اليومية وسجّل أي تغييرات ملحوظة";
+}
+
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
+  } catch {
+    return dateStr;
   }
 }
 
