@@ -68,6 +68,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "flocks.breed": { ar: "السلالة *", sv: "Ras *" },
   "flocks.breed.placeholder": { ar: "مثل: عرب بلدي", sv: "T.ex: Svensk lantras" },
   "flocks.count": { ar: "العدد *", sv: "Antal *" },
+  "flocks.birthDate": { ar: "تاريخ الميلاد", sv: "Födelsedatum" },
   "flocks.ageDays": { ar: "العمر (أيام) *", sv: "Ålder (dagar) *" },
   "flocks.purpose": { ar: "الغرض", sv: "Syfte" },
   "flocks.notes": { ar: "ملاحظات", sv: "Anteckningar" },

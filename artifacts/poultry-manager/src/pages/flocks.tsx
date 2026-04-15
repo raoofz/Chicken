@@ -17,13 +17,24 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+function calcAgeDays(birthDate: string) {
+  if (!birthDate) return 0;
+  const start = new Date(birthDate);
+  const now = new Date();
+  start.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  const diff = now.getTime() - start.getTime();
+  return Math.max(0, Math.floor(diff / 86400000));
+}
+
 function FlockForm({ initial, onSubmit, onClose, isEdit }: { initial?: any; onSubmit: (data: any) => void; onClose: () => void; isEdit?: boolean }) {
   const { t } = useLanguage();
+  const [birthDate, setBirthDate] = useState(initial?.birthDate ?? "");
   const [form, setForm] = useState({
     name: initial?.name ?? "",
     breed: initial?.breed ?? "",
     count: initial?.count ?? 1,
-    ageDays: initial?.ageDays ?? 1,
+    ageDays: initial?.ageDays ?? calcAgeDays(initial?.birthDate ?? ""),
     purpose: initial?.purpose ?? "eggs",
     notes: initial?.notes ?? "",
   });
@@ -44,8 +55,12 @@ function FlockForm({ initial, onSubmit, onClose, isEdit }: { initial?: any; onSu
           <Input type="number" min={1} value={form.count} onChange={(e) => setForm((f) => ({ ...f, count: Number(e.target.value) }))} required />
         </div>
         <div className="space-y-1.5">
+          <Label>{t("flocks.birthDate")}</Label>
+          <Input type="date" value={birthDate} onChange={(e) => { const value = e.target.value; setBirthDate(value); setForm((f) => ({ ...f, ageDays: calcAgeDays(value) })); }} />
+        </div>
+        <div className="space-y-1.5">
           <Label>{t("flocks.ageDays")}</Label>
-          <Input type="number" min={1} value={form.ageDays} onChange={(e) => setForm((f) => ({ ...f, ageDays: Number(e.target.value) }))} required />
+          <Input type="number" min={0} value={form.ageDays} onChange={(e) => setForm((f) => ({ ...f, ageDays: Number(e.target.value) }))} required />
         </div>
         <div className="space-y-1.5">
           <Label>{t("flocks.purpose")}</Label>
@@ -191,7 +206,7 @@ export default function Flocks() {
                     <div className="text-muted-foreground text-xs mt-0.5">{t("flocks.bird")}</div>
                   </div>
                   <div className="bg-muted/50 rounded-xl p-3 text-center">
-                    <div className="font-bold text-xl text-primary">{flock.ageDays}</div>
+                    <div className="font-bold text-xl text-primary">{flock.birthDate ? calcAgeDays(flock.birthDate) : flock.ageDays}</div>
                     <div className="text-muted-foreground text-xs mt-0.5">{t("flocks.day")}</div>
                   </div>
                 </div>
