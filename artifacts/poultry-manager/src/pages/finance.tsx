@@ -146,7 +146,7 @@ function AddTransactionDialog({ onSuccess }: { onSuccess: () => void }) {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t("finance.unit")} ({t("finance.optional")})</Label>
-              <Input placeholder="kg, لتر, قطعة..." value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+              <Input placeholder={t("finance.unit.placeholder")} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
             </div>
           </div>
 
@@ -186,12 +186,16 @@ function StatCard({ label, value, icon: Icon, color, trend }: { label: string; v
   );
 }
 
-function fmtAmount(n: number) {
+function fmtAmount(n: number, lang: string = "ar") {
+  if (lang === "sv") {
+    return new Intl.NumberFormat("sv-SE").format(Math.round(n)) + " IQD";
+  }
   return new Intl.NumberFormat("ar-IQ").format(n) + " د.ع";
 }
 
 export default function Finance() {
   const { t, lang } = useLanguage();
+  const fmt = (n: number) => fmtAmount(n, lang);
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -270,9 +274,9 @@ export default function Finance() {
       const prompt = isAr
         ? `أنت مستشار مالي لمزرعة دواجن في الموصل، العراق.
 هذه البيانات المالية للمزرعة:
-- إجمالي الدخل: ${fmtAmount(totalIncome)}
-- إجمالي المصاريف: ${fmtAmount(totalExpense)}
-- صافي الربح/الخسارة: ${fmtAmount(profit)}
+- إجمالي الدخل: ${fmt(totalIncome)}
+- إجمالي المصاريف: ${fmt(totalExpense)}
+- صافي الربح/الخسارة: ${fmt(profit)}
 - عدد المعاملات: ${transactions.length}
 - تفصيل حسب الفئات: ${JSON.stringify(totalsByCategory, null, 2)}
 - آخر ١٠ معاملات: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
@@ -286,9 +290,9 @@ export default function Finance() {
 اجعل التحليل دقيقاً ومفيداً ومناسباً لمزرعة دواجن صغيرة في العراق.`
         : `You are a financial advisor for a poultry farm in Mosul, Iraq.
 Farm financial data:
-- Total income: ${fmtAmount(totalIncome)}
-- Total expenses: ${fmtAmount(totalExpense)}
-- Net profit/loss: ${fmtAmount(profit)}
+- Total income: ${fmt(totalIncome)}
+- Total expenses: ${fmt(totalExpense)}
+- Net profit/loss: ${fmt(profit)}
 - Number of transactions: ${transactions.length}
 - Breakdown by category: ${JSON.stringify(totalsByCategory, null, 2)}
 - Last 10 transactions: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
@@ -312,34 +316,19 @@ Keep the analysis precise and suitable for a small poultry farm.`;
       } else {
         // Bilingual fallback local analysis
         const margin = totalIncome > 0 ? ((profit / totalIncome) * 100).toFixed(1) : "0";
-        const lines = isAr ? [
+        const lines = [
           `📊 **${t("finance.ai.analyze")}**`,
           ``,
           `💰 **${t("finance.ai.summary")}:**`,
-          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
-          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
-          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
+          `• ${t("finance.income")}: ${fmt(totalIncome)}`,
+          `• ${t("finance.expenses")}: ${fmt(totalExpense)}`,
+          `• ${t("finance.profit")}: ${fmt(profit)} ${profit >= 0 ? "✅" : "❌"}`,
           `• ${t("finance.ai.margin")}: ${margin}%`,
           ``,
           `📈 **${t("finance.ai.notes")}:**`,
           profit < 0 ? `• ⚠️ ${t("finance.ai.loss.note")}` : `• ✅ ${t("finance.ai.profit.note")}`,
           totalExpense > 0 ? `• ${t("finance.ai.review.note")}` : "",
           `• ${t("finance.ai.daily.note")}`,
-        ] : [
-          `📊 **Farm Financial Analysis**`,
-          ``,
-          `💰 **Financial Summary:**`,
-          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
-          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
-          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
-          `• Profit Margin: ${margin}%`,
-          ``,
-          `📈 **Observations:**`,
-          profit < 0
-            ? `• ⚠️ Farm is currently operating at a loss — review expense categories`
-            : `• ✅ Farm is generating positive profit`,
-          totalExpense > 0 ? `• Top expense categories should be reviewed regularly` : "",
-          `• Record all transactions daily for accurate analysis`,
         ];
         setAiAnalysis(lines.filter(Boolean).join("\n"));
       }
@@ -371,11 +360,11 @@ Keep the analysis precise and suitable for a small poultry farm.`;
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label={t("finance.income")} value={fmtAmount(totalIncome)} icon={ArrowUpCircle} color="bg-emerald-500" trend="up" />
-        <StatCard label={t("finance.expense")} value={fmtAmount(totalExpense)} icon={ArrowDownCircle} color="bg-red-500" trend="down" />
+        <StatCard label={t("finance.income")} value={fmt(totalIncome)} icon={ArrowUpCircle} color="bg-emerald-500" trend="up" />
+        <StatCard label={t("finance.expense")} value={fmt(totalExpense)} icon={ArrowDownCircle} color="bg-red-500" trend="down" />
         <StatCard
           label={t("finance.profit")}
-          value={fmtAmount(profit)}
+          value={fmt(profit)}
           icon={profit >= 0 ? TrendingUp : TrendingDown}
           color={profit >= 0 ? "bg-blue-500" : "bg-orange-500"}
           trend={profit >= 0 ? "up" : "down"}
@@ -404,7 +393,7 @@ Keep the analysis precise and suitable for a small poultry farm.`;
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: any) => fmtAmount(Number(v))} />
+                  <Tooltip formatter={(v: any) => fmt(Number(v))} />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
                   <Bar dataKey="income" name={t("finance.type.income")} fill="#10b981" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="expense" name={t("finance.type.expense")} fill="#ef4444" radius={[4, 4, 0, 0]} />
@@ -416,7 +405,7 @@ Keep the analysis precise and suitable for a small poultry farm.`;
                   <Pie data={categoryData} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: 9 }}>
                     {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: any) => fmtAmount(Number(v))} />
+                  <Tooltip formatter={(v: any) => fmt(Number(v))} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -496,7 +485,7 @@ Keep the analysis precise and suitable for a small poultry farm.`;
                   </div>
                   <div className="text-end shrink-0">
                     <div className={cn("text-sm font-bold", tr.type === "income" ? "text-emerald-600" : "text-red-600")}>
-                      {tr.type === "income" ? "+" : "-"}{fmtAmount(Number(tr.amount))}
+                      {tr.type === "income" ? "+" : "-"}{fmt(Number(tr.amount))}
                     </div>
                   </div>
                   {isAdmin && (
