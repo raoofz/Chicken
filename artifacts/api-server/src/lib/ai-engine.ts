@@ -148,6 +148,8 @@ interface FullAnalysis {
   dataQuality: { score: number; label: string; issues: string[] };
 }
 
+type EngineLang = "ar" | "sv";
+
 const SCIENCE = {
   incubation: {
     tempOptimal: { min: 37.5, max: 37.8 },
@@ -215,6 +217,14 @@ function zScore(value: number, arr: number[]): number {
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+function detectLang(message: string): EngineLang {
+  return /[åäöÅÄÖ]/.test(message) ? "sv" : "ar";
+}
+
+function tr(lang: EngineLang, ar: string, sv: string): string {
+  return lang === "sv" ? sv : ar;
 }
 
 function parseNum(value: unknown): number | null {
@@ -943,183 +953,75 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
   };
 }
 
+function buildNarrativeReply(analysis: FullAnalysis, lang: EngineLang): string {
+  const lines = [
+    tr(lang, `النتيجة العامة: ${analysis.score}/100 — ${analysis.scoreLabel}`, `Totalpoäng: ${analysis.score}/100 — ${analysis.scoreLabel}`),
+    "",
+    tr(lang, `أهم إجراء الآن: ${analysis.topPriority}`, `Huvudåtgärd nu: ${analysis.topPriority}`),
+    "",
+    tr(lang, "أقوى المخاطر الحالية:", "Starkaste aktuella risker:"),
+    ...analysis.alerts.slice(0, 3).map(a => `- ${a.title}: ${a.description}`),
+    "",
+    tr(lang, "أدق التوصيات:", "Tydligaste rekommendationer:"),
+    ...analysis.recommendations.slice(0, 4).map(r => `- ${r.title}: ${r.reason} | ${r.impact}`),
+    "",
+    tr(lang, "إذا تريد، أقدر أكمل كحوار خطوة بخطوة حتى أوصل معك لقرار عملي.", "Om du vill kan jag fortsätta som en steg-för-steg-dialog tills vi landar i en praktisk plan."),
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
 export function buildExpertChatReply(message: string, data: RawFarmData): string {
+  const lang = detectLang(message);
   const analysis = runFullAnalysis(data);
   const lower = message.toLowerCase();
+  const wantsRisk = /خطر|مخاطر|مستقبل|تحذير|توقع|what will|predict|future/i.test(message);
+  const wantsDetail = /اشرح|فصل|عمق|تفصيل|why|how|لماذا|كيف|حلل/i.test(message);
+  const wantsCompare = /قارن|مقارنة|أفضل|أسوأ|فرق|compare/i.test(message);
+  const wantsDialogue = /ناقش|رأي|ماذا لو|تتوقع|هل تعتقد|لو سمحت|discuss|opinion/i.test(message);
 
-  if (lower.includes("تحليل") || lower.includes("المزرعة") || lower.includes("تقرير") || lower.includes("حالة")) {
-    const dangerAlerts = analysis.alerts.filter(a => a.type === "danger");
-    const warningAlerts = analysis.alerts.filter(a => a.type === "warning");
-    let reply = `📊 **تقرير تحليل المزرعة الشامل**\n\n`;
-    reply += `**النتيجة العامة: ${analysis.score}/100 — ${analysis.scoreLabel}**\n\n`;
+  if (wantsRisk) {
+    const risk = analysis.futureRisk;
+    return [
+      tr(lang, `**${risk.title}** — أفق الخطر: ${risk.horizon}`, `**${risk.title}** — horisont: ${risk.horizon}`),
+      risk.summary,
+      "",
+      tr(lang, `**المحفزات:** ${risk.triggers.length ? risk.triggers.join("، ") : "لا توجد محفزات قوية حالياً"}`, `**Utlösare:** ${risk.triggers.length ? risk.triggers.join("، ") : "Inga starka utlösare just nu"}`),
+      "",
+      tr(lang, "**الإجراءات العملية:**", "**Praktiska åtgärder:**"),
+      ...risk.actions.map(a => `- ${a}`),
+      "",
+      tr(lang, `**أقوى توصية الآن:** ${analysis.topPriority}`, `**Bästa åtgärd nu:** ${analysis.topPriority}`),
+    ].join("\n");
+  }
 
-    reply += `📈 **تفصيل النتيجة:**\n`;
-    for (const s of analysis.scoreBreakdown) {
-      const bar = s.score >= 80 ? "🟢" : s.score >= 60 ? "🟡" : "🔴";
-      reply += `${bar} ${s.category}: ${s.score}/100 (${s.label}) — وزن ${s.weight}%\n`;
-    }
-    reply += `\n`;
+  if (wantsCompare) {
+    const best = analysis.scoreBreakdown.slice().sort((a, b) => b.score - a.score)[0];
+    const weakest = analysis.scoreBreakdown.slice().sort((a, b) => a.score - b.score)[0];
+    return [
+      tr(lang, "هذه مقارنة سريعة:", "Här är en snabb jämförelse:"),
+      tr(lang, `الأفضل: ${best.category} (${best.score}/100)`, `Starkast: ${best.category} (${best.score}/100)`),
+      tr(lang, `الأضعف: ${weakest.category} (${weakest.score}/100)`, `Svagast: ${weakest.category} (${weakest.score}/100)`),
+      tr(lang, `الفرق العملي: ركّز على ${weakest.category} أولاً لأنه الأكثر تأثيراً على النتيجة النهائية.`, `Praktisk skillnad: fokusera först på ${weakest.category} eftersom det påverkar slutresultatet mest.`),
+    ].join("\n");
+  }
 
-    if (dangerAlerts.length > 0) {
-      reply += `🚨 **تنبيهات خطيرة (${dangerAlerts.length}):**\n`;
-      dangerAlerts.forEach(a => { reply += `- ${a.title}: ${a.description}\n`; });
-      reply += `\n`;
-    }
-    if (warningAlerts.length > 0) {
-      reply += `⚠️ **تحذيرات (${warningAlerts.length}):**\n`;
-      warningAlerts.slice(0, 5).forEach(a => { reply += `- ${a.title}: ${a.description}\n`; });
-      reply += `\n`;
-    }
-    if (analysis.anomalies.length > 0) {
-      reply += `🔍 **شذوذ مكتشف (${analysis.anomalies.length}):**\n`;
-      analysis.anomalies.forEach(a => { reply += `- ${a.title}: ${a.description} (القيمة: ${a.currentValue}، المتوقع: ${a.expectedRange})\n`; });
-      reply += `\n`;
-    }
-
-    reply += `📋 **الواجبات بالأولوية:**\n`;
-    analysis.recommendations.slice(0, 5).forEach((r, i) => {
-      const badge = r.priority === "urgent" ? "🔴" : r.priority === "high" ? "🟠" : "🟡";
-      reply += `${i + 1}. ${badge} **${r.title}**\n   ${r.description}\n   السبب: ${r.reason} | الأثر: ${r.impact}\n`;
-    });
-    reply += `\n`;
-
-    if (analysis.predictions.length > 0) {
-      reply += `🔮 **التوقعات:**\n`;
-      analysis.predictions.forEach(p => {
-        reply += `- **${p.title}** (ثقة: ${p.confidence === "high" ? "عالية" : p.confidence === "medium" ? "متوسطة" : "تقدير"}): ${p.description}\n`;
-      });
-      reply += `\n`;
-    }
-
-    reply += `\n⚡ **أهم إجراء الآن:** ${analysis.topPriority}`;
-    return reply;
+  if (wantsDetail || wantsDialogue || lower.includes("تحليل") || lower.includes("المزرعة") || lower.includes("تقرير") || lower.includes("حالة")) {
+    return buildNarrativeReply(analysis, lang);
   }
 
   if (lower.includes("حرارة") || lower.includes("رطوبة") || lower.includes("بيئة") || lower.includes("فقاسة")) {
-    const envSection = analysis.sections.find(s => s.category === "environment");
-    const envAlerts = analysis.alerts.filter(a => a.category === "environment");
-    const envRecs = analysis.recommendations.filter(r => r.category === "environment");
-
-    let reply = `🌡️ **تحليل البيئة والفقاسات**\n\n`;
-    reply += `النتيجة البيئية: ${envSection?.healthScore ?? "—"}/100\n\n`;
-
-    if (envSection) {
-      envSection.items.forEach(item => {
-        const dot = item.status === "good" ? "✅" : item.status === "danger" ? "🔴" : item.status === "warning" ? "⚠️" : "⚪";
-        reply += `${dot} ${item.label}: ${item.value}\n`;
-      });
-    }
-
-    if (envAlerts.length > 0) {
-      reply += `\n**المشاكل المكتشفة:**\n`;
-      envAlerts.forEach(a => { reply += `- ${a.title}: ${a.description}\n`; });
-    }
-
-    reply += `\n**📖 المعايير العلمية:**\n`;
-    reply += `- حرارة التحضين المثالية: ${SCIENCE.incubation.tempOptimal.min}-${SCIENCE.incubation.tempOptimal.max}°م\n`;
-    reply += `- رطوبة التحضين: ${SCIENCE.incubation.humidityIncubation.min}-${SCIENCE.incubation.humidityIncubation.max}%\n`;
-    reply += `- حرارة الإقفال: ${SCIENCE.incubation.lockdownTempOptimal.min}-${SCIENCE.incubation.lockdownTempOptimal.max}°م\n`;
-    reply += `- رطوبة الإقفال: ${SCIENCE.incubation.humidityLockdown.min}-${SCIENCE.incubation.humidityLockdown.max}%\n`;
-
-    if (envRecs.length > 0) {
-      reply += `\n**التوصيات:**\n`;
-      envRecs.forEach(r => { reply += `- ${r.title}: ${r.description}\n`; });
-    }
-    return reply;
+    const env = analysis.sections.find(s => s.category === "environment");
+    return buildNarrativeReply(analysis, lang) + "\n\n" + tr(lang, "اسألني عن كل فقاسة وسأعطيك تشخيصاً مفصلاً.", "Fråga om varje maskin så ger jag en detaljerad diagnos.");
   }
 
-  if (lower.includes("فقس") || lower.includes("بيض") || lower.includes("تفقيس") || lower.includes("صوص")) {
-    const completedCycles = data.hatchingCycles.filter(c => c.status === "completed" && c.eggsHatched != null);
-    const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
-
-    let reply = `🥚 **تحليل التفقيس والدورات**\n\n`;
-    reply += `إجمالي الدورات: ${data.hatchingCycles.length} (${activeCycles.length} نشطة، ${completedCycles.length} مكتملة)\n\n`;
-
-    if (activeCycles.length > 0) {
-      reply += `**الدورات النشطة:**\n`;
-      activeCycles.forEach(c => {
-        const daysIn = daysBetween(c.startDate, today());
-        const daysLeft = daysBetween(today(), c.expectedHatchDate);
-        reply += `- **${c.batchName}**: ${c.eggsSet} بيضة، يوم ${daysIn}/21، متبقي ${daysLeft} يوم\n`;
-        reply += `  الحرارة: ${c.temperature ?? "—"}°م، الرطوبة: ${c.humidity ?? "—"}%\n`;
-      });
-    }
-
-    if (completedCycles.length > 0) {
-      const rates = completedCycles.map(c => ({ name: c.batchName, rate: c.eggsSet > 0 ? ((c.eggsHatched!) / c.eggsSet) * 100 : 0 }));
-      const avgRate = mean(rates.map(r => r.rate));
-      reply += `\n**نتائج الدورات السابقة:**\n`;
-      reply += `المعدل العام: ${avgRate.toFixed(1)}% ${avgRate >= 85 ? "✅ ممتاز" : avgRate >= 75 ? "✓ جيد" : avgRate >= 65 ? "⚠️ مقبول" : "🔴 ضعيف"}\n`;
-      rates.forEach(r => { reply += `- ${r.name}: ${r.rate.toFixed(0)}%\n`; });
-    }
-
-    reply += `\n**📖 معايير علمية:**\n`;
-    reply += `- ممتاز: ≥${SCIENCE.incubation.hatchRate.excellent}% | جيد: ≥${SCIENCE.incubation.hatchRate.good}% | مقبول: ≥${SCIENCE.incubation.hatchRate.acceptable}%\n`;
-    return reply;
+  if (wantsDialogue) {
+    return [
+      tr(lang, "نعم، وخلينا نمشيها كنقاش عملي:", "Ja, låt oss köra det som en praktisk dialog:"),
+      tr(lang, "1) ما الهدف الآن؟ تحسين الفقس، تقليل النفوق، أم رفع الإنتاج؟", "1) Vad är målet nu? Bättre kläckning, lägre dödlighet eller högre produktion?"),
+      tr(lang, "2) أين المشكلة الأوضح عندك؟ الحرارة، الرطوبة، الصحة، أو إدارة المهام؟", "2) Vad är tydligaste problemet? Temperatur, fukt, hälsa eller uppgifter?"),
+      tr(lang, "3) أعطني سؤالاً محدداً جداً وسأبني عليه خطة تنفيذ.", "3) Ge mig en väldigt specifik fråga så bygger jag en handlingsplan."),
+    ].join("\n");
   }
 
-  if (lower.includes("مهام") || lower.includes("عمل") || lower.includes("واجب") || lower.includes("أولوية")) {
-    const overdue = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed);
-    const pending = data.tasks.filter(t => !t.completed);
-    const rate = data.tasks.length > 0 ? ((data.tasks.filter(t => t.completed).length / data.tasks.length) * 100).toFixed(0) : "0";
-
-    let reply = `⚙️ **تحليل المهام والعمليات**\n\n`;
-    reply += `إجمالي: ${data.tasks.length} | مكتملة: ${rate}% | معلقة: ${pending.length} | متأخرة: ${overdue.length}\n\n`;
-
-    if (overdue.length > 0) {
-      reply += `🔴 **المتأخرة:**\n`;
-      overdue.forEach(t => { reply += `- "${t.title}" (مستحقة ${t.dueDate}) — أولوية: ${t.priority}\n`; });
-    }
-    if (pending.length > 0) {
-      reply += `\n📋 **المعلقة:**\n`;
-      pending.slice(0, 5).forEach(t => { reply += `- "${t.title}" ${t.dueDate ? `(${t.dueDate})` : ""}\n`; });
-    }
-    return reply;
-  }
-
-  if (lower.includes("مشكلة") || lower.includes("مرض") || lower.includes("علاج") || lower.includes("أعراض") ||
-      KEYWORDS_DISEASE.some(k => lower.includes(k))) {
-    const diseaseNotes = data.notes.filter(n => KEYWORDS_DISEASE.some(k => n.content.includes(k)));
-    const recentDisease = diseaseNotes.slice(0, 5);
-
-    let reply = `🩺 **تحليل صحي**\n\n`;
-    if (recentDisease.length > 0) {
-      reply += `**ملاحظات صحية مسجلة:**\n`;
-      recentDisease.forEach(n => { reply += `- [${n.date}] ${n.content}\n`; });
-      reply += `\n`;
-    }
-    reply += `**خطة فحص فوري:**\n`;
-    reply += `1. اعزل الطيور المصابة فوراً\n`;
-    reply += `2. راقب: الأكل، الشرب، التنفس، لون الزرق\n`;
-    reply += `3. سجّل الأعراض بدقة في الملاحظات\n`;
-    reply += `4. قس الحرارة والرطوبة في العنبر\n`;
-    reply += `5. افحص العلف والماء (نظافة، صلاحية)\n\n`;
-    reply += `**الأمراض الشائعة وعلاماتها:**\n`;
-    reply += `- نيوكاسل: خمول، إسهال أخضر، التواء الرقبة\n`;
-    reply += `- كوكسيديا: إسهال دموي، خمول، فقدان شهية\n`;
-    reply += `- CRD: عطس، سيلان أنفي، صعوبة تنفس\n`;
-    reply += `- سالمونيلا: إسهال أبيض، نفوق مفاجئ في الصيصان\n\n`;
-    reply += `⚠️ هذا تحليل أولي — استشر طبيباً بيطرياً للتشخيص النهائي.`;
-    return reply;
-  }
-
-  const urgentRecs = analysis.recommendations.filter(r => r.priority === "urgent" || r.priority === "high");
-  let reply = `📌 **ملخص سريع لمزرعتك**\n\n`;
-  reply += `النتيجة: ${analysis.score}/100 (${analysis.scoreLabel})\n\n`;
-  if (urgentRecs.length > 0) {
-    reply += `**أهم الواجبات الآن:**\n`;
-    urgentRecs.slice(0, 3).forEach(r => {
-      reply += `- **${r.title}**: ${r.description}\n`;
-    });
-    reply += `\n`;
-  }
-  if (analysis.predictions.length > 0) {
-    reply += `**توقعات:**\n`;
-    analysis.predictions.slice(0, 2).forEach(p => {
-      reply += `- ${p.title}: ${p.description}\n`;
-    });
-    reply += `\n`;
-  }
-  reply += `💡 للتحليل الكامل، استخدم تبويب "تحليل المزرعة" أو اكتب "حلل مزرعتي".`;
-  return reply;
+  return buildNarrativeReply(analysis, lang);
 }
