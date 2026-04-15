@@ -154,8 +154,9 @@ router.post("/notes/images/save", requireAuth, async (req: Request, res: Respons
       analysisStatus: "pending",
     }).returning();
 
-    runVisionAnalysis(row.id, objectPath, { mimeType: mimeType ?? "image/jpeg", date, category, caption: caption ?? "" }).catch(console.error);
-    res.json({ id: row.id, message: "تم حفظ الصورة وجارٍ تحليلها..." });
+    const lang = (req.body?.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
+    runVisionAnalysis(row.id, objectPath, { mimeType: mimeType ?? "image/jpeg", date, category, caption: caption ?? "", lang }).catch(console.error);
+    res.json({ id: row.id, message: lang === "sv" ? "Bild sparad och analyseras..." : "تم حفظ الصورة وجارٍ تحليلها..." });
   } catch (err: any) { res.status(500).json({ error: "فشل حفظ الصورة: " + err.message }); }
 });
 
@@ -165,7 +166,8 @@ router.post("/notes/images/:id/analyze", requireAuth, async (req: Request, res: 
     const id = Number(req.params.id);
     const [row] = await db.select().from(noteImagesTable).where(eq(noteImagesTable.id, id));
     if (!row) { res.status(404).json({ error: "الصورة غير موجودة" }); return; }
-    await runVisionAnalysis(id, row.imageUrl, { mimeType: row.mimeType, date: row.date, category: row.category, caption: row.caption ?? "" });
+    const lang = (req.body?.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
+    await runVisionAnalysis(id, row.imageUrl, { mimeType: row.mimeType, date: row.date, category: row.category, caption: row.caption ?? "", lang });
     const [updated] = await db.select().from(noteImagesTable).where(eq(noteImagesTable.id, id));
     res.json(updated);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
@@ -232,9 +234,10 @@ router.get("/notes/images/file/*objectPath", requireAuth, async (req: Request, r
 
 // ─── Vision Analysis Runner ───────────────────────────────────────────────────
 
-interface ImageCtx { mimeType: string | null; date: string; category: string; caption: string; }
+interface ImageCtx { mimeType: string | null; date: string; category: string; caption: string; lang?: "ar" | "sv"; }
 
 async function runVisionAnalysis(imageId: number, objectPath: string, ctx: ImageCtx) {
+  const lang = ctx.lang ?? "ar";
   try {
     await db.update(noteImagesTable).set({ analysisStatus: "analyzing" }).where(eq(noteImagesTable.id, imageId));
 
@@ -246,7 +249,7 @@ async function runVisionAnalysis(imageId: number, objectPath: string, ctx: Image
 
     const result = await analyzeImage(
       imageBuffer, mimeType, fileSize,
-      ctx.date, ctx.category, ctx.caption, imageId,
+      ctx.date, ctx.category, ctx.caption, imageId, lang,
     );
 
     await db.update(noteImagesTable).set({
@@ -264,7 +267,7 @@ async function runVisionAnalysis(imageId: number, objectPath: string, ctx: Image
   } catch (err: any) {
     console.error(`[CV-AI] ✗ image ${imageId}:`, err.message);
     await db.update(noteImagesTable).set({
-      aiAnalysis: `فشل التحليل: ${err.message}`,
+      aiAnalysis: lang === "sv" ? `Analysen misslyckades: ${err.message}` : `فشل التحليل: ${err.message}`,
       analysisStatus: "failed",
     }).where(eq(noteImagesTable.id, imageId));
   }

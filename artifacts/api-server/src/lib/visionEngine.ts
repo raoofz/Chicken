@@ -158,6 +158,7 @@ export async function analyzeImage(
   category: string,
   caption: string,
   imageId?: number,
+  lang: "ar" | "sv" = "ar",
 ): Promise<VisionResult> {
   const [raw, farmCtx, temporalData, predictionData] = await Promise.all([
     extractRawFeatures(imageBuffer, mimeType, fileSize),
@@ -186,7 +187,7 @@ export async function analyzeImage(
   const prediction = predictNextPeriod(predictionData, metrics.riskScore);
 
   const summary = buildSummary(overallStatus, metrics, insights, prediction, anomalies);
-  const analysis = buildAnalysisText(raw, gridData, metrics, insights, recommendations, farmCtx, category, caption, imageDate, prediction, anomalies);
+  const analysis = buildAnalysisText(raw, gridData, metrics, insights, recommendations, farmCtx, category, caption, imageDate, prediction, anomalies, lang);
 
   return {
     overallStatus,
@@ -661,47 +662,58 @@ function buildAnalysisText(
   raw: RawVisualData, grid: GridData, metrics: VisionMetrics,
   insights: OperationalInsight[], actions: ActionItem[],
   farm: FarmContext, category: string, caption: string, imageDate: string,
-  prediction?: Prediction, anomalies?: Anomaly[]
+  prediction?: Prediction, anomalies?: Anomaly[],
+  lang: "ar" | "sv" = "ar",
 ): string {
+  const isAr = lang !== "sv";
+  // Bilingual label helper
+  const lbl = (ar: string, sv: string) => isAr ? ar : sv;
+
   const parts: string[] = [];
 
-  parts.push(`╔══════════════════════════════════════╗`);
-  parts.push(`║   تحليل صورة المزرعة الذكي (AI CV)   ║`);
-  parts.push(`╚══════════════════════════════════════╝`);
+  parts.push(isAr
+    ? `╔══════════════════════════════════════╗\n║   تحليل صورة المزرعة الذكي (AI CV)   ║\n╚══════════════════════════════════════╝`
+    : `╔═══════════════════════════════════════╗\n║  Smart Farm Photo Analysis (AI CV)    ║\n╚═══════════════════════════════════════╝`
+  );
   parts.push(``);
 
   const statusIcon = metrics.riskScore >= 65 ? "🔴" : metrics.riskScore >= 35 ? "🟡" : "✅";
-  parts.push(`${statusIcon} الحالة العامة: ${metrics.riskScore >= 65 ? "حرجة" : metrics.riskScore >= 35 ? "تحتاج انتباهاً" : "جيدة"} | درجة الخطر: ${metrics.riskScore}/100`);
+  const statusText = metrics.riskScore >= 65
+    ? lbl("حرجة", "Kritisk")
+    : metrics.riskScore >= 35
+    ? lbl("تحتاج انتباهاً", "Behöver uppmärksamhet")
+    : lbl("جيدة", "Bra");
+  parts.push(`${statusIcon} ${lbl("الحالة العامة", "Allmän status")}: ${statusText} | ${lbl("درجة الخطر", "Riskpoäng")}: ${metrics.riskScore}/100`);
   parts.push(``);
 
-  parts.push(`📊 المقاييس الدقيقة:`);
-  parts.push(`   الكثافة التقديرية   ${bar(metrics.densityScore)} ${metrics.densityScore}%`);
-  parts.push(`   النشاط الحركي       ${bar(metrics.activityLevel)} ${metrics.activityLevel}%`);
-  parts.push(`   التكدس              ${bar(metrics.crowdingScore)} ${metrics.crowdingScore}%`);
-  parts.push(`   الصحة العامة        ${bar(metrics.healthScore)} ${metrics.healthScore}%`);
-  parts.push(`   نظافة الأرضية       ${bar(metrics.floorCleanliness)} ${metrics.floorCleanliness}%`);
-  parts.push(`   الإضاءة             ${bar(metrics.lightingScore)} ${metrics.lightingScore}%`);
+  parts.push(`📊 ${lbl("المقاييس الدقيقة:", "Precisionsmått:")}`);
+  parts.push(`   ${lbl("الكثافة التقديرية  ", "Uppskattad densitet")} ${bar(metrics.densityScore)} ${metrics.densityScore}%`);
+  parts.push(`   ${lbl("النشاط الحركي      ", "Rörelseaktivitet  ")} ${bar(metrics.activityLevel)} ${metrics.activityLevel}%`);
+  parts.push(`   ${lbl("التكدس             ", "Trängsel          ")} ${bar(metrics.crowdingScore)} ${metrics.crowdingScore}%`);
+  parts.push(`   ${lbl("الصحة العامة       ", "Allmän hälsa      ")} ${bar(metrics.healthScore)} ${metrics.healthScore}%`);
+  parts.push(`   ${lbl("نظافة الأرضية      ", "Golvrenhet        ")} ${bar(metrics.floorCleanliness)} ${metrics.floorCleanliness}%`);
+  parts.push(`   ${lbl("الإضاءة            ", "Belysning         ")} ${bar(metrics.lightingScore)} ${metrics.lightingScore}%`);
   if (metrics.injuryRisk > 5) {
-    parts.push(`   خطر الإصابة         ${bar(metrics.injuryRisk)} ${metrics.injuryRisk}% ⚠️`);
+    parts.push(`   ${lbl("خطر الإصابة        ", "Skaderisk         ")} ${bar(metrics.injuryRisk)} ${metrics.injuryRisk}% ⚠️`);
   }
   if (farm.totalBirds > 0) {
-    parts.push(`   الطيور المرئية تقديراً: ~${metrics.estimatedBirdCount} من ${farm.totalBirds}`);
+    parts.push(`   ${lbl(`الطيور المرئية تقديراً: ~${metrics.estimatedBirdCount} من ${farm.totalBirds}`, `Synliga fåglar (uppskattning): ~${metrics.estimatedBirdCount} av ${farm.totalBirds}`)}`);
   }
   parts.push(``);
 
   if (insights.length > 0) {
-    parts.push(`🧠 الاستنتاجات التشغيلية:`);
+    parts.push(`🧠 ${lbl("الاستنتاجات التشغيلية:", "Operativa insikter:")}`);
     for (const ins of insights.slice(0, 4)) {
       const u = ins.urgency === "critical" ? "🔴" : ins.urgency === "high" ? "🟠" : ins.urgency === "medium" ? "🟡" : "🟢";
       parts.push(`   ${u} ${ins.finding}`);
-      parts.push(`      السبب: ${ins.rootCause}`);
-      parts.push(`      التأثير: ${ins.impact}`);
+      parts.push(`      ${lbl("السبب:", "Orsak:")} ${ins.rootCause}`);
+      parts.push(`      ${lbl("التأثير:", "Påverkan:")} ${ins.impact}`);
     }
     parts.push(``);
   }
 
   if (actions.length > 0) {
-    parts.push(`💡 ماذا تفعل الآن — بالترتيب:`);
+    parts.push(`💡 ${lbl("ماذا تفعل الآن — بالترتيب:", "Vad du ska göra nu — i ordning:")}`);
     for (let i = 0; i < Math.min(actions.length, 5); i++) {
       const p = actions[i].priority === "urgent" ? "🚨" : actions[i].priority === "high" ? "⚡" : actions[i].priority === "medium" ? "📌" : "📝";
       parts.push(`   ${i + 1}. ${p} [${actions[i].timeframe}] ${actions[i].action}`);
@@ -709,17 +721,17 @@ function buildAnalysisText(
     parts.push(``);
   }
 
-  parts.push(`🔬 التحليل البصري التفصيلي:`);
-  parts.push(`   الإضاءة: ${descBrightness(raw.brightness)} (${raw.brightness}%)`);
-  parts.push(`   التعقيد البصري: ${descEntropy(raw.entropy)} (${raw.entropy}%)`);
-  parts.push(`   الألوان الدافئة (طيور/فرشة): ${raw.warmPixelRatio}%`);
-  if (raw.redSpikeRatio > 3) parts.push(`   ⚠️ بكسلات حمراء حادة: ${raw.redSpikeRatio}%`);
-  if (raw.greenScore > 20) parts.push(`   ⚠️ لون أخضر غير طبيعي: ${raw.greenScore}%`);
+  parts.push(`🔬 ${lbl("التحليل البصري التفصيلي:", "Detaljerad visuell analys:")}`);
+  parts.push(`   ${lbl("الإضاءة", "Ljusättning")}: ${descBrightness(raw.brightness)} (${raw.brightness}%)`);
+  parts.push(`   ${lbl("التعقيد البصري", "Visuell komplexitet")}: ${descEntropy(raw.entropy)} (${raw.entropy}%)`);
+  parts.push(`   ${lbl("الألوان الدافئة (طيور/فرشة)", "Varma färger (fåglar/strö)")}: ${raw.warmPixelRatio}%`);
+  if (raw.redSpikeRatio > 3) parts.push(`   ⚠️ ${lbl(`بكسلات حمراء حادة: ${raw.redSpikeRatio}%`, `Skarpa röda pixlar: ${raw.redSpikeRatio}%`)}`);
+  if (raw.greenScore > 20) parts.push(`   ⚠️ ${lbl(`لون أخضر غير طبيعي: ${raw.greenScore}%`, `Onormal grön färg: ${raw.greenScore}%`)}`);
 
   // Phase 10: Anomaly section
   if (anomalies && anomalies.length > 0) {
     parts.push(``);
-    parts.push(`🔍 الشذوذات المكتشفة (Anomaly Detection):`);
+    parts.push(`🔍 ${lbl("الشذوذات المكتشفة (Anomaly Detection):", "Identifierade avvikelser (Anomaly Detection):")}`);
     for (const a of anomalies.slice(0, 4)) {
       const icon = a.severity === "high" ? "🔴" : a.severity === "medium" ? "🟠" : "🟡";
       parts.push(`   ${icon} ${a.description}`);
@@ -729,14 +741,14 @@ function buildAnalysisText(
   // Phase 11: Prediction section
   if (prediction && prediction.dataPoints >= 2) {
     parts.push(``);
-    parts.push(`🤖 التنبؤ بالذكاء الاصطناعي (${prediction.dataPoints} نقطة بيانات):`);
+    parts.push(`🤖 ${lbl(`التنبؤ بالذكاء الاصطناعي (${prediction.dataPoints} نقطة بيانات):`, `AI-prediktion (${prediction.dataPoints} datapunkter):`)}`);
     parts.push(`   ${prediction.description}`);
-    parts.push(`   الدقة التقديرية للتنبؤ: ${prediction.confidence}%`);
+    parts.push(`   ${lbl("الدقة التقديرية للتنبؤ", "Uppskattad prediktionsnoggrannhet")}: ${prediction.confidence}%`);
   }
 
   if (caption) {
     parts.push(``);
-    parts.push(`📝 ملاحظة المراقب: "${caption}"`);
+    parts.push(`📝 ${lbl("ملاحظة المراقب", "Observatörsnotering")}: "${caption}"`);
   }
 
   return parts.join("\n");

@@ -493,12 +493,13 @@ router.post("/ai/resolve", requireAdmin, async (req: Request, res: Response) => 
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
   try {
-    const { text, date } = req.body ?? {};
+    const { text, date, lang } = req.body ?? {};
     if (!text || typeof text !== "string" || text.trim().length < 5) {
       res.status(400).json({ error: "النص مطلوب ويجب أن يكون 5 أحرف على الأقل" });
       return;
     }
     const noteDate = date ?? new Date().toISOString().split("T")[0];
+    const noteLang: "ar" | "sv" = lang === "sv" ? "sv" : "ar";
     const authorId: number | undefined = req.session.userId as number | undefined;
 
     // Get author name
@@ -508,8 +509,8 @@ router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
       authorName = (userRow.rows[0] as any)?.username ?? null;
     }
 
-    // Parse the note
-    const { actions, summary } = parseNote(text.trim(), noteDate);
+    // Parse the note with the current language
+    const { actions, summary } = parseNote(text.trim(), noteDate, noteLang);
 
     // Save each extracted action
     const saved: Array<{ type: string; id: number; description: string }> = [];

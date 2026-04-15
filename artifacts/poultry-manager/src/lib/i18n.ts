@@ -844,6 +844,15 @@ const translations: Record<string, Record<Lang, string>> = {
   "plan.complete.desc":  { ar: "لا تنسَ تسجيل ملاحظاتك اليومية قبل النوم.",   sv: "Glöm inte att registrera dina dagliga anteckningar före sänggåendet." },
   "plan.error":          { ar: "فشل",     sv: "Misslyckades" },
 
+  // ─── Finance AI Fallback (bilingual) ──────────────────────────────────────
+  "finance.ai.summary":      { ar: "ملخص مالي", sv: "Ekonomisk sammanfattning" },
+  "finance.ai.margin":       { ar: "نسبة هامش الربح", sv: "Vinstmarginal" },
+  "finance.ai.notes":        { ar: "ملاحظات", sv: "Observationer" },
+  "finance.ai.loss.note":    { ar: "المزرعة تعمل بخسارة حالياً — راجع بنود المصاريف", sv: "Gården går för närvarande med förlust — granska utgiftskategorierna" },
+  "finance.ai.profit.note":  { ar: "المزرعة تحقق ربحاً إيجابياً", sv: "Gården genererar positiv vinst" },
+  "finance.ai.review.note":  { ar: "أعلى فئات المصاريف تحتاج مراجعة دورية", sv: "De högsta utgiftskategorierna bör granskas regelbundet" },
+  "finance.ai.daily.note":   { ar: "يُنصح بتسجيل جميع المعاملات يومياً لدقة التحليل", sv: "Registrera alla transaktioner dagligen för noggrann analys" },
+
   // ─── Smart Note Analyzer ──────────────────────────────────────────────────
   "smart.analyzing":         { ar: "جارٍ تحليل الملاحظة...", sv: "Analyserar anteckning..." },
   "smart.analyzing.desc":    { ar: "يبحث النظام عن بيانات منظمة في النص", sv: "Söker efter strukturerad data i texten" },

@@ -50,8 +50,13 @@ async function deleteImage(id: number) {
   const r = await fetch(`/api/notes/images/${id}`, { method: "DELETE", credentials: "include" });
   if (!r.ok) throw new Error("delete_error");
 }
-async function reanalyzeImage(id: number) {
-  const r = await fetch(`/api/notes/images/${id}/analyze`, { method: "POST", credentials: "include" });
+async function reanalyzeImage(id: number, lang?: string) {
+  const r = await fetch(`/api/notes/images/${id}/analyze`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lang: lang ?? "ar" }),
+  });
   if (!r.ok) throw new Error("analyze_error");
   return r.json();
 }
@@ -119,6 +124,7 @@ async function uploadFarmPhoto(
   date: string,
   category: string,
   caption: string,
+  lang?: string,
 ): Promise<NoteImage> {
   // 1) Get presigned upload URL
   const urlRes = await fetch("/api/notes/images/upload-url", {
@@ -146,7 +152,7 @@ async function uploadFarmPhoto(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ objectPath, originalName: file.name, mimeType: file.type, date, category, caption }),
+    body: JSON.stringify({ objectPath, originalName: file.name, mimeType: file.type, date, category, caption, lang: lang ?? "ar" }),
   });
   if (!saveRes.ok) {
     const e = await saveRes.json().catch(() => ({}));
@@ -311,7 +317,7 @@ function ImageCard({
   // Parse operational insights from analysis text
   const insights = img.aiAnalysis
     ? img.aiAnalysis.split("\n")
-        .filter(l => l.includes("السبب:") || l.includes("التأثير:") || (l.includes("🔴") && l.includes(":")) || (l.includes("🟠") && l.includes(":")))
+        .filter(l => l.includes("السبب:") || l.includes("التأثير:") || l.includes("Orsak:") || l.includes("Påverkan:") || (l.includes("🔴") && l.includes(":")) || (l.includes("🟠") && l.includes(":")))
     : [];
 
   // Parse action items from analysis text
@@ -618,7 +624,7 @@ function PhotoUploadZone({
   date: string;
   onDone: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { toast } = useToast();
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -641,7 +647,7 @@ function PhotoUploadZone({
     setUploading(true);
     setProgress(t("upload.uploading"));
     try {
-      await uploadFarmPhoto(file, date, imgCategory, caption);
+      await uploadFarmPhoto(file, date, imgCategory, caption, lang);
       toast({ title: t("upload.success"), description: t("upload.success.desc") });
       setCaption("");
       onDone();
@@ -759,9 +765,10 @@ interface SmartAnalysisResult {
 const TYPE_ICONS: Record<string, string> = {
   hatching_cycle: "🥚", hatching_result: "🐣", transaction: "💰", flock: "🐔", task: "📋",
 };
-const TYPE_LABELS_AR: Record<string, string> = {
-  hatching_cycle: "دورة تفقيس", hatching_result: "نتيجة تفقيس",
-  transaction: "معاملة مالية", flock: "قطيع جديد", task: "مهمة",
+// Maps type → i18n key (keys defined in i18n.ts under smart.*)
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  hatching_cycle: "smart.hatching_cycle", hatching_result: "smart.hatching_result",
+  transaction: "smart.transaction", flock: "smart.flock", task: "smart.task",
 };
 
 function SmartAnalysisCard({ loading, result, onDismiss }: {
@@ -805,7 +812,7 @@ function SmartAnalysisCard({ loading, result, onDismiss }: {
                     {result.saved.map((item, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300">
                         <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                        <span className="font-medium">{TYPE_ICONS[item.type]} {TYPE_LABELS_AR[item.type]}</span>
+                        <span className="font-medium">{TYPE_ICONS[item.type]} {t(TYPE_LABEL_KEYS[item.type] ?? item.type)}</span>
                         <ChevronRight className="w-3 h-3 opacity-40" />
                         <span className="text-purple-600 dark:text-purple-400 truncate">{item.description}</span>
                       </div>
@@ -824,7 +831,7 @@ function SmartAnalysisCard({ loading, result, onDismiss }: {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Notes() {
   const { isAdmin } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { toast } = useToast();
   const qc = useQueryClient();
   const today = new Date().toISOString().split("T")[0];
@@ -870,7 +877,7 @@ export default function Notes() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ text: pending.content, date: pending.date }),
+            body: JSON.stringify({ text: pending.content, date: pending.date, lang }),
           });
           if (r.ok) {
             const data = await r.json();
@@ -901,7 +908,7 @@ export default function Notes() {
   });
 
   const reanalyze = useMutation({
-    mutationFn: reanalyzeImage,
+    mutationFn: (id: number) => reanalyzeImage(id, lang),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["noteImages"] }); toast({ title: t("img.reanalyze.title") }); },
     onError: () => toast({ title: t("img.reanalyze.failed"), variant: "destructive" }),
   });
@@ -912,10 +919,10 @@ export default function Notes() {
     if (failed.length === 0) return;
     toast({ title: `${t("img.reanalyze.title")} (${failed.length})` });
     for (const img of failed) {
-      await reanalyzeImage(img.id).catch(() => {});
+      await reanalyzeImage(img.id, lang).catch(() => {});
     }
     qc.invalidateQueries({ queryKey: ["noteImages"] });
-  }, [images, qc, t]);
+  }, [images, qc, t, lang]);
 
   // Stats
   const totalAlerts = images.reduce((acc: number, img: NoteImage) => acc + (img.aiAlerts ?? []).length, 0);

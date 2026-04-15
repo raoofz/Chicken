@@ -266,14 +266,16 @@ export default function Finance() {
         totalsByCategory[tr.category][tr.type] += Number(tr.amount);
       });
 
-      const prompt = `أنت مستشار مالي لمزرعة دواجن في الموصل، العراق.
+      const isAr = lang === "ar";
+      const prompt = isAr
+        ? `أنت مستشار مالي لمزرعة دواجن في الموصل، العراق.
 هذه البيانات المالية للمزرعة:
 - إجمالي الدخل: ${fmtAmount(totalIncome)}
 - إجمالي المصاريف: ${fmtAmount(totalExpense)}
 - صافي الربح/الخسارة: ${fmtAmount(profit)}
 - عدد المعاملات: ${transactions.length}
 - تفصيل حسب الفئات: ${JSON.stringify(totalsByCategory, null, 2)}
-- آخر ١٠ معاملات: ${JSON.stringify(transactions.slice(0, 10).map(t => ({ date: t.date, type: t.type, cat: t.category, amount: Number(t.amount) })), null, 2)}
+- آخر ١٠ معاملات: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
 
 قدم تحليلاً مالياً احترافياً شاملاً يتضمن:
 ١. تقييم الوضع المالي الحالي
@@ -281,7 +283,23 @@ export default function Finance() {
 ٣. فرص زيادة الدخل
 ٤. توصيات عملية ومحددة لتحسين الربحية
 ٥. مؤشرات الأداء الرئيسية التي يجب متابعتها
-اجعل التحليل دقيقاً ومفيداً ومناسباً لمزرعة دواجن صغيرة في العراق.`;
+اجعل التحليل دقيقاً ومفيداً ومناسباً لمزرعة دواجن صغيرة في العراق.`
+        : `You are a financial advisor for a poultry farm in Mosul, Iraq.
+Farm financial data:
+- Total income: ${fmtAmount(totalIncome)}
+- Total expenses: ${fmtAmount(totalExpense)}
+- Net profit/loss: ${fmtAmount(profit)}
+- Number of transactions: ${transactions.length}
+- Breakdown by category: ${JSON.stringify(totalsByCategory, null, 2)}
+- Last 10 transactions: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
+
+Provide a comprehensive professional financial analysis including:
+1. Current financial status assessment
+2. Largest expense categories and how to reduce them
+3. Income growth opportunities
+4. Practical recommendations to improve profitability
+5. Key performance indicators to monitor
+Keep the analysis precise and suitable for a small poultry farm.`;
 
       const r = await fetch(`${BASE}/api/ai/analyze`, {
         method: "POST", credentials: "include",
@@ -292,22 +310,38 @@ export default function Finance() {
         const d = await r.json();
         setAiAnalysis(d.analysis ?? d.result ?? d.text ?? "");
       } else {
-        // fallback local analysis
-        const lines = [
-          `📊 **التحليل المالي للمزرعة**`,
+        // Bilingual fallback local analysis
+        const margin = totalIncome > 0 ? ((profit / totalIncome) * 100).toFixed(1) : "0";
+        const lines = isAr ? [
+          `📊 **${t("finance.ai.analyze")}**`,
           ``,
-          `💰 **ملخص مالي:**`,
-          `• إجمالي الدخل: ${fmtAmount(totalIncome)}`,
-          `• إجمالي المصاريف: ${fmtAmount(totalExpense)}`,
-          `• صافي الربح: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
-          `• نسبة هامش الربح: ${totalIncome > 0 ? ((profit / totalIncome) * 100).toFixed(1) : 0}%`,
+          `💰 **${t("finance.ai.summary")}:**`,
+          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
+          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
+          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
+          `• ${t("finance.ai.margin")}: ${margin}%`,
           ``,
-          `📈 **ملاحظات:**`,
-          profit < 0 ? `• ⚠️ المزرعة تعمل بخسارة حالياً — راجع بنود المصاريف` : `• ✅ المزرعة تحقق ربحاً إيجابياً`,
-          totalExpense > 0 ? `• أعلى فئات المصاريف تحتاج مراجعة دورية` : "",
-          `• يُنصح بتسجيل جميع المعاملات يومياً لدقة التحليل`,
-        ].filter(Boolean);
-        setAiAnalysis(lines.join("\n"));
+          `📈 **${t("finance.ai.notes")}:**`,
+          profit < 0 ? `• ⚠️ ${t("finance.ai.loss.note")}` : `• ✅ ${t("finance.ai.profit.note")}`,
+          totalExpense > 0 ? `• ${t("finance.ai.review.note")}` : "",
+          `• ${t("finance.ai.daily.note")}`,
+        ] : [
+          `📊 **Farm Financial Analysis**`,
+          ``,
+          `💰 **Financial Summary:**`,
+          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
+          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
+          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
+          `• Profit Margin: ${margin}%`,
+          ``,
+          `📈 **Observations:**`,
+          profit < 0
+            ? `• ⚠️ Farm is currently operating at a loss — review expense categories`
+            : `• ✅ Farm is generating positive profit`,
+          totalExpense > 0 ? `• Top expense categories should be reviewed regularly` : "",
+          `• Record all transactions daily for accurate analysis`,
+        ];
+        setAiAnalysis(lines.filter(Boolean).join("\n"));
       }
     } catch {
       toast({ variant: "destructive", title: t("finance.ai.error") });
