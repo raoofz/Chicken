@@ -21,6 +21,44 @@ const baseURL = process.env.OPENAI_API_KEY
 
 const openai = new OpenAI({ baseURL, apiKey });
 
+function isOpenAIQuotaError(err: any) {
+  return err?.status === 429 || err?.code === "insufficient_quota" || String(err?.message ?? "").includes("quota");
+}
+
+function localAnalysisFallback(farmData: string) {
+  const tempMatches = [...farmData.matchAll(/حرارة:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
+  const humMatches = [...farmData.matchAll(/رطوبة:\s*([0-9]+(?:\.[0-9]+)?)/g)].map((m) => Number(m[1]));
+  const overdueTasks = (farmData.match(/متأخرة/g) ?? []).length;
+  const activeCycles = (farmData.match(/حالة: incubating|حالة: hatching/g) ?? []).length;
+
+  const alerts: Array<{ type: string; title: string; description: string }> = [];
+  if (tempMatches.some((t) => t > 38.3)) alerts.push({ type: "danger", title: "حرارة عالية", description: "يوجد على الأقل دورة تفقيس بحرارة أعلى من الحد الآمن." });
+  if (tempMatches.some((t) => t < 37)) alerts.push({ type: "warning", title: "حرارة منخفضة", description: "يوجد على الأقل دورة تفقيس بحرارة أقل من المطلوب." });
+  if (humMatches.some((h) => h < 50)) alerts.push({ type: "warning", title: "رطوبة منخفضة", description: "بعض الدورات تحتاج رفع الرطوبة فوراً." });
+  if (overdueTasks > 0) alerts.push({ type: "warning", title: "مهام متأخرة", description: `يوجد ${overdueTasks} مهمة أو أكثر متأخرة.` });
+
+  const score = Math.max(35, 90 - alerts.length * 10 - overdueTasks * 5);
+
+  return {
+    score,
+    scoreLabel: score >= 80 ? "جيد جداً" : score >= 60 ? "جيد" : "مقبول",
+    alerts,
+    sections: [
+      { icon: "🥚", title: "التفقيس", items: [{ label: "الدورات النشطة", value: String(activeCycles), status: activeCycles > 0 ? "good" : "neutral" }] },
+      { icon: "📋", title: "المهام", items: [{ label: "المتأخرة", value: String(overdueTasks), status: overdueTasks > 0 ? "warning" : "good" }] },
+    ],
+    duties: [
+      { priority: "urgent", title: "راجع حرارة/رطوبة الفقاسات", description: "اضبط أي دورة خارج النطاق العلمي فوراً." },
+      { priority: "high", title: "أنجز المهام المتأخرة", description: "لا تؤجل المهام المتراكمة حتى لا تتضاعف الخسائر." },
+    ],
+    predictions: [
+      { title: "تحسن الفقس", description: "سيحسن الاستقرار البيئي النتائج في الدورة القادمة.", confidence: "medium" },
+    ],
+    errors: [],
+    topPriority: "ثبّت حرارة ورطوبة الفقاسات ثم أنجز المهام المتأخرة",
+  };
+}
+
 const POULTRY_MEGA_ENCYCLOPEDIA = `
 # الموسوعة العلمية الشاملة للدكتور نصار — تربية الدواجن والتفقيس
 # (مستخلصة من أكثر من 6000 مرجع علمي وعملي)
@@ -655,7 +693,7 @@ ${farmData}
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_completion_tokens: 8192,
+      max_tokens: 4096,
       messages: [
         { role: "system", content: systemPrompt },
         ...history.map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
@@ -674,6 +712,13 @@ ${farmData}
     res.json({ reply, timestamp: new Date().toISOString() });
   } catch (err: any) {
     logger.error({ err }, "Dr. Nassar chat failed");
+    if (isOpenAIQuotaError(err)) {
+      res.status(200).json({
+        reply: "تعذّر الاتصال بمزوّد الذكاء الاصطناعي حالياً بسبب نفاد الرصيد أو رفض المفتاح. لكني ما زلت أعمل كنظام محلي، وأستطيع مساعدتك في تحليل المزرعة والفقاسات خطوة بخطوة.",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     res.status(500).json({ error: "فشل الاتصال: " + (err?.message ?? "خطأ غير معروف") });
   }
 });
@@ -709,7 +754,7 @@ ${POULTRY_MEGA_ENCYCLOPEDIA}
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      max_completion_tokens: 8192,
+      max_tokens: 4096,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: farmData },
@@ -727,6 +772,10 @@ ${POULTRY_MEGA_ENCYCLOPEDIA}
     res.json({ analysis, timestamp: new Date().toISOString() });
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
+    if (isOpenAIQuotaError(err)) {
+      res.status(200).json({ analysis: localAnalysisFallback(await getFarmAnalysis()), timestamp: new Date().toISOString() });
+      return;
+    }
     res.status(500).json({ error: "فشل التحليل: " + (err?.message ?? "خطأ غير معروف") });
   }
 });
