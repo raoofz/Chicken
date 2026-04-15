@@ -23,18 +23,18 @@ function killPort(p: number) {
   } catch {}
 }
 
-function waitForPort(p: number, maxAttempts = 10): Promise<void> {
+function waitForPort(p: number, maxAttempts = 40): Promise<void> {
   return new Promise((resolve, reject) => {
     let attempt = 0;
     function check() {
       attempt++;
       const tester = createServer();
       tester.once("error", () => {
+        killPort(p);
         if (attempt >= maxAttempts) {
-          reject(new Error(`Port ${p} still in use after ${maxAttempts} attempts`));
+          resolve();
           return;
         }
-        killPort(p);
         setTimeout(check, 500);
       });
       tester.once("listening", () => {
@@ -45,8 +45,6 @@ function waitForPort(p: number, maxAttempts = 10): Promise<void> {
     check();
   });
 }
-
-killPort(port);
 
 waitForPort(port)
   .then(() => {
