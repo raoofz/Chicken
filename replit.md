@@ -15,7 +15,7 @@ Full-stack poultry farm management system with two web frontends sharing one API
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
+- **Validation**: manual inline validation (zod not installed in api-server), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec at `lib/api-spec/openapi.yaml`)
 - **Build**: esbuild (CJS bundle)
 
@@ -26,6 +26,26 @@ Full-stack poultry farm management system with two web frontends sharing one API
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
+
+## AI Integrations
+- **OpenAI GPT-4o-mini Vision**: via Replit AI Integrations proxy (env: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
+- Used for farm photo analysis in `/api/notes/images/:id/analyze`
+- Analyzes images for bird health, incubator conditions, alerts, and recommendations in Arabic
+
+## Object Storage
+- **Google Cloud Storage** via Replit sidecar proxy at `http://127.0.0.1:1106`
+- Bucket: `replit-objstore-0ec7f8df-f3b4-4257-850a-d104cf6d3b87`
+- Env: `DEFAULT_OBJECT_STORAGE_BUCKET_ID`, `PRIVATE_OBJECT_DIR`, `PUBLIC_OBJECT_SEARCH_PATHS`
+- Farm photos stored under `/objects/uploads/`
+- Served via: `GET /api/notes/images/file/:objectPath`
+
+## Farm Photo Monitoring (new)
+- `note_images` table: stores image metadata, AI analysis, tags, alerts, confidence
+- `/api/notes/images` — CRUD endpoints
+- `/api/notes/images/upload-url` — presigned GCS upload URL
+- `/api/notes/images/save` — save record + trigger async AI vision analysis
+- `/ai` route (frontend) → now shows **Photo Monitoring Hub** (مراقبة بالصور)
+- `/notes` route → shows **Daily Notes** (ملاحظات يومية) with photo upload tab
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 

@@ -65,6 +65,28 @@ export async function runMigrations() {
       )
     `);
 
+    // Fix 4: Create note_images table for farm photo observations
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS note_images (
+        id SERIAL PRIMARY KEY,
+        note_id INTEGER,
+        date TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        original_name TEXT,
+        mime_type TEXT,
+        category TEXT NOT NULL DEFAULT 'general',
+        caption TEXT,
+        author_id INTEGER,
+        author_name TEXT,
+        ai_analysis TEXT,
+        ai_tags JSONB,
+        ai_alerts JSONB,
+        ai_confidence INTEGER,
+        analysis_status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
     logger.info("Migrations complete");
   } catch (err) {
     logger.error({ err }, "Migration failed");

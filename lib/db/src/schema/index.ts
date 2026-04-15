@@ -7,3 +7,4 @@ export * from "./users";
 export * from "./dailyNotes";
 export * from "./auth";
 export * from "./predictionLogs";
+export * from "./noteImages";

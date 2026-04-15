@@ -10,6 +10,8 @@ import authRouter from "./auth";
 import dailyNotesRouter from "./dailyNotes";
 import aiRouter from "./ai";
 import diagnosticsRouter from "./diagnostics";
+import storageRouter from "./storage";
+import noteImagesRouter from "./noteImages";
 
 const router: IRouter = Router();
 
@@ -34,5 +36,7 @@ router.use(dashboardRouter);
 router.use(dailyNotesRouter);
 router.use(aiRouter);
 router.use(diagnosticsRouter);
+router.use(storageRouter);
+router.use(noteImagesRouter);
 
 export default router;
