@@ -20,7 +20,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.goals": { ar: "الأهداف", sv: "Mål" },
   "nav.notes": { ar: "المذكرات", sv: "Anteckningar" },
   "nav.logs": { ar: "سجل النشاط", sv: "Aktivitetslogg" },
-  "nav.ai": { ar: "د. نصار", sv: "Dr. Nassar" },
+  "nav.ai": { ar: "تحليل المزرعة", sv: "Gårdsanalys" },
   "nav.dailyPlan": { ar: "الخطة اليومية", sv: "Dagsplan" },
 
   "ai.engineTitle": { ar: "محرك تحليل خبير", sv: "Expert-analysmotor" },

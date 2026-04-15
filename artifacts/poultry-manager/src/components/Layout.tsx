@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
-  Languages, Stethoscope, CalendarClock,
+  Languages, BrainCircuit, CalendarClock,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ const NAV_KEYS = [
   { href: "/hatching", key: "nav.hatching", icon: Egg, adminOnly: false },
   { href: "/tasks", key: "nav.tasks", icon: CheckSquare, adminOnly: false },
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
-  { href: "/ai", key: "nav.ai", icon: Stethoscope, adminOnly: true },
+  { href: "/ai", key: "nav.ai", icon: BrainCircuit, adminOnly: true },
   { href: "/daily-plan", key: "nav.dailyPlan", icon: CalendarClock, adminOnly: true },
   { href: "/notes", key: "nav.notes", icon: FileText, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
@@ -95,7 +95,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                onClick={() => setSidebarOpen(false)}
+                onClick={() => {
+                  setSidebarOpen(false);
+                  if (active) {
+                    window.dispatchEvent(new CustomEvent("nav-reset", { detail: href }));
+                  }
+                }}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                   active
