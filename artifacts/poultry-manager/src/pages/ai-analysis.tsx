@@ -197,7 +197,7 @@ export default function AiAnalysis() {
     setAnalyzing(true);
     setAnalyzeStep(0);
     try {
-      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
+      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: "ar" }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
       const data = await res.json();
       setAnalysis(data.analysis);
@@ -212,7 +212,7 @@ export default function AiAnalysis() {
     setAnalyzing(true);
     setAnalyzeStep(0);
     try {
-      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } });
+      const res = await fetch("/api/ai/analyze-farm", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: "sv" }) });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
       const data = await res.json();
       setAnalysis(data.analysis);

@@ -594,7 +594,8 @@ ${farmData}
     }
 
     const rawData = await getRawFarmData();
-    const localReply = buildExpertChatReply(message, rawData);
+    const replyLang = String(req.body?.lang ?? "").toLowerCase() === "sv" ? "sv" : "ar";
+    const localReply = buildExpertChatReply(`${message} [lang:${replyLang}]`, rawData);
     try {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -623,7 +624,8 @@ router.post("/ai/analyze-farm", requireAdmin, async (req: Request, res: Response
   try {
     const rawData = await getRawFarmData();
     const analysis = runFullAnalysis(rawData);
-    res.json({ analysis, timestamp: new Date().toISOString(), mode: "expert-local" });
+    const lang = String(req.body?.lang ?? "").toLowerCase() === "sv" ? "sv" : "ar";
+    res.json({ analysis, timestamp: new Date().toISOString(), mode: "expert-local", lang });
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
     res.status(500).json({ error: "فشل التحليل: " + (err?.message ?? "خطأ غير معروف") });
