@@ -15,6 +15,7 @@ import Notes from "@/pages/notes";
 import Login from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import AiAnalysis from "@/pages/ai-analysis";
+import AdvancedAnalysis from "@/pages/advanced-analysis";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ function AppRoutes() {
         <Route path="/logs" component={Logs} />
         <Route path="/notes" component={Notes} />
         <Route path="/ai" component={AiAnalysis} />
+        <Route path="/ai/advanced" component={AdvancedAnalysis} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
