@@ -143,15 +143,42 @@ router.get("/notes/images/file/*objectPath", requireAuth, async (req: Request, r
 });
 
 // ─── AI Vision Analysis ───────────────────────────────────────────────────────
+
+/**
+ * Download image from GCS and return as base64 data URI.
+ * OpenAI Vision requires either a public URL or a base64 data URI.
+ * Since our images are private in GCS, we download them server-side and encode as base64.
+ */
+async function downloadImageAsBase64(objectPath: string): Promise<string> {
+  // objectPath is like /objects/uploads/<uuid>
+  const normalizedPath = objectPath.startsWith("/objects/") ? objectPath : `/objects/${objectPath}`;
+  const file = await storage.getObjectEntityFile(normalizedPath);
+
+  // Download the file buffer from GCS
+  const [buffer] = await file.download();
+  const base64 = buffer.toString("base64");
+
+  // Get content type from metadata
+  const [metadata] = await file.getMetadata();
+  const contentType = (metadata.contentType as string) || "image/jpeg";
+
+  return `data:${contentType};base64,${base64}`;
+}
+
 async function analyzeImageAsync(imageId: number, objectPath: string) {
   try {
-    // Update status to analyzing
+    // Mark as analyzing
     await db.update(noteImagesTable)
       .set({ analysisStatus: "analyzing" })
       .where(eq(noteImagesTable.id, imageId));
 
-    // Build the public URL for the image
-    const imageUrl = buildImageAccessUrl(objectPath);
+    // Download image from GCS → base64 (required since images are private)
+    let imageDataUri: string;
+    try {
+      imageDataUri = await downloadImageAsBase64(objectPath);
+    } catch (downloadErr: any) {
+      throw new Error(`فشل تحميل الصورة من التخزين: ${downloadErr.message}`);
+    }
 
     const systemPrompt = `أنت خبير متخصص في إدارة مزارع الدواجن والتفقيس. مهمتك تحليل صور المزرعة وتقديم تقرير دقيق ومفيد.
 
@@ -169,20 +196,20 @@ async function analyzeImageAsync(imageId: number, objectPath: string) {
 3. **تنبيهات**: أي مشاكل واضحة (كثافة عالية، طيور مريضة، درجة حرارة خاطئة، نقص ماء/علف...)
 4. **توصية فورية**: ما الذي يجب فعله الآن؟
 
-أجب بتنسيق JSON:
+أجب بتنسيق JSON فقط، بدون أي نص إضافي:
 {
-  "ما_أراه": "وصف قصير",
+  "ما_أراه": "وصف قصير لمحتويات الصورة",
   "الحالة": "ممتاز | جيد | تحتاج انتباه | خطر",
   "التحليل": "تحليل مفصل بـ 2-3 جمل",
   "تنبيهات": ["تنبيه 1", "تنبيه 2"],
   "التوصية": "ماذا تفعل الآن",
-  "العلامات": ["طيور", "حاضنة", "بيض", ...أي علامات مناسبة],
+  "العلامات": ["طيور", "حاضنة", "بيض"],
   "الثقة": 85
 }`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 1000,
+      model: "gpt-5-mini",
+      max_tokens: 1200,
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -190,7 +217,7 @@ async function analyzeImageAsync(imageId: number, objectPath: string) {
           content: [
             {
               type: "image_url",
-              image_url: { url: imageUrl, detail: "high" },
+              image_url: { url: imageDataUri, detail: "high" },
             },
             { type: "text", text: userPrompt },
           ],
@@ -200,28 +227,32 @@ async function analyzeImageAsync(imageId: number, objectPath: string) {
 
     const rawContent = response.choices[0]?.message?.content ?? "{}";
 
-    // Parse the JSON response
+    // Parse JSON — strip markdown code blocks if present
     let parsed: any = {};
     try {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      const stripped = rawContent.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/);
       if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-    } catch { parsed = { التحليل: rawContent }; }
+    } catch {
+      parsed = { التحليل: rawContent };
+    }
 
-    // Build human-readable analysis
-    const analysis = [
-      parsed["ما_أراه"] ? `📷 **ما أراه:** ${parsed["ما_أراه"]}` : "",
-      parsed["الحالة"] ? `✅ **الحالة:** ${parsed["الحالة"]}` : "",
-      parsed["التحليل"] ? `\n${parsed["التحليل"]}` : "",
-      parsed["التوصية"] ? `\n💡 **التوصية:** ${parsed["التوصية"]}` : "",
-    ].filter(Boolean).join("\n");
+    // Build readable analysis text
+    const analysisParts: string[] = [];
+    if (parsed["ما_أراه"]) analysisParts.push(`📷 ما أراه: ${parsed["ما_أراه"]}`);
+    if (parsed["الحالة"])   analysisParts.push(`الحالة: ${parsed["الحالة"]}`);
+    if (parsed["التحليل"]) analysisParts.push(`\n${parsed["التحليل"]}`);
+    if (parsed["التوصية"]) analysisParts.push(`\n💡 التوصية: ${parsed["التوصية"]}`);
+    const analysis = analysisParts.join("\n") || rawContent;
 
-    const alerts = (parsed["تنبيهات"] ?? []).map((msg: string) => {
-      const isUrgent = msg.includes("خطر") || msg.includes("مرض") || msg.includes("ميت") || msg.includes("طارئ");
+    const urgentWords = ["خطر", "مرض", "نفوق", "ميت", "طارئ", "حرج", "عاجل", "ضعيف", "تدهور"];
+    const alerts = ((parsed["تنبيهات"] as string[]) ?? []).map((msg: string) => {
+      const isUrgent = urgentWords.some(w => msg.includes(w));
       return { level: isUrgent ? "critical" : "warning", message: msg };
     });
 
-    const tags = parsed["العلامات"] ?? [];
-    const confidence = Number(parsed["الثقة"] ?? 75);
+    const tags = (parsed["العلامات"] as string[]) ?? [];
+    const confidence = Math.min(100, Math.max(0, Number(parsed["الثقة"] ?? 75)));
 
     await db.update(noteImagesTable).set({
       aiAnalysis: analysis,
@@ -231,20 +262,15 @@ async function analyzeImageAsync(imageId: number, objectPath: string) {
       analysisStatus: "done",
     }).where(eq(noteImagesTable.id, imageId));
 
+    console.log(`[vision] ✓ image ${imageId} analyzed, confidence=${confidence}%`);
+
   } catch (err: any) {
-    console.error("[vision] analysis failed:", err.message);
+    console.error(`[vision] ✗ image ${imageId} failed:`, err.message);
     await db.update(noteImagesTable).set({
-      aiAnalysis: "فشل التحليل التلقائي — يمكنك إعادة المحاولة",
+      aiAnalysis: `فشل التحليل: ${err.message}`,
       analysisStatus: "failed",
     }).where(eq(noteImagesTable.id, imageId));
   }
-}
-
-function buildImageAccessUrl(objectPath: string): string {
-  // objectPath is like /objects/uuid — we serve it via our own API
-  const path = objectPath.startsWith("/objects/") ? objectPath.replace("/objects/", "") : objectPath;
-  // Use localhost for server-side access since we can't hit the proxy from inside the container
-  return `http://localhost:${process.env.PORT ?? 8080}/api/notes/images/file/${path}`;
 }
 
 export default router;
