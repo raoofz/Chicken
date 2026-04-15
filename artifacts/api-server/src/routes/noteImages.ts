@@ -7,7 +7,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, noteImagesTable, flocksTable } from "@workspace/db";
-import { desc, eq, and, gte, lte } from "drizzle-orm";
+import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { analyzeImage } from "../lib/visionEngine";
 import { Readable } from "stream";
@@ -168,6 +168,39 @@ router.post("/notes/images/:id/analyze", requireAuth, async (req: Request, res: 
     await runVisionAnalysis(id, row.imageUrl, { mimeType: row.mimeType, date: row.date, category: row.category, caption: row.caption ?? "" });
     const [updated] = await db.select().from(noteImagesTable).where(eq(noteImagesTable.id, id));
     res.json(updated);
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── POST /notes/images/:id/feedback — Phase 16: User Feedback System ────────
+router.post("/notes/images/:id/feedback", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const imageId = Number(req.params.id);
+    const { correctedBirdCount, correctedHealthScore, correctedRiskLevel, confidenceRating, notes: feedbackNotes } = req.body ?? {};
+
+    if (!imageId) { res.status(400).json({ error: "معرّف الصورة مطلوب" }); return; }
+
+    const [image] = await db.select({ id: noteImagesTable.id }).from(noteImagesTable).where(eq(noteImagesTable.id, imageId));
+    if (!image) { res.status(404).json({ error: "الصورة غير موجودة" }); return; }
+
+    await db.execute(sql`
+      INSERT INTO image_feedback (image_id, user_id, user_name, corrected_bird_count, corrected_health_score, corrected_risk_level, confidence_rating, notes)
+      VALUES (${imageId}, ${req.session.userId ?? null}, ${req.session.name ?? null},
+              ${correctedBirdCount ?? null}, ${correctedHealthScore ?? null},
+              ${correctedRiskLevel ?? null}, ${confidenceRating ?? null}, ${feedbackNotes ?? null})
+    `);
+
+    res.json({ success: true, message: "تم حفظ التغذية الراجعة — سيُستخدم لتحسين التحليل" });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── GET /notes/images/:id/feedback — get feedback for an image ───────────────
+router.get("/notes/images/:id/feedback", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const imageId = Number(req.params.id);
+    const result = await db.execute(sql`
+      SELECT * FROM image_feedback WHERE image_id = ${imageId} ORDER BY created_at DESC
+    `);
+    res.json((result as any).rows ?? result ?? []);
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 

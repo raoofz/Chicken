@@ -16,8 +16,9 @@ import {
   Plus, Trash2, FileText, Camera, Upload, Image as ImageIcon, Brain,
   Tag, AlertTriangle, CheckCircle, Clock, X, RefreshCw, ZoomIn, Calendar,
   MessageSquare, Loader2, ChevronDown, ChevronUp, Activity, Thermometer,
-  Droplets, Zap, TrendingUp, TrendingDown, Minus, BarChart3, Shield
+  Droplets, Zap, TrendingUp, TrendingDown, Minus, BarChart3, Shield, Star, Send
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -270,6 +271,41 @@ function ImageCard({
   const [expanded, setExpanded] = useState(true);
   const [showRawText, setShowRawText] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState(false);
+  const [feedbackData, setFeedbackData] = useState({
+    correctedBirdCount: "",
+    correctedHealthScore: "",
+    correctedRiskLevel: "",
+    confidenceRating: 0,
+    notes: "",
+  });
+  const { toast } = useToast();
+
+  const submitFeedback = async () => {
+    setFeedbackSubmitting(true);
+    try {
+      const body: Record<string, any> = {};
+      if (feedbackData.correctedBirdCount) body.correctedBirdCount = Number(feedbackData.correctedBirdCount);
+      if (feedbackData.correctedHealthScore) body.correctedHealthScore = Number(feedbackData.correctedHealthScore);
+      if (feedbackData.correctedRiskLevel) body.correctedRiskLevel = feedbackData.correctedRiskLevel;
+      if (feedbackData.confidenceRating) body.confidenceRating = feedbackData.confidenceRating;
+      if (feedbackData.notes) body.notes = feedbackData.notes;
+
+      const r = await fetch(`/api/notes/images/${img.id}/feedback`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? "فشل");
+      setFeedbackDone(true);
+      setShowFeedback(false);
+      toast({ title: "✅ شكراً!", description: "تم حفظ التصحيح — سيُستخدم لتحسين الدقة" });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "خطأ", description: e.message });
+    } finally { setFeedbackSubmitting(false); }
+  };
   const imageFileUrl = `/api/notes/images/file/${img.imageUrl.replace(/^\/objects\//, "")}`;
   const criticalAlerts = (img.aiAlerts ?? []).filter(a => a.level === "critical");
   const warnAlerts = (img.aiAlerts ?? []).filter(a => a.level === "warning");
@@ -444,11 +480,102 @@ function ImageCard({
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between border-t border-indigo-100 pt-2">
-                    <span className="text-[9px] text-slate-400">Computer Vision AI — 3 طبقات تحليل</span>
-                    <button onClick={() => onReanalyze(img.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3" /> إعادة التحليل
-                    </button>
+                  {/* ── Phase 16: Feedback System ──────────────────────────── */}
+                  <div className="border-t border-indigo-100 pt-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] text-slate-400">Computer Vision AI — 3 طبقات تحليل</span>
+                      <div className="flex items-center gap-2">
+                        {feedbackDone && <span className="text-[9px] text-emerald-600 font-medium">✓ تم التصحيح</span>}
+                        <button
+                          onClick={() => setShowFeedback(!showFeedback)}
+                          className={cn("text-[10px] flex items-center gap-1 px-2 py-0.5 rounded-full border transition-colors",
+                            showFeedback ? "bg-purple-100 text-purple-700 border-purple-200" : "text-purple-500 border-purple-200 hover:bg-purple-50")}
+                        >
+                          <Star className="w-3 h-3" /> تصحيح التحليل
+                        </button>
+                        <button onClick={() => onReanalyze(img.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3" />إعادة
+                        </button>
+                      </div>
+                    </div>
+
+                    {showFeedback && (
+                      <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2.5" dir="rtl">
+                        <p className="text-[10px] font-semibold text-purple-800 flex items-center gap-1">
+                          <Star className="w-3 h-3" /> تصحيح التحليل — بياناتك تحسّن الدقة مستقبلاً
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] text-purple-700 block mb-0.5">العدد الفعلي للطيور</label>
+                            <Input
+                              type="number" min="0" placeholder={m?.estimatedBirdCount ? `~${m.estimatedBirdCount}` : "عدد الطيور"}
+                              value={feedbackData.correctedBirdCount}
+                              onChange={e => setFeedbackData(p => ({ ...p, correctedBirdCount: e.target.value }))}
+                              className="h-7 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-purple-700 block mb-0.5">الصحة الفعلية (%)</label>
+                            <Input
+                              type="number" min="0" max="100" placeholder={m?.healthScore ? `${m.healthScore}%` : "0-100"}
+                              value={feedbackData.correctedHealthScore}
+                              onChange={e => setFeedbackData(p => ({ ...p, correctedHealthScore: e.target.value }))}
+                              className="h-7 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-purple-700 block mb-0.5">مستوى الخطر الفعلي</label>
+                          <div className="flex gap-1 flex-wrap">
+                            {[["low","منخفض","bg-emerald-100 text-emerald-700"], ["medium","متوسط","bg-amber-100 text-amber-700"], ["high","مرتفع","bg-orange-100 text-orange-700"], ["critical","حرج","bg-red-100 text-red-700"]].map(([v, label, cls]) => (
+                              <button key={v} onClick={() => setFeedbackData(p => ({ ...p, correctedRiskLevel: p.correctedRiskLevel === v ? "" : v }))}
+                                className={cn("text-[9px] px-2 py-0.5 rounded-full border transition-all",
+                                  feedbackData.correctedRiskLevel === v ? cls + " border-current font-bold" : "border-gray-200 text-gray-500 hover:border-gray-400")}>
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-purple-700 block mb-0.5">دقة التحليل (تقييمك)</label>
+                          <div className="flex gap-1">
+                            {[1,2,3,4,5].map(s => (
+                              <button key={s} onClick={() => setFeedbackData(p => ({ ...p, confidenceRating: s }))}>
+                                <Star className={cn("w-4 h-4 transition-colors", feedbackData.confidenceRating >= s ? "text-amber-400 fill-amber-400" : "text-gray-300")} />
+                              </button>
+                            ))}
+                            <span className="text-[9px] text-gray-400 mr-1 self-center">
+                              {["","ضعيفة","مقبولة","جيدة","جيد جداً","ممتازة"][feedbackData.confidenceRating]}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] text-purple-700 block mb-0.5">ملاحظات إضافية (اختياري)</label>
+                          <Textarea
+                            placeholder="ما الذي لاحظته فعلاً؟"
+                            value={feedbackData.notes}
+                            onChange={e => setFeedbackData(p => ({ ...p, notes: e.target.value }))}
+                            className="text-xs min-h-[50px] resize-none"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => setShowFeedback(false)} className="text-[10px] text-gray-500 hover:text-gray-700 px-2 py-1">إلغاء</button>
+                          <button
+                            onClick={submitFeedback}
+                            disabled={feedbackSubmitting || (!feedbackData.correctedBirdCount && !feedbackData.correctedHealthScore && !feedbackData.correctedRiskLevel && !feedbackData.notes && !feedbackData.confidenceRating)}
+                            className="text-[10px] bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {feedbackSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            إرسال التصحيح
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

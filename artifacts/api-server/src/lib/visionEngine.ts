@@ -17,6 +17,25 @@ import { desc, eq, and, gte, lte, lt } from "drizzle-orm";
 
 // ─── Exported Types ───────────────────────────────────────────────────────────
 
+export interface Anomaly {
+  zone?: string;
+  metric: string;
+  label: string;
+  current: number;
+  expected: number;
+  deviation: number;
+  severity: "low" | "medium" | "high";
+  description: string;
+}
+
+export interface Prediction {
+  nextPeriodRisk: number;
+  trend: "worsening" | "stable" | "improving";
+  confidence: number;
+  description: string;
+  dataPoints: number;
+}
+
 export interface VisionResult {
   overallStatus: "good" | "warning" | "critical";
   summary: string;
@@ -30,6 +49,8 @@ export interface VisionResult {
   gridData: GridData;
   visualData: RawVisualData;
   temporal?: TemporalComparison;
+  anomalies: Anomaly[];
+  prediction: Prediction;
 }
 
 export interface VisionMetrics {
@@ -103,6 +124,7 @@ export interface TemporalComparison {
   availableImages: number;
   periodDays: number;
   baseline: Partial<VisionMetrics>;
+  stdDevs: Partial<VisionMetrics>;
   changes: TemporalChange[];
   trend: "improving" | "stable" | "declining";
   trendSummary: string;
@@ -137,25 +159,34 @@ export async function analyzeImage(
   caption: string,
   imageId?: number,
 ): Promise<VisionResult> {
-  const [raw, farmCtx, temporal] = await Promise.all([
+  const [raw, farmCtx, temporalData, predictionData] = await Promise.all([
     extractRawFeatures(imageBuffer, mimeType, fileSize),
     loadFarmContext(imageDate),
     imageId ? loadTemporalBaseline(imageDate, imageId) : Promise.resolve(undefined),
+    loadHistoricalRiskSeries(imageDate, imageId),
   ]);
 
-  const grid = buildGridAnalysis(imageBuffer);
-  const gridData = await grid;
+  const gridData = await buildGridAnalysis(imageBuffer);
   const metrics = computeMetrics(raw, gridData, farmCtx, category, caption);
   const insights = runIntelligenceLayer(raw, gridData, metrics, farmCtx, category, caption, imageDate);
   const recommendations = buildDecisionLayer(insights, metrics, farmCtx, imageDate);
   const alerts = buildAlerts(metrics, insights, farmCtx);
   const tags = buildTags(metrics, insights, category, caption, raw);
   const overallStatus = metrics.riskScore >= 65 ? "critical" : metrics.riskScore >= 35 ? "warning" : "good";
-  const summary = buildSummary(overallStatus, metrics, insights);
-  const analysis = buildAnalysisText(raw, gridData, metrics, insights, recommendations, farmCtx, category, caption, imageDate);
   const confidence = computeConfidence(raw, metrics, farmCtx);
 
-  const temporalWithDelta = temporal ? enrichTemporalData(temporal, metrics) : undefined;
+  const temporalWithDelta = temporalData ? enrichTemporalData(temporalData, metrics) : undefined;
+
+  // Phase 9 + Phase 10: Baseline deviation + Anomaly detection
+  const anomalies = temporalData
+    ? detectAnomalies(metrics, gridData, temporalData.baseline, temporalData.stdDevs)
+    : [];
+
+  // Phase 11: Predictive AI — linear regression on historical risk scores
+  const prediction = predictNextPeriod(predictionData, metrics.riskScore);
+
+  const summary = buildSummary(overallStatus, metrics, insights, prediction, anomalies);
+  const analysis = buildAnalysisText(raw, gridData, metrics, insights, recommendations, farmCtx, category, caption, imageDate, prediction, anomalies);
 
   return {
     overallStatus,
@@ -170,6 +201,8 @@ export async function analyzeImage(
     gridData,
     visualData: raw,
     temporal: temporalWithDelta,
+    anomalies,
+    prediction,
   };
 }
 
@@ -328,10 +361,12 @@ function computeMetrics(raw: RawVisualData, grid: GridData, farm: FarmContext, c
   const lightingValues = grid.zones.map(z => z.lighting);
   const lightingUniformity = Math.max(0, 100 - Math.round(stdDev(lightingValues)));
 
-  // Estimated bird count: based on warm pixel ratio + farm context
+  // Estimated bird count: deterministic — no randomness (Phase 20 compliance)
+  // Visibility factor derived directly from image data (warmPixelRatio = proxy for visible birds)
   const farmBirds = farm.totalBirds > 0 ? farm.totalBirds : 0;
+  const visibilityFactor = 0.7 + Math.min(0.3, (raw.warmPixelRatio / 100) * 0.3);
   const estimatedBirdCount = farmBirds > 0
-    ? Math.round(farmBirds * (meanDensity / 100) * (0.7 + Math.random() * 0.3))
+    ? Math.round(farmBirds * (meanDensity / 100) * visibilityFactor)
     : Math.round(raw.warmPixelRatio * 5 + (meanDensity * 2));
 
   // Density score
@@ -604,14 +639,20 @@ function buildTags(metrics: VisionMetrics, insights: OperationalInsight[], categ
   return [...new Set(tags)].slice(0, 8);
 }
 
-function buildSummary(status: string, metrics: VisionMetrics, insights: OperationalInsight[]): string {
+function buildSummary(status: string, metrics: VisionMetrics, insights: OperationalInsight[], prediction?: Prediction, anomalies?: Anomaly[]): string {
   const topInsight = insights[0];
+  const highAnomalies = anomalies?.filter(a => a.severity === "high").length ?? 0;
+  const predSuffix = prediction && prediction.dataPoints >= 3
+    ? ` | التنبؤ: ${prediction.trend === "worsening" ? "تدهور متوقع ⬆️" : prediction.trend === "improving" ? "تحسن متوقع ⬇️" : "مستقر"}`
+    : "";
+  const anomalySuffix = highAnomalies > 0 ? ` | ${highAnomalies} شذوذ حرج` : "";
+
   if (status === "critical") {
-    return `🔴 حالة حرجة — ${topInsight ? topInsight.finding : "يتطلب تدخلاً فورياً"} (خطر: ${metrics.riskScore}/100)`;
+    return `🔴 حالة حرجة — ${topInsight ? topInsight.finding : "يتطلب تدخلاً فورياً"} (خطر: ${metrics.riskScore}/100)${predSuffix}${anomalySuffix}`;
   } else if (status === "warning") {
-    return `🟡 يحتاج انتباهاً — ${topInsight ? topInsight.finding : "راقب الوضع"} (خطر: ${metrics.riskScore}/100)`;
+    return `🟡 يحتاج انتباهاً — ${topInsight ? topInsight.finding : "راقب الوضع"} (خطر: ${metrics.riskScore}/100)${predSuffix}${anomalySuffix}`;
   }
-  return `✅ الوضع جيد — الطيور بصحة جيدة ومستوى الخطر منخفض (${metrics.riskScore}/100)`;
+  return `✅ الوضع جيد — الطيور بصحة جيدة ومستوى الخطر منخفض (${metrics.riskScore}/100)${predSuffix}`;
 }
 
 // ─── Analysis Text Builder ─────────────────────────────────────────────────────
@@ -619,7 +660,8 @@ function buildSummary(status: string, metrics: VisionMetrics, insights: Operatio
 function buildAnalysisText(
   raw: RawVisualData, grid: GridData, metrics: VisionMetrics,
   insights: OperationalInsight[], actions: ActionItem[],
-  farm: FarmContext, category: string, caption: string, imageDate: string
+  farm: FarmContext, category: string, caption: string, imageDate: string,
+  prediction?: Prediction, anomalies?: Anomaly[]
 ): string {
   const parts: string[] = [];
 
@@ -674,6 +716,24 @@ function buildAnalysisText(
   if (raw.redSpikeRatio > 3) parts.push(`   ⚠️ بكسلات حمراء حادة: ${raw.redSpikeRatio}%`);
   if (raw.greenScore > 20) parts.push(`   ⚠️ لون أخضر غير طبيعي: ${raw.greenScore}%`);
 
+  // Phase 10: Anomaly section
+  if (anomalies && anomalies.length > 0) {
+    parts.push(``);
+    parts.push(`🔍 الشذوذات المكتشفة (Anomaly Detection):`);
+    for (const a of anomalies.slice(0, 4)) {
+      const icon = a.severity === "high" ? "🔴" : a.severity === "medium" ? "🟠" : "🟡";
+      parts.push(`   ${icon} ${a.description}`);
+    }
+  }
+
+  // Phase 11: Prediction section
+  if (prediction && prediction.dataPoints >= 2) {
+    parts.push(``);
+    parts.push(`🤖 التنبؤ بالذكاء الاصطناعي (${prediction.dataPoints} نقطة بيانات):`);
+    parts.push(`   ${prediction.description}`);
+    parts.push(`   الدقة التقديرية للتنبؤ: ${prediction.confidence}%`);
+  }
+
   if (caption) {
     parts.push(``);
     parts.push(`📝 ملاحظة المراقب: "${caption}"`);
@@ -687,9 +747,164 @@ function bar(v: number): string {
   return "█".repeat(filled) + "░".repeat(10 - filled);
 }
 
+// ─── Phase 11: Predictive AI — Historical Risk Series Loader ─────────────────
+
+async function loadHistoricalRiskSeries(date: string, excludeId?: number): Promise<{ date: string; risk: number }[]> {
+  try {
+    const d = new Date(date);
+    const from = new Date(d); from.setDate(from.getDate() - 14);
+    const fromStr = from.toISOString().slice(0, 10);
+
+    const rows = await db.select({
+      visualMetrics: noteImagesTable.visualMetrics,
+      date: noteImagesTable.date,
+    }).from(noteImagesTable)
+      .where(and(
+        gte(noteImagesTable.date, fromStr),
+        lte(noteImagesTable.date, date),
+        eq(noteImagesTable.analysisStatus, "done"),
+      ))
+      .orderBy(noteImagesTable.date)
+      .limit(50);
+
+    const filtered = rows.filter(r =>
+      r.visualMetrics && (r.visualMetrics as any).riskScore !== undefined &&
+      (!excludeId || (r as any).id !== excludeId)
+    );
+
+    // Group by date — avg risk per day
+    const byDate: Record<string, number[]> = {};
+    for (const r of filtered) {
+      const m = r.visualMetrics as VisionMetrics;
+      if (!byDate[r.date]) byDate[r.date] = [];
+      byDate[r.date].push(m.riskScore);
+    }
+
+    return Object.entries(byDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, risks]) => ({ date, risk: Math.round(avg(risks)) }));
+  } catch { return []; }
+}
+
+// ─── Phase 11: Predictive AI — Linear Regression ─────────────────────────────
+
+function predictNextPeriod(series: { date: string; risk: number }[], currentRisk: number): Prediction {
+  const allPoints = [...series, { date: "current", risk: currentRisk }];
+  const n = allPoints.length;
+
+  if (n < 2) {
+    return {
+      nextPeriodRisk: currentRisk,
+      trend: "stable",
+      confidence: 30,
+      description: "بيانات غير كافية للتنبؤ — ارفع المزيد من الصور لتفعيل التنبؤ الذكي",
+      dataPoints: n,
+    };
+  }
+
+  // Simple linear regression: y = a*x + b where x = day index
+  const xs = allPoints.map((_, i) => i);
+  const ys = allPoints.map(p => p.risk);
+  const xMean = avg(xs), yMean = avg(ys);
+  const num = xs.reduce((s, x, i) => s + (x - xMean) * (ys[i] - yMean), 0);
+  const den = xs.reduce((s, x) => s + (x - xMean) ** 2, 0);
+  const slope = den === 0 ? 0 : num / den;
+  const intercept = yMean - slope * xMean;
+
+  const predicted = Math.round(Math.max(0, Math.min(100, slope * n + intercept)));
+
+  // R² for confidence
+  const ssTot = ys.reduce((s, y) => s + (y - yMean) ** 2, 0);
+  const ssRes = ys.reduce((s, y, i) => s + (y - (slope * xs[i] + intercept)) ** 2, 0);
+  const r2 = ssTot === 0 ? 1 : Math.max(0, 1 - ssRes / ssTot);
+  const confidence = Math.round(30 + r2 * 55 + Math.min(n / 14, 1) * 15);
+
+  const diff = predicted - currentRisk;
+  const trend: Prediction["trend"] = diff > 8 ? "worsening" : diff < -8 ? "improving" : "stable";
+
+  const description = trend === "worsening"
+    ? `⚠️ التنبؤ: درجة الخطر ستزيد من ${currentRisk} إلى ~${predicted} خلال 24-48 ساعة — تصرف الآن`
+    : trend === "improving"
+      ? `✅ التنبؤ: تحسن متوقع — درجة الخطر ستنخفض من ${currentRisk} إلى ~${predicted}`
+      : `📊 التنبؤ: الوضع مستقر — درجة الخطر المتوقعة ~${predicted} (مستقرة)`;
+
+  return { nextPeriodRisk: predicted, trend, confidence, description, dataPoints: n };
+}
+
+// ─── Phase 9 + Phase 10: Baseline Deviation + Anomaly Detection ───────────────
+
+function detectAnomalies(
+  metrics: VisionMetrics,
+  grid: GridData,
+  baseline: Partial<VisionMetrics>,
+  stdDevs: Partial<VisionMetrics>,
+): Anomaly[] {
+  const anomalies: Anomaly[] = [];
+
+  type MetricKey = keyof VisionMetrics;
+  const checks: { key: MetricKey; label: string; threshold: number; higherIsWorse?: boolean }[] = [
+    { key: "riskScore", label: "درجة الخطر", threshold: 1.5, higherIsWorse: true },
+    { key: "activityLevel", label: "النشاط الحركي", threshold: 2.0 },
+    { key: "crowdingScore", label: "التكدس", threshold: 1.5, higherIsWorse: true },
+    { key: "healthScore", label: "الصحة العامة", threshold: 2.0 },
+    { key: "floorCleanliness", label: "نظافة الأرضية", threshold: 2.0 },
+    { key: "lightingScore", label: "الإضاءة", threshold: 2.0 },
+    { key: "injuryRisk", label: "خطر الإصابة", threshold: 1.5, higherIsWorse: true },
+  ];
+
+  for (const check of checks) {
+    const base = baseline[check.key] as number | undefined;
+    const sd = (stdDevs[check.key] as number | undefined) ?? 0;
+    if (base === undefined || sd < 3) continue;
+
+    const current = metrics[check.key] as number;
+    const deviation = Math.abs(current - base);
+    const sigmas = sd > 0 ? deviation / sd : 0;
+
+    if (sigmas < check.threshold) continue;
+
+    const severity: Anomaly["severity"] = sigmas > 3 ? "high" : sigmas > 2 ? "medium" : "low";
+    const direction = current > base ? "ارتفاع" : "انخفاض";
+    const isProblematic = check.higherIsWorse ? current > base : current < base;
+    if (!isProblematic && severity === "low") continue;
+
+    anomalies.push({
+      metric: check.key,
+      label: check.label,
+      current: Math.round(current),
+      expected: Math.round(base),
+      deviation: Math.round(deviation),
+      severity,
+      description: `${direction} غير طبيعي في ${check.label}: ${Math.round(current)}% (المتوقع: ${Math.round(base)}±${Math.round(sd)}%)`,
+    });
+  }
+
+  // Zone-level anomaly: density spikes (Phase 12 + 10 integration)
+  const zoneDensities = grid.zones.map(z => z.density);
+  const zoneMeanDensity = avg(zoneDensities);
+  const zoneStdDev = stdDev(zoneDensities);
+  if (zoneStdDev > 15) {
+    const hotspots = grid.zones.filter(z => z.density > zoneMeanDensity + 2 * zoneStdDev);
+    for (const zone of hotspots.slice(0, 2)) {
+      anomalies.push({
+        zone: zone.label,
+        metric: "zoneDensity",
+        label: `كثافة منطقة "${zone.label}"`,
+        current: zone.density,
+        expected: Math.round(zoneMeanDensity),
+        deviation: Math.round(zone.density - zoneMeanDensity),
+        severity: zone.density > zoneMeanDensity + 3 * zoneStdDev ? "high" : "medium",
+        description: `تكدس مكاني في "${zone.label}": كثافة ${zone.density}% مقابل متوسط ${Math.round(zoneMeanDensity)}%`,
+      });
+    }
+  }
+
+  return anomalies.sort((a, b) => ({ high: 3, medium: 2, low: 1 }[b.severity] - ({ high: 3, medium: 2, low: 1 }[a.severity])));
+}
+
 // ─── Temporal Analysis ────────────────────────────────────────────────────────
 
-async function loadTemporalBaseline(date: string, excludeId: number): Promise<TemporalComparison | undefined> {
+async function loadTemporalBaseline(date: string, excludeId: number): Promise<(TemporalComparison & { stdDevs: Partial<VisionMetrics> }) | undefined> {
   try {
     const d = new Date(date);
     const from = new Date(d); from.setDate(from.getDate() - 7);
@@ -710,21 +925,23 @@ async function loadTemporalBaseline(date: string, excludeId: number): Promise<Te
     const valid = rows.filter(r => r.visualMetrics && (r.visualMetrics as any).riskScore !== undefined);
     if (valid.length < 2) return undefined;
 
-    const metrics = valid.map(r => r.visualMetrics as VisionMetrics);
-    const baseline: Partial<VisionMetrics> = {
-      riskScore: avg(metrics.map(m => m.riskScore)),
-      activityLevel: avg(metrics.map(m => m.activityLevel)),
-      densityScore: avg(metrics.map(m => m.densityScore)),
-      crowdingScore: avg(metrics.map(m => m.crowdingScore)),
-      healthScore: avg(metrics.map(m => m.healthScore)),
-      floorCleanliness: avg(metrics.map(m => m.floorCleanliness)),
-      lightingScore: avg(metrics.map(m => m.lightingScore)),
-    };
+    const metricsList = valid.map(r => r.visualMetrics as VisionMetrics);
+    const metricKeys: (keyof VisionMetrics)[] = ["riskScore", "activityLevel", "densityScore", "crowdingScore", "healthScore", "floorCleanliness", "lightingScore", "injuryRisk"];
+
+    const baseline: Partial<VisionMetrics> = {};
+    const stdDevMap: Partial<VisionMetrics> = {};
+
+    for (const key of metricKeys) {
+      const vals = metricsList.map(m => m[key] as number).filter(v => typeof v === "number");
+      (baseline as any)[key] = avg(vals);
+      (stdDevMap as any)[key] = stdDev(vals);
+    }
 
     return {
       availableImages: valid.length,
       periodDays: 7,
       baseline,
+      stdDevs: stdDevMap,
       changes: [],
       trend: "stable",
       trendSummary: "",
