@@ -59,6 +59,86 @@ function localAnalysisFallback(farmData: string) {
   };
 }
 
+function buildDeepLocalAnalysis(farmData: string) {
+  const flockLines = farmData.match(/• .*$/gm) ?? [];
+  const cycleLines = farmData.match(/• .*حالة: .*$/gm) ?? [];
+  const taskLines = farmData.match(/• \[(.*?)\] (.*)$/gm) ?? [];
+  const noteLines = farmData.match(/• \[(.*?)\].*$/gm) ?? [];
+  const overdueTasks = (farmData.match(/متأخرة/g) ?? []).length;
+  const activeCycles = (farmData.match(/حالة: incubating|حالة: hatching/g) ?? []).length;
+  const completedGoals = Number((farmData.match(/محققة: (\d+)/)?.[1] ?? "0"));
+  const activeGoals = Number((farmData.match(/جارية: (\d+)/)?.[1] ?? "0"));
+  const tasksCount = Number((farmData.match(/إجمالي المهام: (\d+)/)?.[1] ?? "0"));
+  const notesCount = Number((farmData.match(/آخر الملاحظات \((\d+)\)/)?.[1] ?? "0"));
+
+  const alerts: Array<{ type: string; title: string; description: string }> = [];
+  if (activeCycles === 0) alerts.push({ type: "warning", title: "لا توجد دورات نشطة", description: "راجع سجل التفقيس وتأكد من وجود دفعات قيد العمل." });
+  if (overdueTasks > 0) alerts.push({ type: "danger", title: "مهام متأخرة", description: `هناك ${overdueTasks} مهمة متأخرة تحتاج إغلاقاً فورياً.` });
+  if (notesCount === 0) alerts.push({ type: "info", title: "الملاحظات فارغة", description: "التحليل القوي يحتاج ملاحظات يومية أكثر." });
+  if (completedGoals === 0 && activeGoals > 0) alerts.push({ type: "warning", title: "الأهداف تحتاج متابعة", description: "لا توجد أهداف منجزة حالياً مقارنة بالأهداف الجارية." });
+
+  const score = Math.max(10, 95 - overdueTasks * 8 - (activeCycles === 0 ? 10 : 0) - (notesCount === 0 ? 8 : 0));
+  const topPriority = overdueTasks > 0
+    ? "أغلق المهام المتأخرة أولاً ثم راقب دورات التفقيس"
+    : activeCycles > 0
+      ? "ثبّت حرارة ورطوبة الدورات النشطة بدقة"
+      : "أنشئ دورة تفقيس فعلية وأدخل الملاحظات اليومية";
+
+  return {
+    score,
+    scoreLabel: score >= 85 ? "ممتاز" : score >= 70 ? "جيد جداً" : score >= 55 ? "جيد" : score >= 40 ? "مقبول" : "حرج",
+    alerts,
+    sections: [
+      {
+        icon: "🥚",
+        title: "التفقيس",
+        items: [
+          { label: "الدورات النشطة", value: String(activeCycles), status: activeCycles > 0 ? "good" : "warning" },
+          { label: "سجلات التفقيس", value: String(cycleLines.length), status: cycleLines.length > 0 ? "good" : "neutral" },
+        ],
+      },
+      {
+        icon: "✅",
+        title: "المهام",
+        items: [
+          { label: "إجمالي المهام", value: String(tasksCount), status: tasksCount > 0 ? "good" : "neutral" },
+          { label: "المتأخرة", value: String(overdueTasks), status: overdueTasks > 0 ? "danger" : "good" },
+        ],
+      },
+      {
+        icon: "🎯",
+        title: "الأهداف",
+        items: [
+          { label: "المحققة", value: String(completedGoals), status: completedGoals > 0 ? "good" : "warning" },
+          { label: "الجارية", value: String(activeGoals), status: activeGoals > 0 ? "good" : "neutral" },
+        ],
+      },
+      {
+        icon: "📝",
+        title: "الملاحظات",
+        items: [
+          { label: "آخر الملاحظات", value: String(notesCount), status: notesCount > 0 ? "good" : "warning" },
+          { label: "قطعان مسجلة", value: String(flockLines.length), status: flockLines.length > 0 ? "good" : "neutral" },
+        ],
+      },
+    ],
+    duties: [
+      { priority: "urgent", title: "راجع الفقاسات", description: "افحص حرارة/رطوبة/تقليب كل دورة نشطة وسجل أي انحراف فوراً." },
+      { priority: "high", title: "أغلق المهام المتأخرة", description: "أي مهمة متأخرة الآن تتحول إلى خسارة تشغيلية أو صحية لاحقاً." },
+      { priority: "high", title: "اكتب ملاحظة يومية", description: "سجل اليوم: حرارة، استهلاك، نفوق، سلوك، ماء، علف، وأي حدث غير طبيعي." },
+    ],
+    predictions: [
+      { title: "تحسن الفقس", description: "سيرتفع أداء الفقس إذا استقرت الإدارة اليومية وأصبحت الملاحظات منتظمة.", confidence: "medium" },
+      { title: "تقليل الأخطاء", description: "ستقل الأخطاء بسرعة عندما تُغلق المهام المتأخرة وتُراجع الدورات النشطة.", confidence: "high" },
+    ],
+    errors: [
+      { title: "ضعف التوثيق", description: "البرنامج لا يملك ملاحظات كافية إذا كان عدد السجلات منخفضاً.", solution: "أضف ملاحظة لكل يوم ولكل دورة." },
+      { title: "التحليل غير مكتمل", description: "أي تحليل بدون بيانات يومية تفصيلية سيكون أضعف.", solution: "سجل الحرارة والرطوبة والنفوق والعلف والماء يومياً." },
+    ],
+    topPriority,
+  };
+}
+
 const POULTRY_MEGA_ENCYCLOPEDIA = `
 # الموسوعة العلمية الشاملة للدكتور نصار — تربية الدواجن والتفقيس
 # (مستخلصة من أكثر من 6000 مرجع علمي وعملي)
@@ -773,7 +853,7 @@ ${POULTRY_MEGA_ENCYCLOPEDIA}
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
     if (isOpenAIQuotaError(err)) {
-      res.status(200).json({ analysis: localAnalysisFallback(await getFarmAnalysis()), timestamp: new Date().toISOString() });
+      res.status(200).json({ analysis: buildDeepLocalAnalysis(await getFarmAnalysis()), timestamp: new Date().toISOString() });
       return;
     }
     res.status(500).json({ error: "فشل التحليل: " + (err?.message ?? "خطأ غير معروف") });
