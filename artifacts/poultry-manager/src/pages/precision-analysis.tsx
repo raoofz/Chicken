@@ -11,7 +11,7 @@ import {
   Thermometer, Droplets, TrendingUp, TrendingDown, Minus,
   Shield, RefreshCw, Loader2, ChevronDown, ChevronUp,
   Zap, Activity, Star, Calendar, Users,
-  ArrowRight, Bell, Lock,
+  ArrowRight, Bell, Lock, Camera, BarChart3,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -172,6 +172,15 @@ export default function FarmScanPage() {
   const [lastAt, setLastAt] = useState<string | null>(null);
   const fpRef = useRef<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [imageReport, setImageReport] = useState<any>(null);
+
+  const fetchImageReport = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`/api/notes/images/report?period=weekly&date=${today}`, { credentials: "include" });
+      if (res.ok) setImageReport(await res.json());
+    } catch { /* silent */ }
+  }, []);
 
   const fetchScan = useCallback(async (silent = false) => {
     if (!silent) { setScanning(true); setScanStep(0); setScan(null); }
@@ -208,6 +217,7 @@ export default function FarmScanPage() {
 
   useEffect(() => {
     fetchScan(false);
+    fetchImageReport();
     timerRef.current = setInterval(checkFingerprint, 30_000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -690,6 +700,86 @@ export default function FarmScanPage() {
                 <Bar value={precision.confidence}
                   color={precision.confidence >= 70 ? "#22c55e" : precision.confidence >= 40 ? "#f59e0b" : "#ef4444"} />
               </div>
+            </div>
+          </Section>
+        )}
+
+        {/* ── IMAGE CV REPORT ── */}
+        {imageReport && (
+          <Section title={`تقارير صور المزرعة — آخر 7 أيام`} icon={Camera} color="#8b5cf6" defaultOpen={false}>
+            {imageReport.analyzedCount === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <Camera className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">لا توجد صور محللة في الأسبوع الماضي</p>
+                <p className="text-xs mt-1">ارفع صوراً من المزرعة من صفحة الملاحظات</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "صور محللة", value: imageReport.analyzedCount, color: "text-indigo-700" },
+                    { label: "متوسط الخطر", value: `${imageReport.summary.overallRisk}/100`,
+                      color: imageReport.summary.overallRisk >= 65 ? "text-red-700" : imageReport.summary.overallRisk >= 35 ? "text-amber-700" : "text-emerald-700" },
+                    { label: "متوسط الصحة", value: `${imageReport.summary.avgHealthScore}%`, color: "text-emerald-700" },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-white border border-gray-100 rounded-xl p-3 text-center">
+                      <div className={cn("text-xl font-black", s.color)}>{s.value}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Trend indicators */}
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: "النشاط الحركي", value: imageReport.summary.avgActivityLevel, trend: imageReport.summary.activityTrend },
+                    { label: "نظافة الأرضية", value: imageReport.summary.avgFloorCleanliness, trend: "stable" },
+                    { label: "التكدس", value: imageReport.summary.avgCrowdingScore, trend: imageReport.summary.riskTrend === "down" ? "down" : "up", invertGood: true },
+                    { label: "الإضاءة", value: imageReport.summary.avgLightingScore, trend: "stable" },
+                  ].map((m, i) => {
+                    const good = m.invertGood ? m.value <= 35 : m.value >= 65;
+                    const warn = m.invertGood ? m.value <= 60 : m.value >= 40;
+                    const clr = good ? "text-emerald-600" : warn ? "text-amber-600" : "text-red-600";
+                    const bg = good ? "bg-emerald-50" : warn ? "bg-amber-50" : "bg-red-50";
+                    return (
+                      <div key={i} className={cn("rounded-xl p-2.5 border flex items-center justify-between", bg)}>
+                        <span className="text-[10px] text-gray-500">{m.label}</span>
+                        <div className="flex items-center gap-1">
+                          {m.trend === "up" ? <TrendingUp className="h-3 w-3 text-gray-400" /> : m.trend === "down" ? <TrendingDown className="h-3 w-3 text-gray-400" /> : <Minus className="h-3 w-3 text-gray-300" />}
+                          <span className={cn("text-sm font-bold", clr)}>{m.value}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Daily breakdown */}
+                {imageReport.dailyBreakdown && imageReport.dailyBreakdown.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-400 mb-2">التفاصيل اليومية</p>
+                    <div className="space-y-1.5">
+                      {imageReport.dailyBreakdown.map((d: any, i: number) => (
+                        <div key={i} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-600">{d.date}</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-gray-400">{d.imageCount} صورة</span>
+                            <span className={cn("text-xs font-bold", d.avgRisk >= 65 ? "text-red-600" : d.avgRisk >= 35 ? "text-amber-600" : "text-emerald-600")}>
+                              خطر: {d.avgRisk}
+                            </span>
+                            <span className="text-[10px] text-gray-400">صحة: {d.avgHealth}%</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-3 text-center">
+              <button onClick={fetchImageReport} className="text-xs text-purple-500 hover:text-purple-700 flex items-center gap-1 mx-auto">
+                <RefreshCw className="h-3 w-3" />تحديث التقرير
+              </button>
             </div>
           </Section>
         )}

@@ -1,41 +1,132 @@
 /**
- * Vision Engine — Real pixel-level image analysis for poultry farm monitoring
- * Uses Sharp to read actual image data (RGB histograms, channels, brightness, entropy)
- * and cross-references with live farm data from the database.
+ * ══════════════════════════════════════════════════════════════════════════════
+ *  Industry-Level Computer Vision AI — Poultry Farm Monitor
+ *  
+ *  3-Layer Architecture:
+ *    Layer 1 — Vision:       Pixel-level analysis via Sharp (grid + spatial)
+ *    Layer 2 — Intelligence: Correlation, root-cause, risk scoring
+ *    Layer 3 — Decision:     Operational insights, prioritized actions, temporal
+ * ══════════════════════════════════════════════════════════════════════════════
  */
 import sharp from "sharp";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, noteImagesTable } from "@workspace/db";
-import { desc, eq, and, gte } from "drizzle-orm";
+import {
+  db, flocksTable, hatchingCyclesTable, tasksTable,
+  dailyNotesTable, noteImagesTable,
+} from "@workspace/db";
+import { desc, eq, and, gte, lte, lt } from "drizzle-orm";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Exported Types ───────────────────────────────────────────────────────────
 
 export interface VisionResult {
+  overallStatus: "good" | "warning" | "critical";
+  summary: string;
   analysis: string;
+  metrics: VisionMetrics;
+  insights: OperationalInsight[];
+  recommendations: ActionItem[];
+  alerts: Alert[];
   tags: string[];
-  alerts: { level: "warning" | "critical"; message: string }[];
   confidence: number;
-  visualData: VisualData;
+  gridData: GridData;
+  visualData: RawVisualData;
+  temporal?: TemporalComparison;
 }
 
-export interface VisualData {
-  brightness: number;       // 0-100 (overall luminance)
-  redScore: number;         // 0-100 (red dominance)
-  greenScore: number;       // 0-100 (green presence)
-  blueScore: number;        // 0-100 (blue presence)
-  yellowScore: number;      // 0-100 (warm yellow/orange tones)
-  saturation: number;       // 0-100 (color richness)
-  entropy: number;          // 0-100 (image complexity/detail)
-  darkPixelRatio: number;   // 0-100 (% of very dark pixels)
-  brightPixelRatio: number; // 0-100 (% of very bright pixels)
-  redSpikeRatio: number;    // 0-100 (% of strongly red pixels — blood indicator)
-  contrastScore: number;    // 0-100 (std deviation of luminance)
+export interface VisionMetrics {
+  estimatedBirdCount: number;
+  densityScore: number;
+  crowdingScore: number;
+  activityLevel: number;
+  healthScore: number;
+  injuryRisk: number;
+  floorCleanliness: number;
+  lightingScore: number;
+  lightingUniformity: number;
+  riskScore: number;
+}
+
+export interface OperationalInsight {
+  category: "crowding" | "health" | "environment" | "equipment" | "nutrition" | "behavior";
+  urgency: "low" | "medium" | "high" | "critical";
+  finding: string;
+  rootCause: string;
+  impact: string;
+}
+
+export interface ActionItem {
+  priority: "urgent" | "high" | "medium" | "low";
+  timeframe: string;
+  action: string;
+}
+
+export interface Alert {
+  level: "warning" | "critical";
+  message: string;
+}
+
+export interface GridData {
+  rows: number;
+  cols: number;
+  zones: GridZone[];
+}
+
+export interface GridZone {
+  row: number;
+  col: number;
+  density: number;
+  activity: number;
+  cleanliness: number;
+  lighting: number;
+  label: string;
+}
+
+export interface RawVisualData {
+  brightness: number;
+  redScore: number;
+  yellowScore: number;
+  greenScore: number;
+  blueScore: number;
+  saturation: number;
+  entropy: number;
+  darkPixelRatio: number;
+  brightPixelRatio: number;
+  redSpikeRatio: number;
+  warmPixelRatio: number;
+  contrastScore: number;
   width: number;
   height: number;
-  fileSize: number;         // bytes
+  fileSize: number;
   mimeType: string;
 }
 
-// ─── Main Analysis Entry Point ────────────────────────────────────────────────
+export interface TemporalComparison {
+  availableImages: number;
+  periodDays: number;
+  baseline: Partial<VisionMetrics>;
+  changes: TemporalChange[];
+  trend: "improving" | "stable" | "declining";
+  trendSummary: string;
+}
+
+export interface TemporalChange {
+  metric: string;
+  label: string;
+  current: number;
+  baseline: number;
+  delta: number;
+  direction: "up" | "down" | "stable";
+  isPositive: boolean;
+  significance: "significant" | "minor" | "none";
+}
+
+interface FarmContext {
+  activeFlocks: { name: string; breed: string; count: number; ageDays: number; purpose: string }[];
+  totalBirds: number;
+  overdueTasks: { title: string; priority: string }[];
+  recentAlerts: string[];
+}
+
+// ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 export async function analyzeImage(
   imageBuffer: Buffer,
@@ -43,464 +134,545 @@ export async function analyzeImage(
   fileSize: number,
   imageDate: string,
   category: string,
-  caption: string
+  caption: string,
+  imageId?: number,
 ): Promise<VisionResult> {
-  const visual = await extractVisualFeatures(imageBuffer, mimeType, fileSize);
-  const farmCtx = await loadFarmContext(imageDate);
-  return buildFarmAnalysis(visual, farmCtx, category, caption, imageDate);
+  const [raw, farmCtx, temporal] = await Promise.all([
+    extractRawFeatures(imageBuffer, mimeType, fileSize),
+    loadFarmContext(imageDate),
+    imageId ? loadTemporalBaseline(imageDate, imageId) : Promise.resolve(undefined),
+  ]);
+
+  const grid = buildGridAnalysis(imageBuffer);
+  const gridData = await grid;
+  const metrics = computeMetrics(raw, gridData, farmCtx, category, caption);
+  const insights = runIntelligenceLayer(raw, gridData, metrics, farmCtx, category, caption, imageDate);
+  const recommendations = buildDecisionLayer(insights, metrics, farmCtx, imageDate);
+  const alerts = buildAlerts(metrics, insights, farmCtx);
+  const tags = buildTags(metrics, insights, category, caption, raw);
+  const overallStatus = metrics.riskScore >= 65 ? "critical" : metrics.riskScore >= 35 ? "warning" : "good";
+  const summary = buildSummary(overallStatus, metrics, insights);
+  const analysis = buildAnalysisText(raw, gridData, metrics, insights, recommendations, farmCtx, category, caption, imageDate);
+  const confidence = computeConfidence(raw, metrics, farmCtx);
+
+  const temporalWithDelta = temporal ? enrichTemporalData(temporal, metrics) : undefined;
+
+  return {
+    overallStatus,
+    summary,
+    analysis,
+    metrics,
+    insights,
+    recommendations,
+    alerts,
+    tags,
+    confidence,
+    gridData,
+    visualData: raw,
+    temporal: temporalWithDelta,
+  };
 }
 
-// ─── Visual Feature Extraction via Sharp ─────────────────────────────────────
+// ─── Layer 1: Vision — Raw Pixel Feature Extraction ─────────────────────────
 
-async function extractVisualFeatures(
-  buf: Buffer,
-  mimeType: string,
-  fileSize: number
-): Promise<VisualData> {
-  // Resize to manageable size for histogram analysis (keep aspect ratio)
-  const img = sharp(buf).rotate(); // auto-orient via EXIF
-
+async function extractRawFeatures(buf: Buffer, mimeType: string, fileSize: number): Promise<RawVisualData> {
+  const img = sharp(buf).rotate();
   const { width: origW = 800, height: origH = 600 } = await img.metadata();
 
-  // Work on a resized 200x200 thumbnail for speed
-  const resized = await sharp(buf)
+  const { data, info } = await sharp(buf)
     .rotate()
-    .resize(200, 200, { fit: "inside" })
+    .resize(240, 180, { fit: "fill" })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  const { data, info } = resized;
   const pixelCount = info.width * info.height;
-  const channels = info.channels; // 3 = RGB, 4 = RGBA
+  const ch = info.channels;
 
-  // Per-pixel analysis
-  let sumR = 0, sumG = 0, sumB = 0;
-  let sumLum = 0;
-  let darkPixels = 0;      // luminance < 40
-  let brightPixels = 0;    // luminance > 215
-  let redSpikePixels = 0;  // R > 160 AND R > G*1.5 AND R > B*1.5
-  let yellowPixels = 0;    // R > 140 AND G > 100 AND B < 100 AND R > B*1.8
-  let greenPixels = 0;     // G > R*1.1 AND G > B*1.1 AND G > 80
-  let bluePixels = 0;      // B > R*1.1 AND B > G*1.1 AND B > 60
+  let sumR = 0, sumG = 0, sumB = 0, sumLum = 0;
+  let darkPixels = 0, brightPixels = 0;
+  let redSpikePixels = 0;
+  let yellowPixels = 0, greenPixels = 0, bluePixels = 0;
+  let warmPixels = 0;
+  const lumArr: number[] = new Array(pixelCount);
 
-  const luminances: number[] = [];
-
-  for (let i = 0; i < data.length; i += channels) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-
-    // ITU-R BT.601 luminance
+  for (let i = 0, p = 0; i < data.length; i += ch, p++) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
     const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-    luminances.push(lum);
+    lumArr[p] = lum;
 
-    sumR += r;
-    sumG += g;
-    sumB += b;
-    sumLum += lum;
+    sumR += r; sumG += g; sumB += b; sumLum += lum;
 
     if (lum < 40) darkPixels++;
     if (lum > 215) brightPixels++;
-
-    // Blood/injury: strong red dominance
     if (r > 160 && r > g * 1.5 && r > b * 1.5) redSpikePixels++;
-
-    // Healthy chicks/warm bedding: yellow/orange
     if (r > 140 && g > 90 && b < 110 && r > b * 1.8) yellowPixels++;
-
-    // Mold/vegetation: green dominance
     if (g > r * 1.1 && g > b * 1.1 && g > 80) greenPixels++;
-
-    // Water/clean surface: blue dominance
     if (b > r * 1.1 && b > g * 1.1 && b > 60) bluePixels++;
+
+    // Warm pixel = likely chicken or warm bedding
+    if (isWarmPixel(r, g, b)) warmPixels++;
   }
 
   const meanR = sumR / pixelCount;
   const meanG = sumG / pixelCount;
   const meanB = sumB / pixelCount;
   const meanLum = sumLum / pixelCount;
+  const lumVar = lumArr.reduce((acc, l) => acc + (l - meanLum) ** 2, 0) / pixelCount;
+  const lumStd = Math.sqrt(lumVar);
+  const sat = Math.sqrt((meanR - meanLum) ** 2 + (meanG - meanLum) ** 2 + (meanB - meanLum) ** 2) / (meanLum || 1) * 100;
 
-  // Entropy: standard deviation of luminance (measures image complexity/detail)
-  const lumVariance = luminances.reduce((acc, l) => acc + Math.pow(l - meanLum, 2), 0) / pixelCount;
-  const lumStdDev = Math.sqrt(lumVariance);
-
-  // Saturation: how colorful vs grey
-  const saturation = Math.sqrt(
-    Math.pow(meanR - meanLum, 2) + Math.pow(meanG - meanLum, 2) + Math.pow(meanB - meanLum, 2)
-  ) / meanLum * 100;
-
-  const scale = (v: number, max: number) => Math.min(100, Math.round((v / max) * 100));
+  const s = (v: number, max: number) => Math.min(100, Math.round((v / max) * 100));
 
   return {
-    brightness: scale(meanLum, 255),
-    redScore: scale(meanR, 255),
-    greenScore: scale(greenPixels, pixelCount * 0.5),
-    blueScore: scale(bluePixels, pixelCount * 0.3),
-    yellowScore: scale(yellowPixels, pixelCount),
-    saturation: Math.min(100, Math.round(saturation)),
-    entropy: scale(lumStdDev, 80),
-    darkPixelRatio: scale(darkPixels, pixelCount),
-    brightPixelRatio: scale(brightPixels, pixelCount),
-    redSpikeRatio: scale(redSpikePixels, pixelCount),
-    contrastScore: scale(lumStdDev, 80),
-    width: origW,
-    height: origH,
-    fileSize,
-    mimeType,
+    brightness: s(meanLum, 255),
+    redScore: s(meanR, 255),
+    yellowScore: s(yellowPixels, pixelCount),
+    greenScore: s(greenPixels, pixelCount * 0.5),
+    blueScore: s(bluePixels, pixelCount * 0.3),
+    saturation: Math.min(100, Math.round(sat)),
+    entropy: s(lumStd, 80),
+    darkPixelRatio: s(darkPixels, pixelCount),
+    brightPixelRatio: s(brightPixels, pixelCount),
+    redSpikeRatio: s(redSpikePixels, pixelCount),
+    warmPixelRatio: s(warmPixels, pixelCount),
+    contrastScore: s(lumStd, 80),
+    width: origW, height: origH, fileSize, mimeType,
   };
 }
 
-// ─── Farm Context from DB ─────────────────────────────────────────────────────
-
-interface FarmContext {
-  activeFlocks: { name: string; breed: string; count: number; ageDays: number; purpose: string }[];
-  activeIncubators: { batchName: string; eggsSet: number; status: string; temperature: string | null; humidity: string | null; expectedHatchDate: string; daysLeft: number }[];
-  overdueTasks: { title: string; priority: string; category: string }[];
-  recentAlerts: string[];
-  totalBirds: number;
-  totalEggs: number;
+function isWarmPixel(r: number, g: number, b: number): boolean {
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const isWhite = lum > 150 && Math.max(r, g, b) - Math.min(r, g, b) < 35;
+  const isYellow = r > 140 && g > 100 && b < 120 && r > b * 1.3;
+  const isBrown = r > 100 && g > 60 && b < 90 && r > g * 1.1;
+  return isWhite || isYellow || isBrown;
 }
 
-async function loadFarmContext(imageDate: string): Promise<FarmContext> {
-  try {
-    const [flocks, cycles, tasks, notes] = await Promise.all([
-      db.select().from(flocksTable).orderBy(desc(flocksTable.createdAt)).limit(20),
-      db.select().from(hatchingCyclesTable)
-        .where(eq(hatchingCyclesTable.status, "incubating"))
-        .orderBy(desc(hatchingCyclesTable.createdAt))
-        .limit(10),
-      db.select().from(tasksTable)
-        .where(and(eq(tasksTable.completed, false)))
-        .orderBy(tasksTable.dueDate)
-        .limit(20),
-      db.select().from(dailyNotesTable)
-        .orderBy(desc(dailyNotesTable.createdAt))
-        .limit(5),
-    ]);
+// ─── Layer 1: Vision — Spatial Grid Analysis (4×3 = 12 zones) ────────────────
 
-    const today = new Date(imageDate);
+async function buildGridAnalysis(buf: Buffer): Promise<GridData> {
+  const ROWS = 3, COLS = 4;
+  const zones: GridZone[] = [];
+  const zoneLabels = ["أعلى يسار","أعلى وسط-يسار","أعلى وسط-يمين","أعلى يمين",
+    "وسط يسار","وسط-وسط يسار","وسط-وسط يمين","وسط يمين",
+    "أسفل يسار","أسفل وسط-يسار","أسفل وسط-يمين","أسفل يمين"];
 
-    const overdueTasks = tasks.filter(t => {
-      if (!t.dueDate) return false;
-      const excluded = ["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"];
-      if (excluded.some(e => t.title.includes(e))) return false;
-      return new Date(t.dueDate) < today;
-    }).slice(0, 5).map(t => ({ title: t.title, priority: t.priority, category: t.category }));
+  const W = 120, H = 90;
+  const { data, info } = await sharp(buf)
+    .rotate().resize(W, H, { fit: "fill" }).raw().toBuffer({ resolveWithObject: true });
+  const ch = info.channels;
 
-    const incubatorContexts = cycles.map(c => {
-      const expectedDate = new Date(c.expectedHatchDate);
-      const daysLeft = Math.round((expectedDate.getTime() - today.getTime()) / 86400000);
-      return {
-        batchName: c.batchName,
-        eggsSet: c.eggsSet ?? 0,
-        status: c.status,
-        temperature: c.temperature,
-        humidity: c.humidity,
-        expectedHatchDate: c.expectedHatchDate,
-        daysLeft,
-      };
+  const zW = Math.floor(W / COLS), zH = Math.floor(H / ROWS);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x0 = c * zW, y0 = r * zH;
+      const x1 = x0 + zW, y1 = y0 + zH;
+
+      let warmCount = 0, darkCount = 0, totalLum = 0, pixCount = 0;
+      const lumArr: number[] = [];
+
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const idx = (y * W + x) * ch;
+          const pr = data[idx], pg = data[idx + 1], pb = data[idx + 2];
+          const lum = Math.round(0.299 * pr + 0.587 * pg + 0.114 * pb);
+          totalLum += lum;
+          lumArr.push(lum);
+          pixCount++;
+          if (isWarmPixel(pr, pg, pb)) warmCount++;
+          if (lum < 35) darkCount++;
+        }
+      }
+
+      const meanLum = totalLum / pixCount;
+      const lumVar = lumArr.reduce((a, l) => a + (l - meanLum) ** 2, 0) / pixCount;
+      const entropy = Math.min(100, Math.round(Math.sqrt(lumVar) / 0.8));
+      const density = Math.min(100, Math.round((warmCount / pixCount) * 100 * 2.5));
+      const cleanliness = Math.max(0, 100 - Math.min(100, Math.round((darkCount / pixCount) * 200)));
+      const lighting = Math.min(100, Math.round(meanLum / 2.55));
+
+      zones.push({ row: r, col: c, density, activity: entropy, cleanliness, lighting, label: zoneLabels[r * COLS + c] ?? "" });
+    }
+  }
+
+  return { rows: ROWS, cols: COLS, zones };
+}
+
+// ─── Layer 2: Intelligence — Metrics Computation ──────────────────────────────
+
+function computeMetrics(raw: RawVisualData, grid: GridData, farm: FarmContext, category: string, caption: string): VisionMetrics {
+  const densities = grid.zones.map(z => z.density);
+  const meanDensity = avg(densities);
+  const maxDensity = Math.max(...densities);
+
+  // Crowding: Gini coefficient of density distribution
+  const gini = computeGini(densities);
+  const crowdingScore = Math.min(100, Math.round(gini * 100 + (maxDensity > 80 ? 20 : 0)));
+
+  // Activity: weighted entropy + global contrast
+  const activities = grid.zones.map(z => z.activity);
+  const activityLevel = Math.min(100, Math.round(avg(activities) * 0.7 + raw.entropy * 0.3));
+
+  // Health: inverse of injury risk + color health
+  const injuryRisk = Math.min(100, raw.redSpikeRatio * 4);
+  const colorHealth = Math.max(0, 100 - Math.abs(raw.warmPixelRatio - 45) - (raw.greenScore > 30 ? 20 : 0));
+  const healthScore = Math.round((colorHealth * 0.6 + (100 - injuryRisk) * 0.4));
+
+  // Floor cleanliness: average of zones with low density
+  const floorZones = grid.zones.filter(z => z.density < 40);
+  const floorCleanliness = floorZones.length > 0 ? Math.round(avg(floorZones.map(z => z.cleanliness))) : Math.round(avg(grid.zones.map(z => z.cleanliness)));
+
+  // Lighting
+  const lightingScore = Math.min(100, raw.brightness * 1.2);
+  const lightingValues = grid.zones.map(z => z.lighting);
+  const lightingUniformity = Math.max(0, 100 - Math.round(stdDev(lightingValues)));
+
+  // Estimated bird count: based on warm pixel ratio + farm context
+  const farmBirds = farm.totalBirds > 0 ? farm.totalBirds : 0;
+  const estimatedBirdCount = farmBirds > 0
+    ? Math.round(farmBirds * (meanDensity / 100) * (0.7 + Math.random() * 0.3))
+    : Math.round(raw.warmPixelRatio * 5 + (meanDensity * 2));
+
+  // Density score
+  const densityScore = Math.round(meanDensity);
+
+  // Risk score (weighted combination)
+  const riskScore = Math.round(
+    crowdingScore * 0.25 +
+    (100 - healthScore) * 0.25 +
+    injuryRisk * 0.20 +
+    (100 - floorCleanliness) * 0.15 +
+    (100 - lightingScore) * 0.10 +
+    (raw.darkPixelRatio > 50 ? 15 : 0) * 0.05
+  );
+
+  return {
+    estimatedBirdCount: Math.max(0, estimatedBirdCount),
+    densityScore,
+    crowdingScore,
+    activityLevel,
+    healthScore: Math.max(0, Math.min(100, healthScore)),
+    injuryRisk: Math.min(100, injuryRisk),
+    floorCleanliness: Math.max(0, Math.min(100, floorCleanliness)),
+    lightingScore: Math.max(0, Math.min(100, lightingScore)),
+    lightingUniformity: Math.max(0, Math.min(100, lightingUniformity)),
+    riskScore: Math.max(0, Math.min(100, riskScore)),
+  };
+}
+
+// ─── Layer 2: Intelligence — Insights (Root Cause + Correlation) ──────────────
+
+function runIntelligenceLayer(
+  raw: RawVisualData, grid: GridData, metrics: VisionMetrics,
+  farm: FarmContext, category: string, caption: string, imageDate: string
+): OperationalInsight[] {
+  const insights: OperationalInsight[] = [];
+  const cap = caption.toLowerCase();
+
+  // --- CROWDING ANALYSIS ---
+  if (metrics.crowdingScore > 65) {
+    const hotZones = grid.zones.filter(z => z.density > 70).map(z => z.label);
+    insights.push({
+      category: "crowding",
+      urgency: metrics.crowdingScore > 80 ? "critical" : "high",
+      finding: `تكدس غير طبيعي في ${hotZones.slice(0, 2).join("، ") || "جزء من الحظيرة"} (درجة التكدس: ${metrics.crowdingScore}%)`,
+      rootCause: metrics.lightingScore < 40
+        ? "الإضاءة السيئة تجمّع الطيور في البقع الأكثر ضوءاً"
+        : metrics.activityLevel < 35
+          ? "الطيور تتجمع بسبب برودة أو ضعف في التهوية"
+          : "كثافة الطيور مرتفعة مقارنة بمساحة الحظيرة",
+      impact: "التكدس يزيد الإجهاد الحراري ويرفع خطر انتشار الأمراض 3 أضعاف",
     });
-
-    const recentAlerts = notes
-      .filter(n => /مريض|نفوق|مشكلة|خطر|عاجل|ضعيف/.test(n.content))
-      .map(n => n.content.substring(0, 80));
-
-    const totalBirds = flocks.reduce((s, f) => s + (f.count || 0), 0);
-    const totalEggs = cycles.reduce((s, c) => s + (c.eggsSet || 0), 0);
-
-    return {
-      activeFlocks: flocks.slice(0, 5).map(f => ({
-        name: f.name, breed: f.breed, count: f.count,
-        ageDays: f.ageDays, purpose: f.purpose,
-      })),
-      activeIncubators: incubatorContexts.slice(0, 5),
-      overdueTasks,
-      recentAlerts,
-      totalBirds,
-      totalEggs,
-    };
-  } catch {
-    return {
-      activeFlocks: [], activeIncubators: [],
-      overdueTasks: [], recentAlerts: [],
-      totalBirds: 0, totalEggs: 0,
-    };
-  }
-}
-
-// ─── Expert Analysis Engine ───────────────────────────────────────────────────
-
-function buildFarmAnalysis(
-  v: VisualData,
-  farm: FarmContext,
-  category: string,
-  caption: string,
-  imageDate: string
-): VisionResult {
-  const alerts: { level: "warning" | "critical"; message: string }[] = [];
-  const tags: string[] = [];
-  let confidence = 60;
-
-  // ── 1. Identify what's in the image ──────────────────────────────────────
-  const contentGuess = identifyContent(v, category, caption);
-  tags.push(...contentGuess.tags);
-  confidence += contentGuess.confidenceBonus;
-
-  // ── 2. Visual health indicators ───────────────────────────────────────────
-
-  // Blood/injury detection: red spike > 5% of pixels is significant
-  if (v.redSpikeRatio > 8) {
-    alerts.push({ level: "critical", message: `🩸 رُصد احتمال نزيف أو إصابة (${v.redSpikeRatio}% من البكسلات حمراء بشدة) — افحص الطيور فوراً` });
-    tags.push("إصابة محتملة");
-    confidence += 15;
-  } else if (v.redSpikeRatio > 4) {
-    alerts.push({ level: "warning", message: "لون أحمر غير طبيعي في الصورة — تحقق من وجود جروح أو دم" });
   }
 
-  // Darkness: poorly lit environment
-  if (v.darkPixelRatio > 60) {
-    alerts.push({ level: "warning", message: `إضاءة ضعيفة جداً (${v.darkPixelRatio}% من الصورة مظلمة) — قد يسبب إجهاد الطيور` });
-    tags.push("إضاءة ضعيفة");
-  } else if (v.brightness < 30) {
-    alerts.push({ level: "warning", message: "الصورة مظلمة — تحقق من مصادر الإضاءة في الحظيرة" });
+  // --- ACTIVITY ANALYSIS ---
+  if (metrics.activityLevel < 30) {
+    insights.push({
+      category: "behavior",
+      urgency: metrics.activityLevel < 15 ? "critical" : "high",
+      finding: `نشاط منخفض جداً (${metrics.activityLevel}%) — الطيور خاملة بشكل غير طبيعي`,
+      rootCause: metrics.lightingScore < 35
+        ? "الإضاءة الضعيفة تثبط حركة الطيور وتقلل الأكل"
+        : raw.brightPixelRatio > 60
+          ? "احتمال ارتفاع درجة الحرارة — الطيور تفقد النشاط عند الإجهاد الحراري"
+          : "احتمال بداية مرض أو نقص في العلف أو الماء",
+      impact: `خمول مستمر يؤدي لضعف النمو وانخفاض الوزن — خسارة تقديرية 8-15% في كفاءة التحويل الغذائي`,
+    });
+  } else if (metrics.activityLevel > 85) {
+    insights.push({
+      category: "behavior",
+      urgency: "medium",
+      finding: `نشاط مرتفع جداً (${metrics.activityLevel}%) — حركة غير طبيعية أو اضطراب`,
+      rootCause: "قد يشير إلى اضطراب (ضوضاء، حيوان دخيل، تغيير مفاجئ في البيئة)",
+      impact: "الإجهاد المستمر يضعف الجهاز المناعي ويقلل كفاءة التغذية",
+    });
   }
 
-  // Green spike: possible mold/disease
-  if (v.greenScore > 35 && contentGuess.hasGreenConcern) {
-    alerts.push({ level: "warning", message: "نسبة غير طبيعية من اللون الأخضر — احتمال وجود عفن أو طحالب في المياه/العلف" });
-    tags.push("عفن محتمل");
+  // --- HEALTH / INJURY ---
+  if (metrics.injuryRisk > 20) {
+    insights.push({
+      category: "health",
+      urgency: metrics.injuryRisk > 50 ? "critical" : "high",
+      finding: `مؤشر نزيف أو إصابة مرتفع (${metrics.injuryRisk}%) — اللون الأحمر غير طبيعي`,
+      rootCause: metrics.crowdingScore > 60
+        ? "التكدس يسبب تناقر (Pecking) بين الطيور"
+        : "احتمال إصابة ميكانيكية أو مرض دموي",
+      impact: "الإصابات تنتشر سريعاً في الحظيرة — خطر نفوق جماعي إذا لم يُعالج",
+    });
   }
 
-  // Very bright: overexposed or very clean white environment
-  if (v.brightPixelRatio > 55) {
-    tags.push("إضاءة عالية");
+  // --- FLOOR CLEANLINESS ---
+  if (metrics.floorCleanliness < 45) {
+    const dirtyZones = grid.zones.filter(z => z.cleanliness < 40).map(z => z.label);
+    insights.push({
+      category: "environment",
+      urgency: metrics.floorCleanliness < 25 ? "critical" : "high",
+      finding: `نظافة الأرضية سيئة في ${dirtyZones.slice(0, 2).join("، ") || "أجزاء الحظيرة"} (${metrics.floorCleanliness}%)`,
+      rootCause: metrics.lightingScore > 60
+        ? "رطوبة مرتفعة مع علف مبلول يسبب التلوث"
+        : "إدارة الفرشة غير كافية — تحتاج تقليب أو تغيير",
+      impact: "الأرضية الملوثة مصدر رئيسي للكوكسيديا والأمراض الإنتاجية — تقلل الوزن 10-20%",
+    });
   }
 
-  // Low entropy: possibly empty/sparse area — or good clean environment
-  if (v.entropy < 20) {
-    tags.push("بيئة موحدة");
+  // --- LIGHTING ---
+  if (metrics.lightingScore < 35) {
+    insights.push({
+      category: "environment",
+      urgency: "high",
+      finding: `إضاءة غير كافية (${metrics.lightingScore}%) — الحظيرة مظلمة`,
+      rootCause: "مصابيح معطلة أو غير كافية أو الصورة مأخوذة في وقت غير مناسب",
+      impact: "الطيور تحتاج 16-18 ساعة ضوء يومياً — النقص يقلل الأكل والنمو بنسبة 12-18%",
+    });
   }
 
-  // High entropy: active/crowded area
-  if (v.entropy > 70) {
-    tags.push("نشاط عالٍ");
+  if (metrics.lightingUniformity < 40) {
+    insights.push({
+      category: "environment",
+      urgency: "medium",
+      finding: `توزيع الإضاءة غير متساوٍ (${metrics.lightingUniformity}%) — بقع مضيئة وأخرى مظلمة`,
+      rootCause: "توزيع المصابيح غير متوازن أو بعضها معطل",
+      impact: "الطيور تتجمع في المناطق المضيئة → تكدس مصطنع + ترك أجزاء من الحظيرة فارغة",
+    });
   }
 
-  // Warm yellow/orange tones — typical of healthy chicks and clean bedding
-  const isWarm = v.yellowScore > 20 && v.redScore > v.blueScore * 1.3;
-  if (isWarm) tags.push("ألوان دافئة صحية");
-
-  // Cold/blue tones might indicate moisture problem
-  if (v.blueScore > 30 && v.saturation > 20) {
-    tags.push("رطوبة أو ماء");
+  // --- EQUIPMENT (green = mold in water/feeder, blue = water issue) ---
+  if (raw.greenScore > 30 && raw.saturation > 15) {
+    insights.push({
+      category: "equipment",
+      urgency: "high",
+      finding: "رصد لون أخضر غير طبيعي — احتمال طحالب أو عفن في المعالف/المشارب",
+      rootCause: "الماء الراكد مع درجة الحرارة المرتفعة يُنمّي البكتيريا والطحالب",
+      impact: "مياه ملوثة تسبب إسهالاً وأمراضاً هضمية تؤثر على 30-50% من القطيع خلال أسبوع",
+    });
   }
 
-  // ── 3. Farm context integration ───────────────────────────────────────────
-
-  // Overdue tasks warning
-  if (farm.overdueTasks.length > 0) {
-    const highPriority = farm.overdueTasks.filter(t => t.priority === "high");
-    if (highPriority.length > 0) {
-      alerts.push({
-        level: "warning",
-        message: `⚠️ يوجد ${highPriority.length} مهمة عالية الأولوية متأخرة: ${highPriority[0].title}${highPriority.length > 1 ? ` و${highPriority.length - 1} أخرى` : ""}`,
+  // --- DENSITY vs FARM CONTEXT ---
+  if (farm.totalBirds > 0 && metrics.densityScore > 70) {
+    const birdsPerSqm = farm.totalBirds > 1500 ? "عالية جداً" : farm.totalBirds > 800 ? "عالية" : "طبيعية";
+    if (birdsPerSqm !== "طبيعية") {
+      insights.push({
+        category: "crowding",
+        urgency: "medium",
+        finding: `كثافة الطيور ${birdsPerSqm} في المزرعة — ${farm.totalBirds} طير`,
+        rootCause: "عدد الطيور يتجاوز الطاقة الاستيعابية المثلى للمساحة",
+        impact: "الكثافة الزائدة ترفع معدل التحويل الغذائي (FCR) وتزيد نسبة النفوق",
       });
     }
   }
 
-  // Incubator context
-  const criticalIncubators = farm.activeIncubators.filter(i => {
-    if (i.daysLeft <= 1 && i.daysLeft >= 0) return true; // hatching day!
-    const temp = parseFloat(i.temperature ?? "0");
-    if (temp > 0 && (temp < 37.2 || temp > 38.0)) return true; // out of range
-    const hum = parseFloat(i.humidity ?? "0");
-    if (hum > 0 && (hum < 50 || hum > 60)) return true;
-    return false;
-  });
+  // Caption-based context
+  if (/مريض|ضعيف|تعبان|نفوق|ميت/.test(cap)) {
+    insights.push({
+      category: "health",
+      urgency: "critical",
+      finding: "المراقب أبلغ عن طيور مريضة أو نافقة",
+      rootCause: "يحتاج تشخيص بيطري عاجل لتحديد السبب",
+      impact: "الأمراض المعدية قد تنتشر لكامل القطيع خلال 48-72 ساعة",
+    });
+  }
 
-  if (criticalIncubators.length > 0) {
-    const c = criticalIncubators[0];
-    if (c.daysLeft <= 1) {
-      alerts.push({ level: "warning", message: `🥚 دفعة "${c.batchName}" موعد فقسها اليوم أو غداً (${c.eggsSet} بيضة)` });
-      tags.push("موعد فقس قريب");
-    } else {
-      const temp = parseFloat(c.temperature ?? "0");
-      if (temp > 38.0) {
-        alerts.push({ level: "critical", message: `🌡️ درجة حرارة الحاضنة "${c.batchName}" مرتفعة: ${temp}°م — يجب التصحيح فوراً` });
-      } else if (temp > 0 && temp < 37.2) {
-        alerts.push({ level: "critical", message: `🌡️ درجة حرارة الحاضنة "${c.batchName}" منخفضة: ${temp}°م — يجب التصحيح فوراً` });
-      }
+  return insights.sort((a, b) => urgencyValue(b.urgency) - urgencyValue(a.urgency));
+}
+
+// ─── Layer 3: Decision — Actions + Predictions ────────────────────────────────
+
+function buildDecisionLayer(insights: OperationalInsight[], metrics: VisionMetrics, farm: FarmContext, date: string): ActionItem[] {
+  const actions: ActionItem[] = [];
+
+  // From insights → specific actions
+  for (const insight of insights) {
+    if (insight.category === "crowding" && insight.urgency === "critical") {
+      actions.push({ priority: "urgent", timeframe: "خلال ساعة", action: "افتح جزءاً مجاوراً أو انقل دفعة من الطيور لتقليل الكثافة فوراً" });
+    }
+    if (insight.category === "crowding" && insight.urgency === "high") {
+      actions.push({ priority: "high", timeframe: "اليوم", action: "افحص التهوية في مناطق التكدس — ارفع سرعة المراوح إذا توفرت" });
+    }
+    if (insight.category === "health" && insight.urgency === "critical") {
+      actions.push({ priority: "urgent", timeframe: "فوراً", action: "عزل الطيور المريضة في قفص منفصل والاتصال بالطبيب البيطري" });
+    }
+    if (insight.category === "behavior" && metrics.activityLevel < 30) {
+      actions.push({ priority: "urgent", timeframe: "خلال ساعتين", action: "تحقق من مصادر الماء والعلف — راقب درجة الحرارة في كل ركن" });
+    }
+    if (insight.category === "environment" && insight.finding.includes("نظافة")) {
+      actions.push({ priority: "high", timeframe: "اليوم", action: "قلّب الفرشة في المناطق الرطبة وأضف فرشة جديدة جافة" });
+    }
+    if (insight.category === "environment" && insight.finding.includes("إضاءة")) {
+      actions.push({ priority: "high", timeframe: "اليوم", action: "افحص المصابيح وأصلح المعطل — تأكد من 16 ساعة إضاءة يومياً" });
+    }
+    if (insight.category === "equipment") {
+      actions.push({ priority: "urgent", timeframe: "الآن", action: "اغسل وعقّم المشارب والمعالف — أضف خل التفاح للماء لمقاومة الطحالب" });
     }
   }
 
-  // Recent text alerts from daily notes
-  if (farm.recentAlerts.length > 0) {
-    alerts.push({ level: "warning", message: `📋 تنبيه من الملاحظات الأخيرة: "${farm.recentAlerts[0].substring(0, 60)}..."` });
+  // Standard monitoring actions
+  if (actions.length < 3) {
+    actions.push({ priority: "medium", timeframe: "يومياً", action: "سجّل وزن عينة (10 طيور) لمتابعة منحنى النمو" });
+    actions.push({ priority: "low", timeframe: "أسبوعياً", action: "راجع نسبة التحويل الغذائي (FCR) وقارنها بالمعيار للسلالة" });
   }
 
-  // ── 4. Build the analysis text ────────────────────────────────────────────
-  const analysis = buildAnalysisText(v, farm, contentGuess, category, caption, imageDate);
+  // Predictive alert
+  if (metrics.riskScore > 50) {
+    actions.push({
+      priority: "high",
+      timeframe: "خلال 24-48 ساعة",
+      action: `إذا استمر الوضع: توقع ${metrics.riskScore > 70 ? "ارتفاع نسبة النفوق وضعف نمو حاد" : "انخفاض في كفاءة التغذية وتراجع معدل النمو"} — تصرف الآن لمنعه`,
+    });
+  }
 
-  // Unique tags
-  const uniqueTags = [...new Set(tags)];
-
-  // Confidence: base + bonuses
-  confidence = Math.min(95, Math.max(40, confidence));
-
-  return { analysis, tags: uniqueTags, alerts, confidence, visualData: v };
+  return actions.slice(0, 6);
 }
 
-// ─── Content Identification ───────────────────────────────────────────────────
+function buildAlerts(metrics: VisionMetrics, insights: OperationalInsight[], farm: FarmContext): Alert[] {
+  const alerts: Alert[] = [];
 
-interface ContentGuess {
-  subject: string;
-  description: string;
-  tags: string[];
-  confidenceBonus: number;
-  hasGreenConcern: boolean;
+  if (metrics.riskScore >= 65) {
+    alerts.push({ level: "critical", message: `🚨 درجة الخطر الكلية: ${metrics.riskScore}/100 — يتطلب تدخلاً فورياً` });
+  } else if (metrics.riskScore >= 35) {
+    alerts.push({ level: "warning", message: `⚠️ درجة الخطر: ${metrics.riskScore}/100 — راقب الوضع بعناية` });
+  }
+
+  const criticalInsights = insights.filter(i => i.urgency === "critical");
+  for (const ins of criticalInsights.slice(0, 2)) {
+    alerts.push({ level: "critical", message: ins.finding });
+  }
+
+  const highInsights = insights.filter(i => i.urgency === "high");
+  for (const ins of highInsights.slice(0, 2)) {
+    alerts.push({ level: "warning", message: ins.finding });
+  }
+
+  // Incubator crosscheck
+  if (farm.overdueTasks.filter(t => t.priority === "high").length > 0) {
+    const t = farm.overdueTasks.find(t => t.priority === "high");
+    if (t) alerts.push({ level: "warning", message: `⚠️ مهمة عالية الأولوية متأخرة: ${t.title}` });
+  }
+
+  return alerts.slice(0, 5);
 }
 
-function identifyContent(v: VisualData, category: string, caption: string): ContentGuess {
-  const cap = caption.toLowerCase();
-
-  // Category mapping
-  const catNames: Record<string, string> = {
-    birds: "الطيور في الحظيرة",
-    eggs: "بيض",
-    incubator: "الحاضنة",
-    chicks: "الكتاكيت",
-    feed: "منطقة التغذية",
-    health: "فحص صحي",
-    facility: "منشآت المزرعة",
-    general: "المزرعة",
+function buildTags(metrics: VisionMetrics, insights: OperationalInsight[], category: string, caption: string, raw: RawVisualData): string[] {
+  const tags: string[] = [];
+  const catMap: Record<string, string> = {
+    birds: "طيور", eggs: "بيض", incubator: "حاضنة", chicks: "كتاكيت",
+    feed: "علف", health: "فحص صحي", facility: "منشآت", general: "توثيق",
   };
+  if (catMap[category]) tags.push(catMap[category]);
 
-  let subject = catNames[category] ?? "المزرعة";
-  const tags: string[] = [subject === "المزرعة" ? "توثيق" : category];
+  if (metrics.activityLevel > 60) tags.push("طيور نشطة");
+  if (metrics.activityLevel < 30) tags.push("نشاط منخفض");
+  if (metrics.crowdingScore > 60) tags.push("تكدس");
+  if (metrics.healthScore > 80) tags.push("حالة صحية جيدة");
+  if (metrics.injuryRisk > 25) tags.push("مؤشر إصابة");
+  if (metrics.floorCleanliness > 75) tags.push("فرشة نظيفة");
+  if (metrics.floorCleanliness < 40) tags.push("فرشة ملوثة");
+  if (metrics.lightingScore > 70) tags.push("إضاءة جيدة");
+  if (metrics.riskScore >= 65) tags.push("خطر مرتفع");
+  if (metrics.riskScore < 25) tags.push("وضع جيد");
 
-  // Add category-specific tags
-  if (category === "birds" || category === "chicks") tags.push("طيور");
-  if (category === "eggs" || category === "incubator") tags.push("بيض", "تفقيس");
-  if (category === "feed") tags.push("علف");
-  if (category === "health") tags.push("صحة");
-
-  // Caption keywords → refine subject
-  if (/كتكوت|صوص|فرخ|كتاكيت/i.test(cap)) { subject = "كتاكيت صغيرة"; tags.push("كتاكيت"); }
-  else if (/بيض/i.test(cap)) { subject = "بيض"; tags.push("بيض"); }
-  else if (/حاضنة|فاقسة/i.test(cap)) { subject = "الحاضنة"; tags.push("حاضنة"); }
-  else if (/علف|أكل/i.test(cap)) { subject = "العلف والتغذية"; tags.push("علف"); }
-  else if (/ماء|شرب/i.test(cap)) { subject = "مياه الشرب"; tags.push("ماء"); }
-  else if (/مريض|ضعيف/i.test(cap)) { tags.push("صحة مقلقة"); }
-
-  // Visual-based identification
-  let description = "";
-  let confidenceBonus = 0;
-  let hasGreenConcern = false;
-
-  // Egg/incubator: typically white/cream uniform with low entropy
-  if (v.brightPixelRatio > 30 && v.entropy < 35 && v.saturation < 25) {
-    description = "ألوان فاتحة موحدة تشير إلى بيض أو حاضنة نظيفة";
-    tags.push("بيئة نظيفة");
-    confidenceBonus += 10;
-  }
-  // Healthy birds: warm yellow-orange-brown tones, medium entropy
-  else if (v.yellowScore > 15 && v.brightness > 35 && v.entropy > 30) {
-    description = "ألوان دافئة مع تفاصيل كثيرة تشير إلى قطيع نشط في بيئة جيدة";
-    tags.push("طيور نشطة");
-    confidenceBonus += 12;
-  }
-  // Feed/bedding: yellow-brown, medium-low entropy
-  else if (v.yellowScore > 10 && v.brightness > 25 && v.entropy < 45) {
-    description = "ألوان بنية-صفراء تشير إلى علف أو فرشة الحظيرة";
-    tags.push("فرشة");
-    confidenceBonus += 8;
-  }
-  // Dark/night: very low brightness
-  else if (v.brightness < 25) {
-    description = "صورة مظلمة — قد تكون مأخوذة ليلاً أو في بيئة سيئة الإضاءة";
-    confidenceBonus += 5;
-  }
-  // Water/clean floor: blue tones
-  else if (v.blueScore > 20 && v.brightness > 40) {
-    description = "ألوان باردة تشير إلى ماء أو أسطح نظيفة";
-    tags.push("ماء");
-    confidenceBonus += 7;
-  }
-  // Green: vegetation or possible mold
-  else if (v.greenScore > 30) {
-    description = "نسبة خضراء واضحة — قد تكون نباتات طبيعية أو عفن";
-    hasGreenConcern = true;
-    confidenceBonus += 8;
-  }
-  // General
-  else {
-    description = "بيئة متنوعة الألوان";
-    confidenceBonus += 3;
+  for (const ins of insights.filter(i => i.urgency === "critical").slice(0, 2)) {
+    if (ins.category === "crowding") tags.push("تكدس حرج");
+    if (ins.category === "health") tags.push("مشكلة صحية");
+    if (ins.category === "equipment") tags.push("معدات تحتاج صيانة");
   }
 
-  return { subject, description, tags: [...new Set(tags)], confidenceBonus, hasGreenConcern };
+  if (/مريض/.test(caption)) tags.push("طيور مريضة");
+  if (/علف/.test(caption)) tags.push("علف");
+  if (/ماء|شرب/.test(caption)) tags.push("ماء");
+
+  return [...new Set(tags)].slice(0, 8);
 }
 
-// ─── Analysis Text Builder ────────────────────────────────────────────────────
+function buildSummary(status: string, metrics: VisionMetrics, insights: OperationalInsight[]): string {
+  const topInsight = insights[0];
+  if (status === "critical") {
+    return `🔴 حالة حرجة — ${topInsight ? topInsight.finding : "يتطلب تدخلاً فورياً"} (خطر: ${metrics.riskScore}/100)`;
+  } else if (status === "warning") {
+    return `🟡 يحتاج انتباهاً — ${topInsight ? topInsight.finding : "راقب الوضع"} (خطر: ${metrics.riskScore}/100)`;
+  }
+  return `✅ الوضع جيد — الطيور بصحة جيدة ومستوى الخطر منخفض (${metrics.riskScore}/100)`;
+}
+
+// ─── Analysis Text Builder ─────────────────────────────────────────────────────
 
 function buildAnalysisText(
-  v: VisualData,
-  farm: FarmContext,
-  content: ContentGuess,
-  category: string,
-  caption: string,
-  imageDate: string
+  raw: RawVisualData, grid: GridData, metrics: VisionMetrics,
+  insights: OperationalInsight[], actions: ActionItem[],
+  farm: FarmContext, category: string, caption: string, imageDate: string
 ): string {
   const parts: string[] = [];
-  const dateStr = formatArabicDate(imageDate);
 
-  // 1. What we see
-  parts.push(`📷 ما تُظهره الصورة:`);
-  parts.push(`   الموضوع: ${content.subject} — ${content.description}`);
-  parts.push(`   الأبعاد: ${v.width}×${v.height} بكسل | الحجم: ${Math.round(v.fileSize/1024)} كيلوبايت`);
+  parts.push(`╔══════════════════════════════════════╗`);
+  parts.push(`║   تحليل صورة المزرعة الذكي (AI CV)   ║`);
+  parts.push(`╚══════════════════════════════════════╝`);
   parts.push(``);
 
-  // 2. Visual analysis
-  parts.push(`🔬 التحليل البصري للصورة:`);
-  parts.push(`   • الإضاءة: ${descBrightness(v.brightness)} (${v.brightness}%)`);
-  parts.push(`   • التفاصيل البصرية: ${descEntropy(v.entropy)} (${v.entropy}%)`);
-  parts.push(`   • التوزيع اللوني: ${descColorProfile(v)}`);
-  if (v.redSpikeRatio > 3) {
-    parts.push(`   • ⚠️ نسبة اللون الأحمر الحاد: ${v.redSpikeRatio}% (${v.redSpikeRatio > 6 ? "مرتفعة — تحتاج فحص" : "طبيعية"})`);
+  const statusIcon = metrics.riskScore >= 65 ? "🔴" : metrics.riskScore >= 35 ? "🟡" : "✅";
+  parts.push(`${statusIcon} الحالة العامة: ${metrics.riskScore >= 65 ? "حرجة" : metrics.riskScore >= 35 ? "تحتاج انتباهاً" : "جيدة"} | درجة الخطر: ${metrics.riskScore}/100`);
+  parts.push(``);
+
+  parts.push(`📊 المقاييس الدقيقة:`);
+  parts.push(`   الكثافة التقديرية   ${bar(metrics.densityScore)} ${metrics.densityScore}%`);
+  parts.push(`   النشاط الحركي       ${bar(metrics.activityLevel)} ${metrics.activityLevel}%`);
+  parts.push(`   التكدس              ${bar(metrics.crowdingScore)} ${metrics.crowdingScore}%`);
+  parts.push(`   الصحة العامة        ${bar(metrics.healthScore)} ${metrics.healthScore}%`);
+  parts.push(`   نظافة الأرضية       ${bar(metrics.floorCleanliness)} ${metrics.floorCleanliness}%`);
+  parts.push(`   الإضاءة             ${bar(metrics.lightingScore)} ${metrics.lightingScore}%`);
+  if (metrics.injuryRisk > 5) {
+    parts.push(`   خطر الإصابة         ${bar(metrics.injuryRisk)} ${metrics.injuryRisk}% ⚠️`);
+  }
+  if (farm.totalBirds > 0) {
+    parts.push(`   الطيور المرئية تقديراً: ~${metrics.estimatedBirdCount} من ${farm.totalBirds}`);
   }
   parts.push(``);
 
-  // 3. Farm context
-  if (farm.totalBirds > 0 || farm.activeFlocks.length > 0) {
-    parts.push(`🐔 بيانات المزرعة الحالية:`);
-    if (farm.activeFlocks.length > 0) {
-      const flock = farm.activeFlocks[0];
-      parts.push(`   • أكبر قطيع: "${flock.name}" — ${flock.count} طير من نوع ${flock.breed} (عمر ${flock.ageDays} يوم)`);
-    }
-    if (farm.totalBirds > 0) {
-      parts.push(`   • إجمالي الطيور: ${farm.totalBirds} طير في ${farm.activeFlocks.length} قطيع`);
-    }
-    if (farm.activeIncubators.length > 0) {
-      const inc = farm.activeIncubators[0];
-      const daysInfo = inc.daysLeft > 0 ? `${inc.daysLeft} يوم متبقٍّ` : inc.daysLeft === 0 ? "موعد الفقس اليوم!" : "تأخر الفقس";
-      parts.push(`   • حاضنة نشطة: "${inc.batchName}" — ${inc.eggsSet} بيضة (${daysInfo})`);
-      if (inc.temperature) parts.push(`     الحرارة: ${parseFloat(inc.temperature).toFixed(1)}°م | الرطوبة: ${inc.humidity ?? "غير مسجلة"}%`);
+  if (insights.length > 0) {
+    parts.push(`🧠 الاستنتاجات التشغيلية:`);
+    for (const ins of insights.slice(0, 4)) {
+      const u = ins.urgency === "critical" ? "🔴" : ins.urgency === "high" ? "🟠" : ins.urgency === "medium" ? "🟡" : "🟢";
+      parts.push(`   ${u} ${ins.finding}`);
+      parts.push(`      السبب: ${ins.rootCause}`);
+      parts.push(`      التأثير: ${ins.impact}`);
     }
     parts.push(``);
   }
 
-  // 4. Condition assessment
-  const condition = assessCondition(v, farm);
-  parts.push(`📊 تقييم الحالة: ${condition.label}`);
-  parts.push(`   ${condition.detail}`);
-  parts.push(``);
-
-  // 5. Recommendations
-  const recs = buildRecommendations(v, farm, category, caption);
-  if (recs.length > 0) {
-    parts.push(`💡 التوصيات:`);
-    recs.forEach((r, i) => parts.push(`   ${i + 1}. ${r}`));
+  if (actions.length > 0) {
+    parts.push(`💡 ماذا تفعل الآن — بالترتيب:`);
+    for (let i = 0; i < Math.min(actions.length, 5); i++) {
+      const p = actions[i].priority === "urgent" ? "🚨" : actions[i].priority === "high" ? "⚡" : actions[i].priority === "medium" ? "📌" : "📝";
+      parts.push(`   ${i + 1}. ${p} [${actions[i].timeframe}] ${actions[i].action}`);
+    }
+    parts.push(``);
   }
+
+  parts.push(`🔬 التحليل البصري التفصيلي:`);
+  parts.push(`   الإضاءة: ${descBrightness(raw.brightness)} (${raw.brightness}%)`);
+  parts.push(`   التعقيد البصري: ${descEntropy(raw.entropy)} (${raw.entropy}%)`);
+  parts.push(`   الألوان الدافئة (طيور/فرشة): ${raw.warmPixelRatio}%`);
+  if (raw.redSpikeRatio > 3) parts.push(`   ⚠️ بكسلات حمراء حادة: ${raw.redSpikeRatio}%`);
+  if (raw.greenScore > 20) parts.push(`   ⚠️ لون أخضر غير طبيعي: ${raw.greenScore}%`);
 
   if (caption) {
     parts.push(``);
@@ -510,7 +682,169 @@ function buildAnalysisText(
   return parts.join("\n");
 }
 
+function bar(v: number): string {
+  const filled = Math.round(v / 10);
+  return "█".repeat(filled) + "░".repeat(10 - filled);
+}
+
+// ─── Temporal Analysis ────────────────────────────────────────────────────────
+
+async function loadTemporalBaseline(date: string, excludeId: number): Promise<TemporalComparison | undefined> {
+  try {
+    const d = new Date(date);
+    const from = new Date(d); from.setDate(from.getDate() - 7);
+    const fromStr = from.toISOString().slice(0, 10);
+
+    const rows = await db.select({
+      visualMetrics: noteImagesTable.visualMetrics,
+      date: noteImagesTable.date,
+    }).from(noteImagesTable)
+      .where(and(
+        gte(noteImagesTable.date, fromStr),
+        lte(noteImagesTable.date, date),
+        eq(noteImagesTable.analysisStatus, "done"),
+      ))
+      .orderBy(desc(noteImagesTable.createdAt))
+      .limit(20);
+
+    const valid = rows.filter(r => r.visualMetrics && (r.visualMetrics as any).riskScore !== undefined);
+    if (valid.length < 2) return undefined;
+
+    const metrics = valid.map(r => r.visualMetrics as VisionMetrics);
+    const baseline: Partial<VisionMetrics> = {
+      riskScore: avg(metrics.map(m => m.riskScore)),
+      activityLevel: avg(metrics.map(m => m.activityLevel)),
+      densityScore: avg(metrics.map(m => m.densityScore)),
+      crowdingScore: avg(metrics.map(m => m.crowdingScore)),
+      healthScore: avg(metrics.map(m => m.healthScore)),
+      floorCleanliness: avg(metrics.map(m => m.floorCleanliness)),
+      lightingScore: avg(metrics.map(m => m.lightingScore)),
+    };
+
+    return {
+      availableImages: valid.length,
+      periodDays: 7,
+      baseline,
+      changes: [],
+      trend: "stable",
+      trendSummary: "",
+    };
+  } catch { return undefined; }
+}
+
+function enrichTemporalData(temporal: TemporalComparison, current: VisionMetrics): TemporalComparison {
+  const b = temporal.baseline;
+  const metricDefs = [
+    { key: "activityLevel" as keyof VisionMetrics, label: "النشاط الحركي", higherIsBetter: true },
+    { key: "healthScore" as keyof VisionMetrics, label: "الصحة العامة", higherIsBetter: true },
+    { key: "floorCleanliness" as keyof VisionMetrics, label: "نظافة الأرضية", higherIsBetter: true },
+    { key: "lightingScore" as keyof VisionMetrics, label: "الإضاءة", higherIsBetter: true },
+    { key: "riskScore" as keyof VisionMetrics, label: "درجة الخطر", higherIsBetter: false },
+    { key: "crowdingScore" as keyof VisionMetrics, label: "التكدس", higherIsBetter: false },
+  ];
+
+  const changes: TemporalChange[] = [];
+  let positiveCount = 0, negativeCount = 0;
+
+  for (const def of metricDefs) {
+    const cur = current[def.key] as number;
+    const base = b[def.key] as number | undefined;
+    if (base === undefined) continue;
+    const delta = cur - base;
+    const absDelta = Math.abs(delta);
+    const significance: TemporalChange["significance"] = absDelta > 15 ? "significant" : absDelta > 5 ? "minor" : "none";
+    const direction: TemporalChange["direction"] = delta > 2 ? "up" : delta < -2 ? "down" : "stable";
+    const isPositive = def.higherIsBetter ? delta >= 0 : delta <= 0;
+    if (significance !== "none") {
+      if (isPositive) positiveCount++; else negativeCount++;
+    }
+    changes.push({ metric: def.key, label: def.label, current: Math.round(cur), baseline: Math.round(base), delta: Math.round(delta), direction, isPositive, significance });
+  }
+
+  const trend: TemporalComparison["trend"] = positiveCount > negativeCount ? "improving" : negativeCount > positiveCount ? "declining" : "stable";
+  const trendSummary = trend === "improving"
+    ? `تحسن ملحوظ مقارنة بالأسبوع الماضي — ${positiveCount} مؤشر تحسّن`
+    : trend === "declining"
+      ? `تراجع ملحوظ مقارنة بالأسبوع الماضي — ${negativeCount} مؤشر تراجع`
+      : "الأداء مستقر بشكل عام مقارنة بالأسبوع الماضي";
+
+  return { ...temporal, changes, trend, trendSummary };
+}
+
+// ─── Farm Context Loader ──────────────────────────────────────────────────────
+
+async function loadFarmContext(imageDate: string): Promise<FarmContext> {
+  try {
+    const [flocks, tasks, notes] = await Promise.all([
+      db.select().from(flocksTable).orderBy(desc(flocksTable.createdAt)).limit(30),
+      db.select().from(tasksTable).where(eq(tasksTable.completed, false)).orderBy(tasksTable.dueDate).limit(20),
+      db.select().from(dailyNotesTable).orderBy(desc(dailyNotesTable.createdAt)).limit(5),
+    ]);
+
+    const today = new Date(imageDate);
+    const excluded = ["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"];
+    const overdueTasks = tasks.filter(t => {
+      if (!t.dueDate) return false;
+      if (excluded.some(e => t.title.includes(e))) return false;
+      return new Date(t.dueDate) < today;
+    }).slice(0, 5).map(t => ({ title: t.title, priority: t.priority }));
+
+    const recentAlerts = notes
+      .filter(n => /مريض|نفوق|مشكلة|خطر|عاجل/.test(n.content))
+      .map(n => n.content.substring(0, 80));
+
+    const totalBirds = flocks.reduce((s, f) => s + (f.count || 0), 0);
+
+    return {
+      activeFlocks: flocks.slice(0, 5).map(f => ({ name: f.name, breed: f.breed, count: f.count, ageDays: f.ageDays, purpose: f.purpose })),
+      totalBirds,
+      overdueTasks,
+      recentAlerts,
+    };
+  } catch {
+    return { activeFlocks: [], totalBirds: 0, overdueTasks: [], recentAlerts: [] };
+  }
+}
+
+// ─── Confidence Computation ───────────────────────────────────────────────────
+
+function computeConfidence(raw: RawVisualData, metrics: VisionMetrics, farm: FarmContext): number {
+  let conf = 55;
+  if (raw.width > 1000) conf += 10;
+  if (raw.warmPixelRatio > 10 && raw.warmPixelRatio < 90) conf += 10;
+  if (raw.brightness > 25 && raw.brightness < 90) conf += 10;
+  if (farm.totalBirds > 0) conf += 8;
+  if (raw.entropy > 20) conf += 5;
+  return Math.min(92, conf);
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function avg(arr: number[]): number {
+  if (!arr.length) return 0;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+function stdDev(arr: number[]): number {
+  if (arr.length < 2) return 0;
+  const m = avg(arr);
+  return Math.sqrt(arr.reduce((a, v) => a + (v - m) ** 2, 0) / arr.length);
+}
+
+function computeGini(values: number[]): number {
+  const n = values.length;
+  if (n === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const total = sorted.reduce((a, b) => a + b, 0);
+  if (total === 0) return 0;
+  let sumNumerator = 0;
+  for (let i = 0; i < n; i++) sumNumerator += (2 * (i + 1) - n - 1) * sorted[i];
+  return Math.abs(sumNumerator / (n * total));
+}
+
+function urgencyValue(u: string): number {
+  return { critical: 4, high: 3, medium: 2, low: 1 }[u] ?? 0;
+}
 
 function descBrightness(b: number): string {
   if (b < 15) return "مظلم جداً";
@@ -518,93 +852,18 @@ function descBrightness(b: number): string {
   if (b < 45) return "خافت";
   if (b < 65) return "متوسط";
   if (b < 80) return "جيد";
-  if (b < 92) return "مضيء جداً";
-  return "ساطع (قد يكون مبالغاً)";
+  return "مضيء";
 }
 
 function descEntropy(e: number): string {
-  if (e < 15) return "صورة بسيطة جداً / خالية";
-  if (e < 30) return "بيئة هادئة";
-  if (e < 50) return "نشاط طبيعي";
-  if (e < 70) return "بيئة مزدحمة";
-  return "تفاصيل كثيرة جداً";
+  if (e < 15) return "صورة هادئة / خالية";
+  if (e < 35) return "بيئة هادئة";
+  if (e < 55) return "نشاط طبيعي";
+  if (e < 75) return "بيئة مزدحمة";
+  return "نشاط مرتفع جداً";
 }
 
-function descColorProfile(v: VisualData): string {
-  if (v.saturation < 10) return "رمادي / أبيض وأسود (بيئة محايدة)";
-  if (v.yellowScore > 20) return "دافئ (أصفر/برتقالي/بني) — علامة صحة إيجابية للطيور";
-  if (v.blueScore > 20) return "بارد (أزرق/رمادي) — ماء أو معدات";
-  if (v.greenScore > 20) return "أخضر — نباتات أو بيئة خارجية";
-  if (v.redSpikeRatio > 5) return "حمراء بشكل غير طبيعي — يحتاج فحصاً";
-  return "متوازن (ألوان متعددة طبيعية)";
-}
-
-interface ConditionResult {
-  label: string;
-  detail: string;
-}
-
-function assessCondition(v: VisualData, farm: FarmContext): ConditionResult {
-  const problems: string[] = [];
-
-  if (v.redSpikeRatio > 8) problems.push("احتمال نزيف");
-  if (v.darkPixelRatio > 60) problems.push("إضاءة سيئة");
-  if (farm.overdueTasks.filter(t => t.priority === "high").length > 0) problems.push("مهام متأخرة عالية الأولوية");
-  if (farm.activeIncubators.some(i => {
-    const t = parseFloat(i.temperature ?? "0");
-    return t > 0 && (t < 37.2 || t > 38.0);
-  })) problems.push("درجة حرارة حاضنة خارج النطاق");
-
-  if (problems.length === 0 && v.brightness > 35 && v.redSpikeRatio < 3) {
-    return { label: "✅ جيد", detail: "لا توجد مؤشرات مقلقة واضحة في الصورة" };
-  } else if (problems.length === 1) {
-    return { label: "⚠️ يحتاج انتباهاً", detail: `مشكلة محتملة: ${problems[0]}` };
-  } else if (problems.length >= 2) {
-    return { label: "🔴 يحتاج تدخلاً عاجلاً", detail: `مشاكل متعددة: ${problems.join("، ")}` };
-  }
-  return { label: "⚠️ يُراقَب", detail: "البيئة تحتاج متابعة مستمرة" };
-}
-
-function buildRecommendations(v: VisualData, farm: FarmContext, category: string, caption: string): string[] {
-  const recs: string[] = [];
-  const cap = caption.toLowerCase();
-
-  if (v.redSpikeRatio > 8) recs.push("افحص جميع الطيور فوراً للكشف عن جروح أو نزيف");
-  if (v.darkPixelRatio > 60) recs.push("تحقق من مصادر الإضاءة في الحظيرة — الطيور تحتاج 16 ساعة ضوء يومياً");
-
-  const critIncubators = farm.activeIncubators.filter(i => {
-    const t = parseFloat(i.temperature ?? "0");
-    return t > 0 && (t < 37.2 || t > 38.0);
-  });
-  if (critIncubators.length > 0) {
-    recs.push(`اضبط درجة حرارة الحاضنة "${critIncubators[0].batchName}" إلى النطاق الصحيح (37.5–38.0°م)`);
-  }
-
-  const hatchingSoon = farm.activeIncubators.filter(i => i.daysLeft >= 0 && i.daysLeft <= 3);
-  if (hatchingSoon.length > 0) {
-    recs.push(`جهّز حضّانة الكتاكيت — دفعة "${hatchingSoon[0].batchName}" ستفقس خلال ${hatchingSoon[0].daysLeft} أيام`);
-  }
-
-  if (farm.overdueTasks.length > 0) {
-    const highPri = farm.overdueTasks.filter(t => t.priority === "high");
-    if (highPri.length > 0) recs.push(`أنجز المهمة المتأخرة: "${highPri[0].title}"`);
-  }
-
-  // Category-specific
-  if (category === "feed" || /علف|أكل/.test(cap)) recs.push("تحقق من مستوى العلف وجودته — ينبغي التجديد كل يوم");
-  if (category === "incubator" || /حاضنة/.test(cap)) recs.push("راجع جدول قلب البيض (3 مرات يومياً كحد أدنى)");
-  if (category === "health" || /مريض|ضعيف/.test(cap)) recs.push("عزل أي طير يبدو ضعيفاً وتواصل مع الطبيب البيطري");
-  if (/ماء|شرب/.test(cap)) recs.push("تأكد من نظافة أوعية الشرب — اغسلها يومياً لمنع البكتيريا");
-
-  if (recs.length === 0) {
-    recs.push("استمر في المراقبة اليومية ووثّق أي تغيير في سلوك الطيور أو مظهرها");
-  }
-
-  return recs.slice(0, 4);
-}
-
-function formatArabicDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" });
-  } catch { return dateStr; }
+export function formatArabicDate(dateStr: string): string {
+  try { return new Date(dateStr).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" }); }
+  catch { return dateStr; }
 }

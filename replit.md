@@ -27,6 +27,46 @@ Full-stack poultry farm management system with two web frontends sharing one API
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## Computer Vision AI System (Industry-Level)
+
+Built at `artifacts/api-server/src/lib/visionEngine.ts`:
+
+### 3-Layer Architecture
+1. **Vision Layer** — Sharp pixel-level analysis (4×3 grid = 12 spatial zones)
+   - Chicken density estimation per zone (warm pixel clustering)
+   - Activity level (entropy + contrast)
+   - Floor cleanliness (dark spot analysis)
+   - Lighting score and uniformity
+   - Injury risk detection (red spike ratio)
+
+2. **Intelligence Layer** — Rules-based correlation engine
+   - Crowding detection (Gini coefficient of density distribution)
+   - Root cause analysis for each anomaly
+   - Risk scoring (weighted combination: crowding 25%, health 25%, injury 20%, floor 15%, lighting 15%)
+   - Operational insights (not just descriptions): crowding → ventilation issue, low activity → disease/heat
+
+3. **Decision Layer** — Prioritized actions + predictions
+   - Urgent/high/medium/low priority recommendations with timeframes
+   - Predictive alerts ("within 24-48h, if no action...")
+   - Temporal comparison vs. historical baseline (7 days)
+
+### Key Metrics (stored per image as `visual_metrics` JSONB)
+- `densityScore`, `crowdingScore`, `activityLevel`, `healthScore`
+- `injuryRisk`, `floorCleanliness`, `lightingScore`, `lightingUniformity`
+- `riskScore` (0-100 overall), `estimatedBirdCount`
+- `gridData` (4×3 grid with density/activity/cleanliness/lighting per zone)
+
+### API Endpoints
+- `POST /api/notes/images/save` — upload + trigger CV analysis
+- `POST /api/notes/images/:id/analyze` — re-run analysis
+- `GET /api/notes/images/report?period=weekly|daily&date=YYYY-MM-DD` — aggregate report
+
+### Test Data (seeded)
+- 1200 Ross 308 broilers (قطيع ماكينة الرئيسي أ)
+- 600 Cobb 500 broilers (قطيع ماكينة الرئيسي ب)
+- 600 chicks (قطيع الصيصان الجديد)
+- 5 completed hatching cycles with full production data
+
 ## AI Integrations
 - **OpenAI GPT-4o-mini Vision**: via Replit AI Integrations proxy (env: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
 - Used for farm photo analysis in `/api/notes/images/:id/analyze`

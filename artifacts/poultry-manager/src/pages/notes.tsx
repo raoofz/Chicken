@@ -15,7 +15,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, Trash2, FileText, Camera, Upload, Image as ImageIcon, Brain,
   Tag, AlertTriangle, CheckCircle, Clock, X, RefreshCw, ZoomIn, Calendar,
-  MessageSquare, Loader2, ChevronDown, ChevronUp
+  MessageSquare, Loader2, ChevronDown, ChevronUp, Activity, Thermometer,
+  Droplets, Zap, TrendingUp, TrendingDown, Minus, BarChart3, Shield
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,6 +55,30 @@ async function reanalyzeImage(id: number) {
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface VisionMetrics {
+  estimatedBirdCount: number;
+  densityScore: number;
+  crowdingScore: number;
+  activityLevel: number;
+  healthScore: number;
+  injuryRisk: number;
+  floorCleanliness: number;
+  lightingScore: number;
+  lightingUniformity: number;
+  riskScore: number;
+  gridData?: { rows: number; cols: number; zones: GridZone[] };
+}
+
+interface GridZone {
+  row: number;
+  col: number;
+  density: number;
+  activity: number;
+  cleanliness: number;
+  lighting: number;
+  label: string;
+}
+
 interface NoteImage {
   id: number;
   date: string;
@@ -66,6 +91,8 @@ interface NoteImage {
   aiTags: string[] | null;
   aiAlerts: { level: string; message: string }[] | null;
   aiConfidence: number | null;
+  visualMetrics: VisionMetrics | null;
+  riskScore: number | null;
   analysisStatus: string;
   createdAt: string;
 }
@@ -158,6 +185,77 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
+// ─── Metric Gauge ─────────────────────────────────────────────────────────────
+function MetricGauge({ label, value, higherIsBetter = true, icon }: { label: string; value: number; higherIsBetter?: boolean; icon?: React.ReactNode }) {
+  const isGood = higherIsBetter ? value >= 65 : value <= 35;
+  const isWarn = higherIsBetter ? value >= 40 : value <= 60;
+  const color = isGood ? "bg-emerald-500" : isWarn ? "bg-amber-500" : "bg-red-500";
+  const textColor = isGood ? "text-emerald-700" : isWarn ? "text-amber-700" : "text-red-700";
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-slate-500 flex items-center gap-1">{icon}{label}</span>
+        <span className={cn("text-[10px] font-bold", textColor)}>{value}%</span>
+      </div>
+      <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Risk Score Ring ──────────────────────────────────────────────────────────
+function RiskRing({ score }: { score: number }) {
+  const color = score >= 65 ? "text-red-600 bg-red-50 border-red-200" : score >= 35 ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200";
+  const label = score >= 65 ? "خطر مرتفع" : score >= 35 ? "تحت المراقبة" : "وضع جيد";
+  const icon = score >= 65 ? "🔴" : score >= 35 ? "🟡" : "✅";
+  return (
+    <div className={cn("flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold", color)}>
+      <Shield className="w-3.5 h-3.5" />
+      <span>{icon} {label}</span>
+      <span className="mr-auto font-bold">{score}/100</span>
+    </div>
+  );
+}
+
+// ─── Density Heatmap ──────────────────────────────────────────────────────────
+function DensityHeatmap({ zones, rows, cols }: { zones: any[]; rows: number; cols: number }) {
+  const grid = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => zones.find((z: any) => z.row === r && z.col === c))
+  );
+
+  const getColor = (density: number) => {
+    if (density >= 80) return "bg-red-600";
+    if (density >= 60) return "bg-orange-500";
+    if (density >= 40) return "bg-amber-400";
+    if (density >= 20) return "bg-lime-400";
+    return "bg-emerald-300";
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] text-slate-500 font-medium">🗺️ خريطة توزيع الطيور (حرارية)</p>
+      <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        {grid.flat().map((zone: any, i) => (
+          <div
+            key={i}
+            className={cn("h-7 rounded-sm opacity-80 transition-opacity hover:opacity-100 cursor-help flex items-center justify-center", zone ? getColor(zone.density) : "bg-slate-200")}
+            title={zone ? `${zone.label}: كثافة ${zone.density}% • نشاط ${zone.activity}%` : ""}
+          >
+            <span className="text-[8px] text-white/90 font-bold drop-shadow">{zone?.density ?? 0}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-1.5 text-[9px] text-slate-400">
+        <span className="w-3 h-2 rounded-sm bg-emerald-300 inline-block" />منخفض
+        <span className="w-3 h-2 rounded-sm bg-amber-400 inline-block mr-1" />متوسط
+        <span className="w-3 h-2 rounded-sm bg-red-600 inline-block mr-1" />مرتفع
+      </div>
+    </div>
+  );
+}
+
+// ─── Image Card (Enhanced with CV AI) ────────────────────────────────────────
 function ImageCard({
   img,
   isAdmin,
@@ -170,70 +268,71 @@ function ImageCard({
   onReanalyze: (id: number) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [showRawText, setShowRawText] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const imageFileUrl = `/api/notes/images/file/${img.imageUrl.replace(/^\/objects\//, "")}`;
-  const hasAlerts = (img.aiAlerts ?? []).length > 0;
   const criticalAlerts = (img.aiAlerts ?? []).filter(a => a.level === "critical");
+  const warnAlerts = (img.aiAlerts ?? []).filter(a => a.level === "warning");
+  const m = img.visualMetrics;
+
+  // Parse operational insights from analysis text
+  const insights = img.aiAnalysis
+    ? img.aiAnalysis.split("\n")
+        .filter(l => l.includes("السبب:") || l.includes("التأثير:") || (l.includes("🔴") && l.includes(":")) || (l.includes("🟠") && l.includes(":")))
+    : [];
+
+  // Parse action items from analysis text
+  const actions = img.aiAnalysis
+    ? img.aiAnalysis.split("\n")
+        .filter(l => /^\s+\d+\.\s*(🚨|⚡|📌|📝)/.test(l))
+        .slice(0, 4)
+    : [];
 
   return (
     <>
       {lightbox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
-          onClick={() => setLightbox(false)}
-        >
-          <button className="absolute top-4 right-4 text-white" onClick={() => setLightbox(false)}>
-            <X className="w-8 h-8" />
-          </button>
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setLightbox(false)}>
+          <button className="absolute top-4 right-4 text-white"><X className="w-8 h-8" /></button>
           <img src={imageFileUrl} alt={img.originalName} className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl" />
         </div>
       )}
 
-      <Card className={cn(
-        "overflow-hidden border transition-shadow hover:shadow-md",
-        criticalAlerts.length > 0 ? "border-red-300" : ""
-      )}>
+      <Card className={cn("overflow-hidden border transition-shadow hover:shadow-md", criticalAlerts.length > 0 ? "border-red-300" : m && m.riskScore >= 35 ? "border-amber-200" : "")}>
         {/* Image */}
         <div className="relative aspect-video bg-slate-100 cursor-pointer group" onClick={() => setLightbox(true)}>
-          <img
-            src={imageFileUrl}
-            alt={img.originalName}
-            className="w-full h-full object-cover"
-            onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }}
-          />
+          <img src={imageFileUrl} alt={img.originalName} className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }} />
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
             <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-          <div className="absolute top-2 right-2">
-            <StatusBadge status={img.analysisStatus} />
-          </div>
+          <div className="absolute top-2 right-2"><StatusBadge status={img.analysisStatus} /></div>
+          {m && (
+            <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-full">
+              خطر: {m.riskScore}/100
+            </div>
+          )}
           {criticalAlerts.length > 0 && (
             <div className="absolute bottom-2 left-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" />تنبيه
+              <AlertTriangle className="w-3 h-3" />{criticalAlerts.length} تنبيه حرج
             </div>
           )}
         </div>
 
-        <CardContent className="p-3 space-y-2">
+        <CardContent className="p-3 space-y-2.5">
+          {/* Header row */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-800 truncate">{img.originalName ?? "صورة"}</p>
-              <div className="flex items-center gap-2 flex-wrap mt-1">
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
                 <span className="text-xs text-slate-400">{img.date}</span>
-                {img.category && (
-                  <Badge variant="secondary" className="text-xs">
-                    {IMAGE_CATEGORIES[img.category] ?? img.category}
-                  </Badge>
-                )}
-                {img.authorName && <span className="text-xs text-slate-400">بواسطة {img.authorName}</span>}
+                {img.category && <Badge variant="secondary" className="text-xs">{IMAGE_CATEGORIES[img.category] ?? img.category}</Badge>}
+                {img.authorName && <span className="text-xs text-slate-400">{img.authorName}</span>}
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {img.analysisStatus === "failed" && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onReanalyze(img.id)} title="إعادة التحليل">
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-                </Button>
-              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onReanalyze(img.id)} title="إعادة التحليل">
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              </Button>
               {isAdmin && (
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => onDelete(img.id)}>
                   <Trash2 className="w-3.5 h-3.5" />
@@ -242,9 +341,7 @@ function ImageCard({
             </div>
           </div>
 
-          {img.caption && (
-            <p className="text-sm text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">{img.caption}</p>
-          )}
+          {img.caption && <p className="text-sm text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5">{img.caption}</p>}
 
           {/* Tags */}
           {(img.aiTags ?? []).length > 0 && (
@@ -255,65 +352,101 @@ function ImageCard({
             </div>
           )}
 
-          {/* Confidence */}
-          {img.aiConfidence != null && img.analysisStatus === "done" && (
-            <ConfidenceBar value={img.aiConfidence} />
-          )}
+          {/* ── CV AI Rich Display ─────────────────────────────────────────── */}
+          {img.analysisStatus === "done" && m && (
+            <div className="space-y-2.5">
+              {/* Risk score badge */}
+              <RiskRing score={m.riskScore} />
 
-          {/* Alerts */}
-          {hasAlerts && (
-            <div className="space-y-1">
-              {(img.aiAlerts ?? []).map((alert, i) => (
-                <div key={i} className={cn(
-                  "text-xs flex items-start gap-1.5 px-2 py-1.5 rounded-lg",
-                  alert.level === "critical" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
-                )}>
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                  {alert.message}
+              {/* Critical alerts */}
+              {criticalAlerts.length > 0 && (
+                <div className="space-y-1">
+                  {criticalAlerts.map((a, i) => (
+                    <div key={i} className="text-xs bg-red-50 text-red-700 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5 border border-red-200">
+                      <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />{a.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {warnAlerts.length > 0 && warnAlerts.slice(0, 2).map((a, i) => (
+                <div key={i} className="text-xs bg-amber-50 text-amber-700 px-2.5 py-1.5 rounded-lg flex items-start gap-1.5">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />{a.message}
                 </div>
               ))}
-            </div>
-          )}
 
-          {/* AI Analysis */}
-          {img.aiAnalysis && img.analysisStatus === "done" && (
-            <div>
+              {/* Expand toggle */}
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-between text-xs text-indigo-600 hover:text-indigo-800 transition-colors bg-indigo-50 hover:bg-indigo-100 rounded-lg px-2.5 py-1.5"
+                className="w-full flex items-center justify-between text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-2.5 py-1.5"
               >
                 <span className="flex items-center gap-1.5 font-medium">
-                  <Brain className="w-3.5 h-3.5" />
-                  تقرير التحليل البصري
+                  <Brain className="w-3.5 h-3.5" />التحليل التفصيلي (CV AI)
                 </span>
                 {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
+
               {expanded && (
-                <div className="mt-2 bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-indigo-100 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2.5 space-y-1.5">
-                    {img.aiAnalysis.split("\n").map((line, i) => {
-                      if (!line.trim()) return <div key={i} className="h-1" />;
-                      const isHeader = line.startsWith("📷") || line.startsWith("🔬") || line.startsWith("🐔") || line.startsWith("📊") || line.startsWith("💡") || line.startsWith("📝");
-                      const isBullet = line.trim().startsWith("•") || line.trim().startsWith("1.") || line.trim().startsWith("2.") || line.trim().startsWith("3.") || line.trim().startsWith("4.");
-                      const isSubBullet = line.startsWith("     ");
-                      if (isHeader) return (
-                        <div key={i} className="text-xs font-semibold text-slate-800 pt-1">{line}</div>
-                      );
-                      if (isSubBullet) return (
-                        <div key={i} className="text-xs text-slate-500 pr-4">{line.trim()}</div>
-                      );
-                      if (isBullet) return (
-                        <div key={i} className="text-xs text-slate-700 pr-2">{line.trim()}</div>
-                      );
-                      return <div key={i} className="text-xs text-slate-600">{line}</div>;
-                    })}
+                <div className="space-y-3 bg-gradient-to-br from-slate-50 to-indigo-50/20 border border-indigo-100 rounded-xl p-3">
+                  {/* Metrics Grid */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-slate-600 mb-2">📊 المقاييس الدقيقة</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      <MetricGauge label="النشاط الحركي" value={m.activityLevel} icon={<Activity className="w-2.5 h-2.5" />} />
+                      <MetricGauge label="الصحة العامة" value={m.healthScore} icon={<Shield className="w-2.5 h-2.5" />} />
+                      <MetricGauge label="التكدس" value={m.crowdingScore} higherIsBetter={false} icon={<Zap className="w-2.5 h-2.5" />} />
+                      <MetricGauge label="نظافة الأرضية" value={m.floorCleanliness} icon={<Droplets className="w-2.5 h-2.5" />} />
+                      <MetricGauge label="الإضاءة" value={m.lightingScore} icon={<Thermometer className="w-2.5 h-2.5" />} />
+                      <MetricGauge label="كثافة التوزيع" value={m.densityScore} />
+                    </div>
+                    {m.estimatedBirdCount > 0 && (
+                      <p className="text-[10px] text-slate-500 mt-1.5">
+                        🐔 الطيور المرئية تقديراً: <strong className="text-slate-700">~{m.estimatedBirdCount}</strong>
+                        {m.injuryRisk > 15 && <span className="text-red-600 mr-2">⚠️ مؤشر إصابة: {m.injuryRisk}%</span>}
+                      </p>
+                    )}
                   </div>
-                  <div className="border-t border-indigo-100 px-3 py-1.5 bg-white/50 flex items-center justify-between">
-                    <span className="text-xs text-slate-400">تحليل بصري للبكسلات + بيانات المزرعة</span>
-                    <button
-                      onClick={() => onReanalyze(img.id)}
-                      className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1"
-                    >
+
+                  {/* Confidence */}
+                  {img.aiConfidence != null && <ConfidenceBar value={img.aiConfidence} />}
+
+                  {/* Density Heatmap */}
+                  {m.gridData && m.gridData.zones.length > 0 && (
+                    <DensityHeatmap zones={m.gridData.zones} rows={m.gridData.rows} cols={m.gridData.cols} />
+                  )}
+
+                  {/* Actions from analysis */}
+                  {actions.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-600 mb-1.5">💡 ماذا تفعل الآن</p>
+                      <div className="space-y-1">
+                        {actions.map((a, i) => (
+                          <p key={i} className="text-[10px] text-slate-700 leading-relaxed">{a.trim()}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Toggle raw text */}
+                  {img.aiAnalysis && (
+                    <div>
+                      <button
+                        onClick={() => setShowRawText(!showRawText)}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1"
+                      >
+                        <ChevronDown className={cn("w-3 h-3 transition-transform", showRawText && "rotate-180")} />
+                        {showRawText ? "إخفاء التقرير الكامل" : "عرض التقرير الكامل"}
+                      </button>
+                      {showRawText && (
+                        <pre className="mt-2 text-[9px] text-slate-600 whitespace-pre-wrap bg-white rounded-lg p-2 border border-slate-200 max-h-48 overflow-y-auto font-mono leading-relaxed">
+                          {img.aiAnalysis}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between border-t border-indigo-100 pt-2">
+                    <span className="text-[9px] text-slate-400">Computer Vision AI — 3 طبقات تحليل</span>
+                    <button onClick={() => onReanalyze(img.id)} className="text-[10px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
                       <RefreshCw className="w-3 h-3" /> إعادة التحليل
                     </button>
                   </div>
@@ -322,10 +455,27 @@ function ImageCard({
             </div>
           )}
 
+          {img.analysisStatus === "done" && !m && img.aiAnalysis && (
+            <div className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-2 rounded-lg">
+              <Brain className="w-3.5 h-3.5 inline ml-1" />
+              تم التحليل (بيانات قديمة — أعد التحليل لعرض المقاييس الكاملة)
+              <button onClick={() => onReanalyze(img.id)} className="mr-2 underline">إعادة التحليل</button>
+            </div>
+          )}
+
           {img.analysisStatus === "analyzing" && (
-            <div className="flex items-center gap-2 text-xs text-blue-600">
+            <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 px-2.5 py-2 rounded-lg">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              جارٍ تحليل الصورة بالذكاء الاصطناعي...
+              جارٍ التحليل بـ CV AI — طبقة الرؤية + الذكاء + القرار...
+            </div>
+          )}
+
+          {img.analysisStatus === "failed" && (
+            <div className="flex items-center justify-between text-xs text-red-600 bg-red-50 px-2.5 py-2 rounded-lg">
+              <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" />فشل التحليل</span>
+              <button onClick={() => onReanalyze(img.id)} className="text-red-700 underline flex items-center gap-1">
+                <RefreshCw className="w-3 h-3" />إعادة المحاولة
+              </button>
             </div>
           )}
         </CardContent>
