@@ -1107,10 +1107,10 @@ export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): Ful
   }
 
   const scoreBreakdown = [
-    { category: L("البيئة", "Miljö"), score: env.score, weight: 35, label: env.score >= 80 ? L("جيد", "Bra") : env.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
-    { category: L("الأحياء", "Biologi"), score: bio.score, weight: 35, label: bio.score >= 80 ? L("جيد", "Bra") : bio.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
-    { category: L("العمليات", "Drift"), score: ops.score, weight: 20, label: ops.score >= 80 ? L("جيد", "Bra") : ops.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
-    { category: L("جودة البيانات", "Datakvalitet"), score: dq.score, weight: 10, label: dq.label },
+    { category: L("حرارة الحاضنة", "Kläcktemperatur"), score: env.score, weight: 35, label: env.score >= 80 ? L("جيد", "Bra") : env.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("الإنتاج والتفقيس", "Produktion"), score: bio.score, weight: 35, label: bio.score >= 80 ? L("جيد", "Bra") : bio.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("إنجاز المهام", "Uppgifter"), score: ops.score, weight: 20, label: ops.score >= 80 ? L("جيد", "Bra") : ops.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("التوثيق والمتابعة", "Dokumentation"), score: dq.score, weight: 10, label: dq.label },
   ];
 
   const weightedScore = Math.round(
@@ -1123,9 +1123,9 @@ export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): Ful
     weightedScore >= 40 ? L("مقبول", "Acceptabelt") : L("حرج", "Kritiskt");
 
   const sections: Section[] = [
-    { icon: "🌡️", title: L("البيئة والحرارة", "Miljö och temperatur"), category: "environment", items: env.sectionItems, healthScore: env.score },
-    { icon: "🧬", title: L("المؤشرات الحيوية", "Biologiska indikatorer"), category: "biological", items: bio.sectionItems, healthScore: bio.score },
-    { icon: "⚙️", title: L("العمليات والإدارة", "Drift och förvaltning"), category: "operational", items: ops.sectionItems, healthScore: ops.score },
+    { icon: "🌡️", title: L("حرارة الحاضنة والبيئة", "Kläcktemperatur & Miljö"), category: "environment", items: env.sectionItems, healthScore: env.score },
+    { icon: "🥚", title: L("الإنتاج والتفقيس", "Produktion & Kläckning"), category: "biological", items: bio.sectionItems, healthScore: bio.score },
+    { icon: "✅", title: L("إنجاز المهام والأهداف", "Uppgifter & Mål"), category: "operational", items: ops.sectionItems, healthScore: ops.score },
   ];
 
   let topPriority = L("لا توجد مشاكل عاجلة حالياً — حافظ على نفس الأداء.", "Inga akuta problem just nu — håll samma prestanda.");

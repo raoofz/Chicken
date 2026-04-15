@@ -638,7 +638,10 @@ export default function AiAnalysis() {
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"><Database className="w-4 h-4 text-blue-600 dark:text-blue-400" /></div>
-                        <h3 className="font-bold text-sm">{isSv ? "Datakvalitet" : "جودة البيانات"}</h3>
+                        <button onClick={() => navigate("/notes")} className="flex items-center gap-1 hover:underline underline-offset-2 group">
+                          <h3 className="font-bold text-sm">{isSv ? "Dokumentation & Uppföljning" : "التوثيق والمتابعة"}</h3>
+                          <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                        </button>
                         <div className="ml-auto flex items-center gap-1.5">
                           <span className={cn("text-lg font-black tabular-nums", getScoreColor(analysis.dataQuality.score))}>{analysis.dataQuality.score}</span>
                           <span className="text-xs text-muted-foreground">— {analysis.dataQuality.label}</span>
