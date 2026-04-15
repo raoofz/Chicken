@@ -296,6 +296,8 @@ export default function AiAnalysis() {
   const getScoreColor = (score: number) => score >= 80 ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-600";
   const getScoreBg = (score: number) => score >= 80 ? "from-emerald-500 to-teal-600" : score >= 60 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600";
   const getScoreRingColor = (score: number) => score >= 80 ? "stroke-emerald-500" : score >= 60 ? "stroke-amber-500" : "stroke-red-500";
+  const topAlerts = (analysis?.alerts ?? []).slice(0, 5);
+  const topRecommendations = (analysis?.recommendations ?? []).slice(0, 5);
 
   const alertIcon = (type: string) => {
     switch (type) {
