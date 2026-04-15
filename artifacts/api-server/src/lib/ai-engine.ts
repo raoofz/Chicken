@@ -246,7 +246,7 @@ function daysOld(date: string | Date | null | undefined): number | null {
 
 function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
   const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
-  const overdueTasks = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed);
+  const overdueTasks = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed && !["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"].includes(t.title.trim()));
   const recentNotes = data.notes.slice(0, 10).map(n => n.content).join(" ").toLowerCase();
   const diseaseSignals = KEYWORDS_DISEASE.filter(k => recentNotes.includes(k)).length;
   const envSignals = KEYWORDS_ENVIRONMENT.filter(k => recentNotes.includes(k)).length;
@@ -307,7 +307,7 @@ function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
 
 function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] {
   const recentNotesCount = data.notes.length;
-  const overdueTasksCount = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed).length;
+  const overdueTasksCount = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed && !["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"].includes(t.title.trim())).length;
   const activeCyclesCount = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching").length;
   return [
     {
@@ -320,7 +320,9 @@ function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] 
     },
     {
       title: "مدقق العمل والتأخير",
-      description: `يرصد ${overdueTasksCount} مهمة متأخرة ويقترح إعادة توزيع العمل لتقليل الاختناق التشغيلي.`,
+      description: overdueTasksCount > 0
+        ? `يرصد ${overdueTasksCount} مهمة متأخرة ويقترح إعادة توزيع العمل لتقليل الاختناق التشغيلي.`
+        : "يتأكد من أن المهام المتأخرة لا تبقى عالقة أو مكررة بعد الإغلاق اليدوي.",
     },
     {
       title: "محرك التعلم من المزرعة",

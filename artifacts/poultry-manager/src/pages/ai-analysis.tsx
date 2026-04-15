@@ -1,31 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Send, ShieldAlert, Trash2, Loader2, Stethoscope,
-  BookOpen, ChevronDown, ChevronUp, Sparkles, Bot, User,
-  BarChart3, AlertTriangle, CheckCircle2, Info, Zap,
-  ClipboardList, TrendingUp, XCircle, Activity,
-  Thermometer, Bug, Settings, Database, Shield,
-  Target, ArrowUpRight, ArrowDownRight, Minus,
-} from "lucide-react";
+import { ShieldAlert, Loader2, Sparkles, AlertTriangle, CheckCircle2, Zap, Activity, Thermometer, Bug, Settings, Database, Shield, Target, Info, ClipboardList, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-}
-
-interface EncSection {
-  id: string;
-  icon: string;
-  title: string;
-  topics: { title: string; summary: string }[];
-}
 
 interface Alert {
   type: string;
@@ -33,16 +13,6 @@ interface Alert {
   description: string;
   category?: string;
   severity?: number;
-}
-
-interface Anomaly {
-  title: string;
-  description: string;
-  severity: string;
-  metric: string;
-  currentValue: string;
-  expectedRange: string;
-  category: string;
 }
 
 interface Recommendation {
@@ -89,7 +59,6 @@ interface FarmAnalysis {
   scoreLabel: string;
   scoreBreakdown?: { category: string; score: number; weight: number; label: string }[];
   alerts: Alert[];
-  anomalies?: Anomaly[];
   sections: Section[];
   recommendations?: Recommendation[];
   predictions: Prediction[];
@@ -101,7 +70,7 @@ interface FarmAnalysis {
     documentationFreq: TrendPoint[];
   };
   topPriority: string;
-  futureRisk: {
+  futureRisk?: {
     level: "critical" | "high" | "medium" | "low";
     title: string;
     summary: string;
@@ -109,40 +78,19 @@ interface FarmAnalysis {
     triggers: string[];
     actions: string[];
   };
-  aiCapabilities: {
-    title: string;
-    description: string;
-  }[];
+  aiCapabilities?: { title: string; description: string }[];
   summary?: string;
   dataQuality?: { score: number; label: string; issues: string[] };
   duties?: { priority: string; title: string; description: string }[];
 }
 
-type TabType = "chat" | "analyze";
-
 export default function AiAnalysis() {
   const { isAdmin } = useAuth();
-  const { t, dir } = useLanguage();
+  const { t } = useLanguage();
   const { toast } = useToast();
-  const isRtl = dir === "rtl";
-
-  const [activeTab, setActiveTab] = useState<TabType>("chat");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showEncyclopedia, setShowEncyclopedia] = useState(false);
-  const [encyclopedia, setEncyclopedia] = useState<EncSection[]>([]);
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
-  const [encLoading, setEncLoading] = useState(false);
   const [analysis, setAnalysis] = useState<FarmAnalysis | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   useEffect(() => {
     if (!analyzing) return;
@@ -174,37 +122,6 @@ export default function AiAnalysis() {
     );
   }
 
-  const sendMessage = async () => {
-    const msg = input.trim();
-    if (!msg || loading) return;
-    const userMsg: ChatMessage = { role: "user", content: msg, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/ai/chat", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, newChat: messages.length === 0 }),
-      });
-      if (!res.ok) { const data = await res.json(); throw new Error(data.error ?? "فشل الاتصال"); }
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: "assistant", content: data.reply, timestamp: data.timestamp }]);
-    } catch (err: any) {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
-      setMessages(prev => prev.slice(0, -1));
-      setInput(msg);
-    } finally {
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  };
-
-  const clearChat = async () => {
-    try { await fetch("/api/ai/clear", { method: "POST", credentials: "include" }); } catch {}
-    setMessages([]);
-  };
-
   const runAnalysis = async () => {
     setAnalyzing(true);
     setAnalyzeStep(0);
@@ -228,7 +145,6 @@ export default function AiAnalysis() {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "فشل"); }
       const data = await res.json();
       setAnalysis(data.analysis);
-      setActiveTab("analyze");
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message, variant: "destructive" });
     } finally {
@@ -236,86 +152,16 @@ export default function AiAnalysis() {
     }
   };
 
-  const loadEncyclopedia = async () => {
-    if (encyclopedia.length > 0) { setShowEncyclopedia(!showEncyclopedia); return; }
-    setEncLoading(true);
-    try {
-      const res = await fetch("/api/ai/encyclopedia", { credentials: "include" });
-      const data = await res.json();
-      setEncyclopedia(data.sections);
-      setShowEncyclopedia(true);
-    } catch { toast({ title: "خطأ", description: "فشل تحميل الموسوعة", variant: "destructive" }); }
-    finally { setEncLoading(false); }
-  };
-
-  const askAboutTopic = (topic: string) => {
-    setInput(`اشرح لي بالتفصيل العلمي عن: ${topic}`);
-    setShowEncyclopedia(false);
-    setActiveTab("chat");
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
-
-  const quickQuestions = [
-    "حلل مزرعتي بالكامل وأعطني تقرير شامل",
-    "ما هي درجة الحرارة والرطوبة المثالية للتفقيس؟",
-    "كيف أعالج الكوكسيديا بالجرعات الدقيقة؟",
-    "ما هو برنامج التحصينات الكامل لدجاج اللحم؟",
-    "كيف أزيد نسبة الفقس فوق 85%؟",
-    "ما هي علامات المرض في الدجاج؟",
-    "كيف أحسب معامل التحويل الغذائي؟",
-    "ما هو بروتوكول الإقفال المتقدم؟",
-  ];
-
-  const formatContent = (text: string) => {
-    const lines = text.split("\n");
-    return lines.map((line, i) => {
-      if (line.startsWith("### ")) return <h3 key={i} className="font-bold text-base mt-3 mb-1">{line.replace("### ", "")}</h3>;
-      if (line.startsWith("## ")) return <h2 key={i} className="font-bold text-lg mt-4 mb-2">{line.replace("## ", "")}</h2>;
-      if (line.startsWith("# ")) return <h1 key={i} className="font-bold text-xl mt-4 mb-2">{line.replace("# ", "")}</h1>;
-      if (line.startsWith("- ")) return <li key={i} className="mr-4 ml-4 list-disc">{line.replace("- ", "")}</li>;
-      if (line.match(/^\d+\. /)) return <li key={i} className="mr-4 ml-4 list-decimal">{line.replace(/^\d+\. /, "")}</li>;
-      if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-bold mt-2">{line.replace(/\*\*/g, "")}</p>;
-      if (line.startsWith("|")) return null;
-      if (line.trim() === "") return <br key={i} />;
-      const parts = line.split(/\*\*(.*?)\*\*/g);
-      return <p key={i} className="leading-relaxed">{parts.map((part, j) => j % 2 === 1 ? <strong key={j}>{part}</strong> : part)}</p>;
-    });
-  };
-
-  const analyzeSteps = [
-    "قراءة بيانات القطعان...",
-    "تحليل دورات التفقيس...",
-    "فحص المعايير البيئية...",
-    "تحليل المهام والأهداف...",
-    "مسح الملاحظات اليومية...",
-    "كشف الشذوذ والانحرافات...",
-    "توليد التوقعات...",
-    "حساب النتيجة النهائية...",
-  ];
-
   const getScoreColor = (score: number) => score >= 80 ? "text-emerald-600" : score >= 60 ? "text-amber-600" : "text-red-600";
-  const getScoreBg = (score: number) => score >= 80 ? "from-emerald-500 to-teal-600" : score >= 60 ? "from-amber-500 to-orange-600" : "from-red-500 to-rose-600";
   const getScoreRingColor = (score: number) => score >= 80 ? "stroke-emerald-500" : score >= 60 ? "stroke-amber-500" : "stroke-red-500";
   const topAlerts = (analysis?.alerts ?? []).slice(0, 5);
   const topRecommendations = (analysis?.recommendations ?? []).slice(0, 5);
-
-  const alertIcon = (type: string) => {
-    switch (type) {
-      case "danger": return <XCircle className="w-4 h-4 text-red-500 shrink-0" />;
-      case "warning": return <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />;
-      case "success": return <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />;
-      default: return <Info className="w-4 h-4 text-blue-500 shrink-0" />;
-    }
-  };
-
-  const alertBg = (type: string) => {
-    switch (type) {
-      case "danger": return "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800";
-      case "warning": return "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
-      case "success": return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
-      default: return "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800";
-    }
-  };
+  const termHelp = [
+    { title: "البيئة", text: "تعني الحرارة والرطوبة والتهوية والنظافة داخل العنبر أو الفقاسة." },
+    { title: "الأحياء", text: "تعني صحة الدجاج والكتاكيت والأجنة وأي أعراض مرضية أو نفوق." },
+    { title: "العمليات", text: "تعني المهام اليومية مثل العلف والماء والتقليب والتحصين والمتابعة." },
+    { title: "جودة البيانات", text: "تعني هل السجل كامل وصحيح وحديث، أم فيه نقص أو تكرار أو تعارض." },
+  ];
 
   const priorityColor = (p: string) => {
     switch (p) { case "urgent": return "bg-red-500 text-white"; case "high": return "bg-orange-500 text-white"; case "medium": return "bg-amber-500 text-white"; default: return "bg-blue-500 text-white"; }
@@ -323,46 +169,6 @@ export default function AiAnalysis() {
 
   const priorityLabel = (p: string) => {
     switch (p) { case "urgent": return "عاجل"; case "high": return "مهم"; case "medium": return "متوسط"; default: return "عادي"; }
-  };
-
-  const statusDot = (s: string) => {
-    switch (s) { case "good": return "bg-emerald-500"; case "warning": return "bg-amber-500"; case "danger": return "bg-red-500"; default: return "bg-gray-400"; }
-  };
-
-  const categoryIcon = (cat: string) => {
-    switch (cat) {
-      case "environment": return <Thermometer className="w-4 h-4" />;
-      case "biological": return <Bug className="w-4 h-4" />;
-      case "operational": return <Settings className="w-4 h-4" />;
-      default: return <Activity className="w-4 h-4" />;
-    }
-  };
-
-  const severityColor = (s: string) => {
-    switch (s) { case "critical": return "bg-red-100 text-red-700 border-red-300"; case "high": return "bg-orange-100 text-orange-700 border-orange-300"; case "medium": return "bg-amber-100 text-amber-700 border-amber-300"; default: return "bg-blue-100 text-blue-700 border-blue-300"; }
-  };
-
-  const severityLabel = (s: string) => {
-    switch (s) { case "critical": return "حرج"; case "high": return "عالي"; case "medium": return "متوسط"; default: return "منخفض"; }
-  };
-
-  const MiniTrendChart = ({ data, color = "emerald" }: { data: TrendPoint[]; color?: string }) => {
-    if (!data || data.length < 2) return null;
-    const max = Math.max(...data.map(d => d.value), 1);
-    const h = 32;
-    const w = 80;
-    const points = data.map((d, i) => `${(i / (data.length - 1)) * w},${h - (d.value / max) * h}`).join(" ");
-    const trend = data[data.length - 1].value - data[0].value;
-    const TrendIcon = trend > 0 ? ArrowUpRight : trend < 0 ? ArrowDownRight : Minus;
-    const trendColor = trend > 0 ? "text-emerald-500" : trend < 0 ? "text-red-500" : "text-gray-400";
-    return (
-      <div className="flex items-center gap-1">
-        <svg width={w} height={h} className="opacity-60">
-          <polyline fill="none" stroke={`var(--color-${color}-500, #10b981)`} strokeWidth="2" points={points} />
-        </svg>
-        <TrendIcon className={cn("w-3.5 h-3.5", trendColor)} />
-      </div>
-    );
   };
 
   const ScoreRing = ({ score, size = 80 }: { score: number; size?: number }) => {
@@ -373,11 +179,7 @@ export default function AiAnalysis() {
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/30" />
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth="6" strokeLinecap="round"
-            className={getScoreRingColor(score)}
-            strokeDasharray={circ} strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 1s ease" }}
-          />
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth="6" strokeLinecap="round" className={getScoreRingColor(score)} strokeDasharray={circ} strokeDashoffset={offset} style={{ transition: "stroke-dashoffset 1s ease" }} />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={cn("text-xl font-bold", getScoreColor(score))}>{score}</span>
@@ -386,14 +188,12 @@ export default function AiAnalysis() {
     );
   };
 
-  const recs = analysis?.recommendations || analysis?.duties?.map(d => ({ ...d, reason: "", impact: "", confidence: 0, category: "" })) || [];
-
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] md:h-[calc(100vh-5rem)]">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-            <Stethoscope className="w-6 h-6 text-white" />
+            <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">محرك التحليل الذكي</h1>
@@ -402,322 +202,137 @@ export default function AiAnalysis() {
         </div>
       </div>
 
-      <div className="flex gap-1 mb-3 bg-muted/50 p-1 rounded-xl">
-        <button onClick={() => setActiveTab("chat")} className={cn("flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all", activeTab === "chat" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
-          <Bot className="w-4 h-4" /> المحادثة الذكية
-        </button>
-        <button onClick={() => setActiveTab("analyze")} className={cn("flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all", activeTab === "analyze" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>
-          <BarChart3 className="w-4 h-4" /> تحليل المزرعة
-        </button>
-      </div>
-
-      {activeTab === "analyze" ? (
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-          {!analysis && !analyzing && (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-6">
-              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
-                <Activity className="w-12 h-12 text-emerald-600" />
-              </div>
-              <div className="space-y-2 max-w-md">
-                <h2 className="text-lg font-bold">محرك تحليل خبير</h2>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  يقرأ كل البيانات ويحللها بالمعايير العلمية: كشف الشذوذ، التوقعات، مؤشرات المخاطر، والتوصيات العملية.
-                </p>
-              </div>
-              <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
-                <Sparkles className="w-5 h-5" />
-                ابدأ التحليل العميق / Starta djupanalysen
-              </Button>
-              <Button onClick={runFutureRisk} size="lg" className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg">
-                <AlertTriangle className="w-5 h-5" />
-                اكتشف مخاطر المستقبل / Upptäck framtida risker
-              </Button>
+      <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+        {!analysis && !analyzing && (
+          <div className="flex flex-col items-center justify-center py-16 text-center space-y-6">
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center">
+              <Activity className="w-12 h-12 text-emerald-600" />
             </div>
-          )}
+            <div className="space-y-2 max-w-md">
+              <h2 className="text-lg font-bold">محرك تحليل خبير</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">يقرأ كل البيانات ويحللها بالمعايير العلمية: كشف الشذوذ، التوقعات، مؤشرات المخاطر، والتوصيات العملية.</p>
+            </div>
+            <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
+              <Sparkles className="w-5 h-5" /> ابدأ التحليل العميق
+            </Button>
+            <Button onClick={runFutureRisk} size="lg" className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg">
+              <AlertTriangle className="w-5 h-5" /> تحليل المخاطر المستقبلية
+            </Button>
+          </div>
+        )}
 
-          {analyzing && (
-            <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-              <div className="relative w-24 h-24">
-                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 animate-pulse" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Stethoscope className="w-10 h-10 text-emerald-600 animate-bounce" />
-                </div>
-              </div>
-              <p className="font-semibold text-lg">جارٍ التحليل العميق...</p>
-              <p className="text-sm text-emerald-600 font-medium animate-pulse min-h-[20px]">
-                {analyzeSteps[analyzeStep]}
-              </p>
-              <div className="w-64 h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
-                  style={{ width: `${((analyzeStep + 1) / analyzeSteps.length) * 100}%` }} />
+        {analyzing && (
+          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+            <div className="relative w-24 h-24">
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 animate-pulse" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
               </div>
             </div>
-          )}
+            <p className="font-semibold text-lg">جارٍ التحليل العميق...</p>
+            <p className="text-sm text-emerald-600 font-medium animate-pulse min-h-[20px]">{["قراءة بيانات القطعان...", "تحليل دورات التفقيس...", "فحص المعايير البيئية...", "تحليل المهام والأهداف...", "مسح الملاحظات اليومية...", "كشف الشذوذ والانحرافات...", "توليد التوقعات...", "حساب النتيجة النهائية..."][analyzeStep]}</p>
+          </div>
+        )}
 
-          {analysis && !analyzing && (
-            <div className="space-y-5">
-              <Card className="border-border/60 shadow-lg overflow-hidden">
-                <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
-                <CardContent className="p-5">
-                  <div className="flex flex-col md:flex-row md:items-center gap-5">
-                    <ScoreRing score={analysis.score} size={92} />
-                    <div className="flex-1 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className={cn("text-2xl font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
-                          <p className="text-sm text-muted-foreground mt-1">تنبيه / السبب / التوقع / الحل</p>
-                        </div>
-                        <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5 rounded-full">
-                          <Sparkles className="w-3.5 h-3.5" /> تحديث
-                        </Button>
+        {analysis && !analyzing && (
+          <div className="space-y-5">
+            <Card className="border-border/60 shadow-lg overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+              <CardContent className="p-5">
+                <div className="flex flex-col md:flex-row md:items-center gap-5">
+                  <ScoreRing score={analysis.score} size={92} />
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={cn("text-2xl font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
+                        <p className="text-sm text-muted-foreground mt-1">تنبيه / السبب / التوقع / الحل</p>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {analysis.scoreBreakdown?.map((s, i) => (
-                          <div key={i} className="rounded-2xl border border-border/60 bg-muted/25 p-3">
-                            <p className="text-[11px] text-muted-foreground">{s.category}</p>
-                            <p className="text-lg font-bold">{s.score}</p>
-                            <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                              <div className={cn("h-full rounded-full", s.score >= 80 ? "bg-emerald-500" : s.score >= 60 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${s.score}%` }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5 rounded-full">
+                        <Sparkles className="w-3.5 h-3.5" /> تحديث
+                      </Button>
                     </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {analysis.scoreBreakdown?.map((s, i) => (
+                        <div key={i} className="rounded-2xl border border-border/60 bg-muted/25 p-3">
+                          <p className="text-[11px] text-muted-foreground">{s.category}</p>
+                          <p className="text-lg font-bold">{s.score}</p>
+                          <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className={cn("h-full rounded-full", s.score >= 80 ? "bg-emerald-500" : s.score >= 60 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${s.score}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              <Card className="lg:col-span-2 border-border/60 shadow-sm">
+                <CardContent className="p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2"><Zap className="w-4 h-4 text-emerald-600" /><h3 className="font-bold">أهم إجراء الآن</h3></div>
+                    <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Action</span>
+                  </div>
+                  <p className="text-sm leading-7 text-foreground/90">{analysis.topPriority}</p>
+                  <div className="rounded-2xl bg-muted/20 border border-border/60 p-4">
+                    <p className="text-sm font-semibold mb-2">الملخص التنفيذي</p>
+                    <p className="text-sm leading-7 text-foreground/90">{analysis.summary}</p>
                   </div>
                 </CardContent>
               </Card>
-
-              <div className="grid gap-5 lg:grid-cols-3">
-                <Card className="lg:col-span-2 border-border/60 shadow-sm">
-                  <CardContent className="p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-emerald-600" />
-                        <h3 className="font-bold">أهم إجراء الآن</h3>
-                      </div>
-                      <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Action</span>
-                    </div>
-                    <p className="text-sm leading-7 text-foreground/90">{analysis.topPriority}</p>
-                    <div className="rounded-2xl bg-muted/20 border border-border/60 p-4">
-                      <p className="text-sm font-semibold mb-2">الملخص التنفيذي</p>
-                      <p className="text-sm leading-7 text-foreground/90">{analysis.summary}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="p-5 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-500" />
-                      <h3 className="font-bold">الخطر المستقبلي</h3>
-                    </div>
-                    {analysis.futureRisk ? (
-                      <div className="rounded-2xl border border-border/60 p-3">
-                        <p className="text-sm font-semibold">{analysis.futureRisk.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{analysis.futureRisk.horizon}</p>
-                        <p className="text-sm mt-3 leading-7 text-foreground/90">{analysis.futureRisk.summary}</p>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
-                        لا توجد مخاطر مستقبلية واضحة حالياً.
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid gap-5 lg:grid-cols-2">
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="p-5 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-red-500" />
-                      <h3 className="font-bold">أهم 5 مشاكل</h3>
-                    </div>
-                    <div className="space-y-2">
-                      {topAlerts.map((a, i) => (
-                        <div key={i} className="rounded-2xl border border-border/60 p-3">
-                          <p className="text-sm font-semibold">{a.title}</p>
-                          <p className="text-xs text-muted-foreground mt-1 leading-6">{a.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border/60 shadow-sm">
-                  <CardContent className="p-5 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Target className="w-4 h-4 text-primary" />
-                      <h3 className="font-bold">أهم 5 توصيات</h3>
-                    </div>
-                    <div className="space-y-2">
-                      {topRecommendations.map((r, i) => (
-                        <div key={i} className="rounded-2xl border border-border/60 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-semibold">{r.title}</p>
-                            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", priorityColor(r.priority))}>{priorityLabel(r.priority)}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1 leading-6">{r.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
 
               <Card className="border-border/60 shadow-sm">
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    <h3 className="font-bold">4 قدرات ذكاء اصطناعي</h3>
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <h3 className="font-bold">الخطر المستقبلي</h3>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {analysis.aiCapabilities?.map((cap, i) => (
-                      <div key={i} className="rounded-2xl border border-border/60 p-3 bg-muted/20">
-                        <p className="text-sm font-semibold">{cap.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1 leading-6">{cap.description}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {analysis.futureRisk ? (
+                    <div className="rounded-2xl border border-border/60 p-3">
+                      <p className="text-sm font-semibold">{analysis.futureRisk.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{analysis.futureRisk.horizon}</p>
+                      <p className="text-sm mt-3 leading-7 text-foreground/90">{analysis.futureRisk.summary}</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border/60 p-3 text-sm text-muted-foreground">لا توجد مخاطر مستقبلية واضحة حالياً.</div>
+                  )}
                 </CardContent>
               </Card>
             </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="flex gap-2 mb-2">
-            <Button variant="outline" size="sm" onClick={loadEncyclopedia} className="gap-1.5 text-xs" disabled={encLoading}>
-              {encLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BookOpen className="w-3.5 h-3.5" />}
-              الموسوعة
-            </Button>
-            {messages.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearChat} className="gap-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50">
-                <Trash2 className="w-3.5 h-3.5" /> جديدة
-              </Button>
-            )}
-          </div>
 
-          {showEncyclopedia && (
-            <Card className="mb-3 border-emerald-500/20 max-h-64 overflow-y-auto">
-              <CardContent className="p-3">
-                <h3 className="font-bold text-xs mb-2 flex items-center gap-2"><BookOpen className="w-3.5 h-3.5 text-emerald-600" /> موسوعة الدواجن (6000+ مرجع)</h3>
-                <div className="space-y-1.5">
-                  {encyclopedia.map(section => (
-                    <div key={section.id} className="border rounded-lg overflow-hidden">
-                      <button onClick={() => setExpandedSection(expandedSection === section.id ? null : section.id)} className="w-full flex items-center justify-between px-2.5 py-2 hover:bg-muted/50 transition-colors">
-                        <span className="flex items-center gap-2 text-xs font-medium"><span>{section.icon}</span>{section.title}</span>
-                        {expandedSection === section.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      </button>
-                      {expandedSection === section.id && (
-                        <div className="px-2.5 pb-2 space-y-1">
-                          {section.topics.map((topic, i) => (
-                            <button key={i} onClick={() => askAboutTopic(topic.title)} className="w-full text-start p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors group">
-                              <p className="text-xs font-medium group-hover:text-emerald-700 dark:group-hover:text-emerald-400">{topic.title}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">{topic.summary}</p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <Card className="border-border/60 shadow-sm">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-red-500" /><h3 className="font-bold">أهم 5 مشاكل</h3></div>
+                  <div className="space-y-2">{topAlerts.map((a, i) => (<div key={i} className="rounded-2xl border border-border/60 p-3"><p className="text-sm font-semibold">{a.title}</p><p className="text-xs text-muted-foreground mt-1 leading-6">{a.description}</p></div>))}</div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/60 shadow-sm">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center gap-2"><Target className="w-4 h-4 text-primary" /><h3 className="font-bold">أهم 5 توصيات</h3></div>
+                  <div className="space-y-2">{topRecommendations.map((r, i) => (<div key={i} className="rounded-2xl border border-border/60 p-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold">{r.title}</p><span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", priorityColor(r.priority))}>{priorityLabel(r.priority)}</span></div><p className="text-xs text-muted-foreground mt-1 leading-6">{r.description}</p></div>))}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-border/60 shadow-sm">
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-600" /><h3 className="font-bold">4 أدوات ذكاء اصطناعي متقدمة</h3></div>
+                <div className="grid gap-3 md:grid-cols-2">{analysis.aiCapabilities?.map((cap, i) => (<div key={i} className="rounded-2xl border border-border/60 p-3 bg-muted/20"><p className="text-sm font-semibold">{cap.title}</p><p className="text-xs text-muted-foreground mt-1 leading-6">{cap.description}</p></div>))}</div>
               </CardContent>
             </Card>
-          )}
 
-          <div className="flex-1 overflow-y-auto space-y-3 pb-3 min-h-0">
-            {messages.length === 0 && !loading && (
-              <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center mb-4">
-                  <Stethoscope className="w-10 h-10 text-emerald-600" />
-                </div>
-                <h2 className="text-base font-bold mb-1">مرحباً! أنا الدكتور نصار 🐔🩺</h2>
-                <p className="text-xs text-muted-foreground max-w-sm mb-4 leading-relaxed">
-                  خبير بيطري بـ 30 سنة خبرة ودرست 6000+ مرجع علمي.
-                  اسألني أي سؤال عن الدواجن وسأحلل مزرعتك مع كل إجابة!
-                </p>
-                <div className="grid grid-cols-2 gap-1.5 max-w-md w-full">
-                  {quickQuestions.map((q, i) => (
-                    <button key={i} onClick={() => { setInput(q); setTimeout(() => inputRef.current?.focus(), 100); }}
-                      className="text-start text-[11px] p-2.5 rounded-xl border hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all">
-                      <Sparkles className="w-3 h-3 text-emerald-500 mb-0.5" />
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((msg, i) => (
-              <div key={i} className={cn("flex gap-2.5", msg.role === "user" ? "justify-end" : "justify-start")}>
-                {msg.role === "assistant" && (
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 mt-1">
-                    <Bot className="w-3.5 h-3.5 text-white" />
-                  </div>
-                )}
-                <div className={cn("max-w-[85%] md:max-w-[75%] rounded-2xl px-3.5 py-2.5 text-sm",
-                  msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted/60 border rounded-bl-md")}>
-                  {msg.role === "assistant" ? (
-                    <div className="prose prose-sm dark:prose-invert max-w-none space-y-0.5">{formatContent(msg.content)}</div>
-                  ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-                  )}
-                  <p className={cn("text-[10px] mt-1.5 opacity-50", msg.role === "user" ? "text-primary-foreground" : "text-muted-foreground")}>
-                    {new Date(msg.timestamp).toLocaleTimeString(isRtl ? "ar" : "sv", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                {msg.role === "user" && (
-                  <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 mt-1">
-                    <User className="w-3.5 h-3.5 text-primary" />
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0">
-                  <Bot className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div className="bg-muted/60 border rounded-2xl rounded-bl-md px-3.5 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                    </div>
-                    <span className="text-xs text-muted-foreground">الدكتور نصار يحلل بياناتك...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
+            <Card className="border-border/60 shadow-sm">
+              <CardContent className="p-5 space-y-3">
+                <div className="flex items-center gap-2"><Info className="w-4 h-4 text-blue-600" /><h3 className="font-bold">شرح المصطلحات</h3></div>
+                <div className="grid gap-3 md:grid-cols-2">{termHelp.map((item) => (<div key={item.title} className="rounded-2xl border border-border/60 p-3"><p className="text-sm font-semibold">{item.title}</p><p className="text-xs text-muted-foreground mt-1 leading-6">{item.text}</p></div>))}</div>
+              </CardContent>
+            </Card>
           </div>
-
-          <div className="border-t pt-2.5 mt-auto">
-            <div className="flex gap-2 items-end">
-              <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="اسأل الدكتور نصار..."
-                rows={1}
-                className={cn("flex-1 resize-none rounded-xl border bg-background px-3.5 py-2.5 text-sm",
-                  "focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500",
-                  "placeholder:text-muted-foreground/60 min-h-[42px] max-h-28")}
-                style={{ direction: isRtl ? "rtl" : "ltr" }}
-                disabled={loading}
-              />
-              <Button onClick={sendMessage} disabled={!input.trim() || loading} size="icon"
-                className="h-[42px] w-[42px] rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/25 shrink-0">
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
-            </div>
-            <p className="text-[9px] text-muted-foreground text-center mt-1.5 opacity-50">
-              محرك التحليل الذكي — معايير علمية + كشف شذوذ + توقعات | الإجابات استرشادية
-            </p>
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
