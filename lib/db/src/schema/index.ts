@@ -9,3 +9,8 @@ export * from "./auth";
 export * from "./predictionLogs";
 export * from "./noteImages";
 export * from "./transactions";
+export * from "./productionLogs";
+export * from "./feedLogs";
+export * from "./waterLogs";
+export * from "./environmentLogs";
+export * from "./mortalityLogs";
