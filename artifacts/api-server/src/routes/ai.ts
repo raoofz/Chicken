@@ -76,8 +76,9 @@ function buildDeepLocalAnalysis(farmData: string) {
   if (overdueTasks > 0) alerts.push({ type: "danger", title: "مهام متأخرة", description: `هناك ${overdueTasks} مهمة متأخرة تحتاج إغلاقاً فورياً.` });
   if (notesCount === 0) alerts.push({ type: "info", title: "الملاحظات فارغة", description: "التحليل القوي يحتاج ملاحظات يومية أكثر." });
   if (completedGoals === 0 && activeGoals > 0) alerts.push({ type: "warning", title: "الأهداف تحتاج متابعة", description: "لا توجد أهداف منجزة حالياً مقارنة بالأهداف الجارية." });
+  if (taskLines.length > 0 && overdueTasks === 0) alerts.push({ type: "success", title: "تنظيم جيد", description: "لا توجد مهام متأخرة واضحة في السجل الحالي." });
 
-  const score = Math.max(10, 95 - overdueTasks * 8 - (activeCycles === 0 ? 10 : 0) - (notesCount === 0 ? 8 : 0));
+  const score = Math.max(10, 95 - overdueTasks * 8 - (activeCycles === 0 ? 10 : 0) - (notesCount === 0 ? 8 : 0) + Math.min(5, Math.floor(taskLines.length / 5)));
   const topPriority = overdueTasks > 0
     ? "أغلق المهام المتأخرة أولاً ثم راقب دورات التفقيس"
     : activeCycles > 0
@@ -126,17 +127,34 @@ function buildDeepLocalAnalysis(farmData: string) {
       { priority: "urgent", title: "راجع الفقاسات", description: "افحص حرارة/رطوبة/تقليب كل دورة نشطة وسجل أي انحراف فوراً." },
       { priority: "high", title: "أغلق المهام المتأخرة", description: "أي مهمة متأخرة الآن تتحول إلى خسارة تشغيلية أو صحية لاحقاً." },
       { priority: "high", title: "اكتب ملاحظة يومية", description: "سجل اليوم: حرارة، استهلاك، نفوق، سلوك، ماء، علف، وأي حدث غير طبيعي." },
+      { priority: "medium", title: "قارن النتائج أسبوعياً", description: "راجع تغيرات الفقس والأداء والأهداف لاكتشاف الانحراف مبكراً." },
     ],
     predictions: [
       { title: "تحسن الفقس", description: "سيرتفع أداء الفقس إذا استقرت الإدارة اليومية وأصبحت الملاحظات منتظمة.", confidence: "medium" },
       { title: "تقليل الأخطاء", description: "ستقل الأخطاء بسرعة عندما تُغلق المهام المتأخرة وتُراجع الدورات النشطة.", confidence: "high" },
+      { title: "انخفاض المخاطر", description: "الالتزام بالتوثيق اليومي يقلل المخاطر الصحية والإدارية قبل حدوثها.", confidence: "medium" },
     ],
     errors: [
       { title: "ضعف التوثيق", description: "البرنامج لا يملك ملاحظات كافية إذا كان عدد السجلات منخفضاً.", solution: "أضف ملاحظة لكل يوم ولكل دورة." },
       { title: "التحليل غير مكتمل", description: "أي تحليل بدون بيانات يومية تفصيلية سيكون أضعف.", solution: "سجل الحرارة والرطوبة والنفوق والعلف والماء يومياً." },
+      { title: "غياب المقارنة", description: "عدم المقارنة بين الدورات يجعل نفس الخطأ يتكرر.", solution: "احفظ مؤشرات كل دورة وقارنها أسبوعياً." },
     ],
     topPriority,
   };
+}
+
+function buildDeepLocalReply(message: string, farmData: string, systemPrompt: string, history: Array<{ role: string; content: string }>) {
+  const analysis = buildDeepLocalAnalysis(farmData);
+  const recentNotes = (farmData.match(/📝 آخر الملاحظات[\s\S]*?(?:\n\n|$)/)?.[0] ?? "").trim();
+  const recentWarnings = analysis.alerts.map((a) => `- ${a.title}: ${a.description}`).join("\n");
+  const lower = message.toLowerCase();
+  if (lower.includes("تحليل") || lower.includes("المزرعة")) {
+    return `📊 تحليل محلي قوي\n\n${recentWarnings}\n\nأهم الأولويات:\n- ${analysis.topPriority}\n- ${analysis.duties.slice(0, 3).map((d) => d.title).join("\n- ")}\n\n${recentNotes}\n\nالنتيجة العامة: ${analysis.scoreLabel} (${analysis.score}/100)`;
+  }
+  if (lower.includes("مشكلة") || lower.includes("مرض") || lower.includes("كوكسيديا") || lower.includes("نيوكاسل")) {
+    return `🩺 تشخيص أولي\n\n${recentWarnings || "لا توجد إشارات حرجة واضحة في البيانات الحالية."}\n\nالخطوة العملية الآن:\n1) اعزل الحالة أو العنبر المشكوك فيه\n2) راقب النفوق والأكل والشرب والحرارة\n3) سجّل ملاحظة يومية مفصلة\n4) أرسل لي العلامات الظاهرة لأعطيك خطة أدق`;
+  }
+  return `📌 إجابة محلية مستندة إلى بيانات المزرعة\n\n${analysis.topPriority}\n\nإذا أردت تحليلاً نهائياً كاملاً، استخدم تبويب تحليل المزرعة؛ فهو يقرأ القطعان والفقاسات والمهام والأهداف والملاحظات ويخرج لك تقريراً عملياً بالأولوية.`;
 }
 
 const POULTRY_MEGA_ENCYCLOPEDIA = `
@@ -771,34 +789,27 @@ ${farmData}
       history = history.slice(-30);
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 4096,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...history.map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
-      ],
-    });
-
-    const reply = response.choices[0]?.message?.content;
-    if (!reply) {
-      res.status(500).json({ error: "لم يتم الحصول على رد" });
-      return;
+    const localReply = buildDeepLocalReply(message, farmData, systemPrompt, history);
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
+        ],
+      });
+      const reply = response.choices[0]?.message?.content || localReply;
+      history.push({ role: "assistant", content: reply });
+      chatHistory.set(userId, history);
+      res.json({ reply, timestamp: new Date().toISOString(), mode: reply === localReply ? "local" : "ai" });
+    } catch {
+      history.push({ role: "assistant", content: localReply });
+      chatHistory.set(userId, history);
+      res.status(200).json({ reply: localReply, timestamp: new Date().toISOString(), mode: "local" });
     }
-
-    history.push({ role: "assistant", content: reply });
-    chatHistory.set(userId, history);
-
-    res.json({ reply, timestamp: new Date().toISOString() });
   } catch (err: any) {
     logger.error({ err }, "Dr. Nassar chat failed");
-    if (isOpenAIQuotaError(err)) {
-      res.status(200).json({
-        reply: "تعذّر الاتصال بمزوّد الذكاء الاصطناعي حالياً بسبب نفاد الرصيد أو رفض المفتاح. لكني ما زلت أعمل كنظام محلي، وأستطيع مساعدتك في تحليل المزرعة والفقاسات خطوة بخطوة.",
-        timestamp: new Date().toISOString(),
-      });
-      return;
-    }
     res.status(500).json({ error: "فشل الاتصال: " + (err?.message ?? "خطأ غير معروف") });
   }
 });
@@ -832,30 +843,24 @@ ${POULTRY_MEGA_ENCYCLOPEDIA}
 - كن دقيقاً ومحدداً
 - رد بـ JSON فقط بدون أي نص إضافي`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_tokens: 4096,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: farmData },
-      ],
-      response_format: { type: "json_object" },
-    });
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      res.status(500).json({ error: "لم يتم الحصول على رد" });
-      return;
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        max_tokens: 4096,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: farmData },
+        ],
+        response_format: { type: "json_object" },
+      });
+      const content = response.choices[0]?.message?.content;
+      const analysis = content ? JSON.parse(content) : buildDeepLocalAnalysis(farmData);
+      res.json({ analysis, timestamp: new Date().toISOString(), mode: content ? "ai" : "local" });
+    } catch {
+      res.status(200).json({ analysis: buildDeepLocalAnalysis(farmData), timestamp: new Date().toISOString(), mode: "local" });
     }
-
-    const analysis = JSON.parse(content);
-    res.json({ analysis, timestamp: new Date().toISOString() });
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
-    if (isOpenAIQuotaError(err)) {
-      res.status(200).json({ analysis: buildDeepLocalAnalysis(await getFarmAnalysis()), timestamp: new Date().toISOString() });
-      return;
-    }
     res.status(500).json({ error: "فشل التحليل: " + (err?.message ?? "خطأ غير معروف") });
   }
 });
