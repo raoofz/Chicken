@@ -77,6 +77,47 @@ const translations: Record<string, Record<Lang, string>> = {
   "finance.confirm.delete": { ar: "هل تريد حذف هذه المعاملة؟", sv: "Vill du ta bort denna transaktion?" },
   "finance.notes.label": { ar: "ملاحظات إضافية", sv: "Ytterligare anteckningar" },
 
+  "finance.period.today":   { ar: "اليوم",       sv: "Idag" },
+  "finance.period.week":    { ar: "هذا الأسبوع", sv: "Denna vecka" },
+  "finance.period.month":   { ar: "هذا الشهر",   sv: "Denna månad" },
+  "finance.period.year":    { ar: "هذه السنة",   sv: "Detta år" },
+  "finance.period.all":     { ar: "الكل",        sv: "Allt" },
+
+  "finance.tab.overview":     { ar: "نظرة عامة",  sv: "Översikt" },
+  "finance.tab.charts":       { ar: "الرسوم البيانية", sv: "Diagram" },
+  "finance.tab.transactions": { ar: "المعاملات",  sv: "Transaktioner" },
+  "finance.tab.ai":           { ar: "التحليل الذكي", sv: "AI-analys" },
+
+  "finance.health.score":     { ar: "درجة الصحة المالية", sv: "Finansiellt hälsopoäng" },
+  "finance.health.excellent": { ar: "ممتاز 🌟",   sv: "Utmärkt 🌟" },
+  "finance.health.good":      { ar: "جيد ✅",      sv: "Bra ✅" },
+  "finance.health.fair":      { ar: "مقبول ⚠️",   sv: "Acceptabelt ⚠️" },
+  "finance.health.poor":      { ar: "ضعيف ❌",     sv: "Svag ❌" },
+
+  "finance.margin.pct":       { ar: "هامش الربح",    sv: "Vinstmarginal" },
+  "finance.net.margin":       { ar: "صافي الهامش",   sv: "Nettomarginal" },
+  "finance.avg.daily":        { ar: "معدل يومي",     sv: "Dagligt genomsnitt" },
+  "finance.tx.count":         { ar: "معاملة",        sv: "transaktioner" },
+  "finance.tx.shown":         { ar: "معاملة معروضة", sv: "transaktioner visade" },
+  "finance.tx.net":           { ar: "صافي",          sv: "Netto" },
+  "finance.tx.total":         { ar: "إجمالي",        sv: "Totalt" },
+
+  "finance.profit.breakdown": { ar: "تحليل الربح والخسارة", sv: "Vinst- och förlustanalys" },
+  "finance.top.expenses":     { ar: "أعلى بنود المصاريف",   sv: "Största utgiftsposter" },
+  "finance.top.income":       { ar: "مصادر الدخل",         sv: "Inkomstkällor" },
+  "finance.best.month":       { ar: "أفضل شهر",            sv: "Bästa månaden" },
+  "finance.worst.month":      { ar: "أصعب شهر",            sv: "Svagaste månaden" },
+
+  "finance.chart.trend":            { ar: "منحنى الربح الشهري",     sv: "Månatlig vinstutveckling" },
+  "finance.chart.expense.breakdown":{ ar: "توزيع المصاريف",         sv: "Fördelning av kostnader" },
+  "finance.chart.income.breakdown": { ar: "توزيع مصادر الدخل",      sv: "Fördelning av inkomster" },
+
+  "finance.search.placeholder": { ar: "ابحث في المعاملات...", sv: "Sök transaktioner..." },
+  "finance.no.results":         { ar: "لا توجد نتائج",       sv: "Inga resultat" },
+
+  "finance.ai.empty.hint": { ar: "اضغط 'تشغيل التحليل' للحصول على تشخيص مالي شامل وتوصيات قابلة للتطبيق", sv: "Klicka 'Kör analys' för en fullständig finansiell diagnos och handlingsbara rekommendationer" },
+  "finance.ai.no.data":    { ar: "أضف معاملات أولاً", sv: "Lägg till transaktioner först" },
+
   "weather.title": { ar: "طقس الموصل", sv: "Mosulväder" },
   "weather.temp": { ar: "الحرارة", sv: "Temperatur" },
   "weather.humidity": { ar: "الرطوبة", sv: "Luftfuktighet" },
@@ -591,6 +632,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "notes.content.label": { ar: "الملاحظة",         sv: "Anteckning" },
   "notes.input.placeholder": { ar: "اكتب ملاحظتك هنا...", sv: "Skriv din anteckning här..." },
   "notes.save":          { ar: "حفظ الملاحظة",    sv: "Spara anteckning" },
+  "notes.smart.hint":    { ar: "سيحلل الذكاء الاصطناعي ملاحظتك ويستخرج منها البيانات تلقائياً", sv: "AI analyserar din anteckning och extraherar data automatiskt" },
   "notes.delete.title":  { ar: "حذف الملاحظة؟",  sv: "Ta bort anteckning?" },
   "notes.delete.desc":   { ar: "هذا الإجراء لا يمكن التراجع عنه.", sv: "Denna åtgärd kan inte ångras." },
   "notes.deleteImg.title":{ ar: "حذف الصورة؟",   sv: "Ta bort foto?" },

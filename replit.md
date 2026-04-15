@@ -79,13 +79,21 @@ Built at `artifacts/api-server/src/lib/visionEngine.ts`:
 - Farm photos stored under `/objects/uploads/`
 - Served via: `GET /api/notes/images/file/:objectPath`
 
-## Farm Photo Monitoring (new)
-- `note_images` table: stores image metadata, AI analysis, tags, alerts, confidence
-- `/api/notes/images` — CRUD endpoints
-- `/api/notes/images/upload-url` — presigned GCS upload URL
-- `/api/notes/images/save` — save record + trigger async AI vision analysis
-- `/ai` route (frontend) → now shows **Photo Monitoring Hub** (مراقبة بالصور)
-- `/notes` route → shows **Daily Notes** (ملاحظات يومية) with photo upload tab
+## Daily Notes (ملاحظات يومية)
+- **Notes only** — text journal with categories (general, health, production, feeding, maintenance, observation, incubator, flock)
+- **Smart AI parser** — parses Arabic/Swedish freetext and extracts: transactions, hatching cycles, flocks, tasks
+- **Photo monitoring tab removed** — images/vision features exist in API but UI tab deleted from notes page
+
+## Finance System (نظام المالية الكامل)
+Complete financial management system at `artifacts/poultry-manager/src/pages/finance.tsx`:
+- **Period selector** — today / this week / this month / this year / all-time
+- **5 KPI cards** — Income, Expenses, Profit, Transaction count (with daily avg), Margin%
+- **4 tabs**: Overview | Charts | Transactions | AI Analysis
+- **Financial Health Score** (0-100 SVG gauge) — calculated from profit margin and expense ratio
+- **Overview tab**: Health gauge, profit breakdown bars, top expense categories with progress bars, best/worst month
+- **Charts tab**: Monthly bar chart, profit trend area chart, expense donut, income donut (all with bilingual tooltips)
+- **Transactions tab**: Search + filter, category icons, delete with hover-reveal button, net total footer
+- **AI Analysis tab**: Quick stats (health score, margin%, tx count), AI prompt + smart local fallback, bilingual
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
 

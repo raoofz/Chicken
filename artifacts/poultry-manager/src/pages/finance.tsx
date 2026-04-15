@@ -1,4 +1,8 @@
-import { useState, useMemo } from "react";
+/**
+ * نظام إدارة مالية متكامل — Complete Financial Management System
+ * Full bilingual (AR/SV) — Poultry Farm Finance
+ */
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,101 +15,213 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, DollarSign, Plus, Trash2, Edit3, Loader2,
-  ArrowUpCircle, ArrowDownCircle, Filter, BarChart2, PieChart as PieIcon,
-  Brain, RefreshCw, Receipt,
+  TrendingUp, TrendingDown, DollarSign, Plus, Trash2, Loader2,
+  ArrowUpCircle, ArrowDownCircle, Filter, Brain, RefreshCw,
+  Receipt, Search, Target, BarChart2, Activity, Wallet, Sparkles,
+  ChevronDown, AlertTriangle, CheckCircle, Calendar, Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES_EXPENSE = ["feed", "medicine", "equipment", "electricity", "labor", "maintenance", "other"];
-const CATEGORIES_INCOME  = ["chick_sale", "egg_sale", "other"];
-const COLORS = ["#f59e0b","#10b981","#3b82f6","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];
+// ─── Constants ────────────────────────────────────────────────────────────────
+const CATEGORIES_EXPENSE = ["feed","medicine","equipment","electricity","labor","maintenance","other"];
+const CATEGORIES_INCOME  = ["chick_sale","egg_sale","other"];
+const COLORS_EXPENSE = ["#ef4444","#f97316","#f59e0b","#84cc16","#06b6d4","#8b5cf6","#ec4899"];
+const COLORS_INCOME  = ["#10b981","#3b82f6","#6366f1"];
+const COLORS_CHART   = ["#10b981","#ef4444","#3b82f6","#f59e0b","#8b5cf6","#ec4899","#14b8a6","#f97316"];
 
-const CAT_KEYS: Record<string, string> = {
-  feed: "finance.cat.feed", medicine: "finance.cat.medicine", chick_sale: "finance.cat.chick_sale",
-  egg_sale: "finance.cat.egg_sale", equipment: "finance.cat.equipment", electricity: "finance.cat.electricity",
-  labor: "finance.cat.labor", maintenance: "finance.cat.maintenance", other: "finance.cat.other",
+const CAT_KEYS: Record<string,string> = {
+  feed:"finance.cat.feed", medicine:"finance.cat.medicine", chick_sale:"finance.cat.chick_sale",
+  egg_sale:"finance.cat.egg_sale", equipment:"finance.cat.equipment", electricity:"finance.cat.electricity",
+  labor:"finance.cat.labor", maintenance:"finance.cat.maintenance", other:"finance.cat.other",
+};
+const CAT_ICONS: Record<string,string> = {
+  feed:"🌾", medicine:"💊", chick_sale:"🐥", egg_sale:"🥚",
+  equipment:"🔧", electricity:"⚡", labor:"👷", maintenance:"🛠️", other:"📦",
 };
 
+type Period = "today" | "week" | "month" | "year" | "all";
+type TabType = "overview" | "charts" | "transactions" | "ai";
+type FilterType = "all" | "income" | "expense";
+
 interface Transaction {
-  id: number; date: string; type: "income" | "expense"; category: string;
-  description: string; amount: string; quantity: string | null;
-  unit: string | null; notes: string | null; authorName: string | null; createdAt: string;
+  id: number; date: string; type: "income"|"expense"; category: string;
+  description: string; amount: string; quantity: string|null;
+  unit: string|null; notes: string|null; authorName: string|null; createdAt: string;
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
 async function apiFetch(path: string, opts?: RequestInit) {
   const r = await fetch(`${BASE}${path}`, { credentials: "include", ...opts });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "Error");
   return r.status === 204 ? null : r.json();
 }
 
-function AddTransactionDialog({ onSuccess }: { onSuccess: () => void }) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmtAmount(n: number, lang: "ar"|"sv" = "ar"): string {
+  const formatted = new Intl.NumberFormat(lang === "ar" ? "ar-IQ" : "sv-SE").format(Math.abs(Math.round(n)));
+  return lang === "ar" ? `${formatted} د.ع` : `${formatted} IQD`;
+}
+
+function getPeriodRange(period: Period): { start: string; end: string } | null {
+  const today = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  if (period === "all") return null;
+  if (period === "today") return { start: fmt(today), end: fmt(today) };
+  if (period === "week") {
+    const s = new Date(today); s.setDate(today.getDate() - 6);
+    return { start: fmt(s), end: fmt(today) };
+  }
+  if (period === "month") {
+    return { start: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), end: fmt(today) };
+  }
+  if (period === "year") {
+    return { start: `${today.getFullYear()}-01-01`, end: fmt(today) };
+  }
+  return null;
+}
+
+function calcHealthScore(income: number, expense: number, txCount: number): {
+  score: number; grade: "excellent"|"good"|"fair"|"poor"; color: string; bgColor: string;
+} {
+  if (txCount === 0) return { score: 0, grade: "poor", color: "text-slate-400", bgColor: "from-slate-300 to-slate-400" };
+  const margin = income > 0 ? ((income - expense) / income) * 100 : (income === 0 && expense === 0 ? 50 : 0);
+  const clampedMargin = Math.max(0, Math.min(100, margin + 50));
+  const score = Math.round(clampedMargin);
+  if (score >= 75) return { score, grade: "excellent", color: "text-emerald-600", bgColor: "from-emerald-400 to-teal-500" };
+  if (score >= 60) return { score, grade: "good", color: "text-blue-600", bgColor: "from-blue-400 to-indigo-500" };
+  if (score >= 45) return { score, grade: "fair", color: "text-amber-600", bgColor: "from-amber-400 to-orange-500" };
+  return { score, grade: "poor", color: "text-red-600", bgColor: "from-red-400 to-rose-500" };
+}
+
+// ─── Health Gauge (SVG) ───────────────────────────────────────────────────────
+const GRADE_COLORS: Record<string, { start: string; end: string; text: string; badge: string }> = {
+  excellent: { start: "#34d399", end: "#14b8a6", text: "#059669", badge: "bg-emerald-100 text-emerald-700" },
+  good:      { start: "#60a5fa", end: "#6366f1", text: "#2563eb", badge: "bg-blue-100 text-blue-700" },
+  fair:      { start: "#fbbf24", end: "#f97316", text: "#d97706", badge: "bg-amber-100 text-amber-700" },
+  poor:      { start: "#f87171", end: "#fb7185", text: "#dc2626", badge: "bg-red-100 text-red-700" },
+};
+
+function HealthGauge({ score, grade }: { score: number; grade: string; color: string; bgColor: string }) {
   const { t } = useLanguage();
+  const R = 56; const cx = 70; const cy = 70;
+  const circumference = Math.PI * R;
+  const dash = (score / 100) * circumference;
+  const gc = GRADE_COLORS[grade] ?? GRADE_COLORS.poor;
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative">
+        <svg width="140" height="90" viewBox="0 0 140 90">
+          <defs>
+            <linearGradient id="gaugeGradFin" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={gc.start} />
+              <stop offset="100%" stopColor={gc.end} />
+            </linearGradient>
+          </defs>
+          <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`}
+            fill="none" stroke="#e2e8f0" strokeWidth="12" strokeLinecap="round" />
+          <path
+            d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`}
+            fill="none" stroke="url(#gaugeGradFin)" strokeWidth="12" strokeLinecap="round"
+            strokeDasharray={`${dash} ${circumference}`}
+            style={{ transition: "stroke-dasharray 1s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
+          <span className="text-3xl font-black" style={{ color: gc.text }}>{score}</span>
+          <span className="text-[10px] text-muted-foreground">/100</span>
+        </div>
+      </div>
+      <Badge className={cn("text-xs font-bold px-3 py-1", gc.badge)}>
+        {t(`finance.health.${grade}`)}
+      </Badge>
+    </div>
+  );
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, icon: Icon, gradient, trend }: {
+  label: string; value: string; sub?: string; icon: any; gradient: string; trend?: "up"|"down"|"neutral";
+}) {
+  return (
+    <Card className="border-none shadow-sm overflow-hidden">
+      <CardContent className="p-0">
+        <div className={cn("h-1 w-full bg-gradient-to-r", gradient)} />
+        <div className="p-4 flex items-center gap-3">
+          <div className={cn("w-11 h-11 rounded-2xl bg-gradient-to-br flex items-center justify-center shrink-0 shadow-sm", gradient)}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-muted-foreground leading-none mb-1 truncate">{label}</p>
+            <p className="text-base font-bold truncate leading-tight">{value}</p>
+            {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+          </div>
+          {trend === "up" && <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0" />}
+          {trend === "down" && <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Add Transaction Dialog ───────────────────────────────────────────────────
+function AddTransactionDialog({ onSuccess }: { onSuccess: () => void }) {
+  const { t, lang } = useLanguage();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    type: "expense" as "income" | "expense",
+    type: "expense" as "income"|"expense",
     date: new Date().toISOString().split("T")[0],
-    category: "",
-    description: "",
-    amount: "",
-    quantity: "",
-    unit: "",
-    notes: "",
+    category: "", description: "", amount: "", quantity: "", unit: "", notes: "",
   });
   const [saving, setSaving] = useState(false);
-
   const cats = form.type === "income" ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
 
   const handleSubmit = async () => {
     if (!form.date || !form.category || !form.description || !form.amount) {
-      toast({ variant: "destructive", title: t("finance.error.required") });
-      return;
+      toast({ variant: "destructive", title: t("finance.error.required") }); return;
     }
     setSaving(true);
     try {
       await apiFetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, amount: Number(form.amount), quantity: form.quantity ? Number(form.quantity) : null }),
       });
       toast({ title: t("finance.added") });
       setOpen(false);
       setForm({ type: "expense", date: new Date().toISOString().split("T")[0], category: "", description: "", amount: "", quantity: "", unit: "", notes: "" });
       onSuccess();
-    } catch (e: any) {
-      toast({ variant: "destructive", title: e.message });
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { toast({ variant: "destructive", title: e.message }); }
+    finally { setSaving(false); }
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-none shadow-md">
+        <Button className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-none shadow-md">
           <Plus className="w-4 h-4" />{t("finance.add")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t("finance.add")}</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-md" dir={lang === "ar" ? "rtl" : "ltr"}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-emerald-500" />
+            {t("finance.add")}
+          </DialogTitle>
+        </DialogHeader>
         <div className="space-y-4 pt-2">
-          {/* Type toggle */}
           <div className="flex gap-2">
             {(["expense","income"] as const).map(tp => (
               <button key={tp} onClick={() => setForm(f => ({ ...f, type: tp, category: "" }))}
-                className={cn("flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all border",
+                className={cn("flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all border-2",
                   form.type === tp
-                    ? tp === "income" ? "bg-emerald-500 text-white border-emerald-500" : "bg-red-500 text-white border-red-500"
-                    : "bg-muted text-muted-foreground border-transparent"
+                    ? tp === "income" ? "bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20"
+                                      : "bg-red-500 text-white border-red-500 shadow-md shadow-red-500/20"
+                    : "bg-muted text-muted-foreground border-transparent hover:border-slate-200"
                 )}>
                 {tp === "income" ? <ArrowUpCircle className="w-4 h-4" /> : <ArrowDownCircle className="w-4 h-4" />}
                 {t(`finance.type.${tp}`)}
@@ -115,48 +231,63 @@ function AddTransactionDialog({ onSuccess }: { onSuccess: () => void }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">{t("finance.date")}</Label>
+              <Label className="text-xs font-medium">{t("finance.date")}</Label>
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">{t("finance.amount")} (IQD)</Label>
-              <Input type="number" min="0" placeholder="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+              <Label className="text-xs font-medium">{t("finance.amount")} (IQD)</Label>
+              <Input type="number" min="0" placeholder="0" value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">{t("finance.category")}</Label>
+            <Label className="text-xs font-medium">{t("finance.category")}</Label>
             <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
-              <SelectTrigger><SelectValue placeholder={t("finance.category")} /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder={t("finance.category")} />
+              </SelectTrigger>
               <SelectContent>
-                {cats.map(c => <SelectItem key={c} value={c}>{t(CAT_KEYS[c] ?? c)}</SelectItem>)}
+                {cats.map(c => (
+                  <SelectItem key={c} value={c}>
+                    <span className="flex items-center gap-2">
+                      <span>{CAT_ICONS[c]}</span>
+                      {t(CAT_KEYS[c] ?? c)}
+                    </span>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">{t("finance.description")}</Label>
-            <Input placeholder={t("finance.description")} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            <Label className="text-xs font-medium">{t("finance.description")}</Label>
+            <Input placeholder={t("finance.description")} value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">{t("finance.quantity")} ({t("finance.optional")})</Label>
-              <Input type="number" min="0" placeholder="0" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+              <Label className="text-xs font-medium">{t("finance.quantity")} ({t("finance.optional")})</Label>
+              <Input type="number" min="0" placeholder="0" value={form.quantity}
+                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">{t("finance.unit")} ({t("finance.optional")})</Label>
-              <Input placeholder="kg, لتر, قطعة..." value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+              <Label className="text-xs font-medium">{t("finance.unit")} ({t("finance.optional")})</Label>
+              <Input placeholder="kg, لتر..." value={form.unit}
+                onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">{t("finance.notes.label")} ({t("finance.optional")})</Label>
-            <Textarea className="text-sm resize-none" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            <Label className="text-xs font-medium">{t("finance.notes.label")} ({t("finance.optional")})</Label>
+            <Textarea className="text-sm resize-none" rows={2} value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
           </div>
 
-          <Button className="w-full" onClick={handleSubmit} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : null}
+          <Button className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-none"
+            onClick={handleSubmit} disabled={saving}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin me-2" /> : <CheckCircle className="w-4 h-4 me-2" />}
             {t("save")}
           </Button>
         </div>
@@ -165,38 +296,30 @@ function AddTransactionDialog({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color, trend }: { label: string; value: string; icon: any; color: string; trend?: "up" | "down" | "neutral" }) {
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label, lang }: any) {
+  if (!active || !payload?.length) return null;
   return (
-    <Card className="border-none shadow-sm">
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", color)}>
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-muted-foreground leading-none mb-1">{label}</p>
-          <p className="text-lg font-bold truncate">{value}</p>
-        </div>
-        {trend && (
-          trend === "up" ? <TrendingUp className="w-4 h-4 text-emerald-500 shrink-0" />
-          : trend === "down" ? <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
-          : null
-        )}
-      </CardContent>
-    </Card>
+    <div className="bg-white dark:bg-slate-800 shadow-lg rounded-lg px-3 py-2 border text-xs">
+      <p className="font-semibold mb-1 text-slate-600">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ color: p.color }} className="font-medium">{p.name}: {fmtAmount(p.value, lang)}</p>
+      ))}
+    </div>
   );
 }
 
-function fmtAmount(n: number) {
-  return new Intl.NumberFormat("ar-IQ").format(n) + " د.ع";
-}
-
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Finance() {
   const { t, lang } = useLanguage();
   const { isAdmin } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
-  const [chartView, setChartView] = useState<"bar" | "pie">("bar");
+
+  const [period, setPeriod] = useState<Period>("month");
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [search, setSearch] = useState("");
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -205,41 +328,95 @@ export default function Finance() {
     queryKey: ["transactions"],
     queryFn: () => apiFetch("/api/transactions"),
   });
-
   const { data: summary = [] } = useQuery<any[]>({
     queryKey: ["transactions-summary"],
     queryFn: () => apiFetch("/api/transactions/summary"),
   });
 
-  const filtered = useMemo(() =>
-    filter === "all" ? transactions : transactions.filter(t => t.type === filter),
-    [transactions, filter]
-  );
+  const PERIODS: { key: Period; labelKey: string }[] = [
+    { key: "today",  labelKey: "finance.period.today" },
+    { key: "week",   labelKey: "finance.period.week" },
+    { key: "month",  labelKey: "finance.period.month" },
+    { key: "year",   labelKey: "finance.period.year" },
+    { key: "all",    labelKey: "finance.period.all" },
+  ];
+  const TABS: { key: TabType; labelKey: string; icon: any }[] = [
+    { key: "overview",      labelKey: "finance.tab.overview",      icon: Activity },
+    { key: "charts",        labelKey: "finance.tab.charts",        icon: BarChart2 },
+    { key: "transactions",  labelKey: "finance.tab.transactions",  icon: Receipt },
+    { key: "ai",            labelKey: "finance.tab.ai",            icon: Brain },
+  ];
 
-  const totalIncome  = useMemo(() => transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
-  const totalExpense = useMemo(() => transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0), [transactions]);
+  // Filter by period
+  const periodFiltered = useMemo(() => {
+    const range = getPeriodRange(period);
+    if (!range) return transactions;
+    return transactions.filter(tr => tr.date >= range.start && tr.date <= range.end);
+  }, [transactions, period]);
+
+  // Totals
+  const totalIncome  = useMemo(() => periodFiltered.filter(t => t.type === "income").reduce((s,t) => s + Number(t.amount), 0), [periodFiltered]);
+  const totalExpense = useMemo(() => periodFiltered.filter(t => t.type === "expense").reduce((s,t) => s + Number(t.amount), 0), [periodFiltered]);
   const profit = totalIncome - totalExpense;
+  const marginPct = totalIncome > 0 ? ((profit / totalIncome) * 100).toFixed(1) : "—";
+  const avgDaily = useMemo(() => {
+    const days = period === "today" ? 1 : period === "week" ? 7 : period === "month" ? 30 : period === "year" ? 365 : 30;
+    return totalIncome / days;
+  }, [totalIncome, period]);
 
-  // Monthly chart data
+  // Health score
+  const health = useMemo(() => calcHealthScore(totalIncome, totalExpense, periodFiltered.length), [totalIncome, totalExpense, periodFiltered.length]);
+
+  // Monthly data for charts
   const monthlyData = useMemo(() => {
-    const map: Record<string, { month: string; income: number; expense: number }> = {};
+    const map: Record<string, { month: string; income: number; expense: number; profit: number }> = {};
     summary.forEach((r: any) => {
-      if (!map[r.month]) map[r.month] = { month: r.month, income: 0, expense: 0 };
+      if (!map[r.month]) map[r.month] = { month: r.month, income: 0, expense: 0, profit: 0 };
       if (r.type === "income") map[r.month].income += Number(r.total);
       else map[r.month].expense += Number(r.total);
     });
-    return Object.values(map).sort((a, b) => a.month.localeCompare(b.month)).slice(-6);
+    const arr = Object.values(map).sort((a,b) => a.month.localeCompare(b.month)).slice(-9);
+    return arr.map(d => ({ ...d, profit: d.income - d.expense }));
   }, [summary]);
 
-  // Category pie data
-  const categoryData = useMemo(() => {
-    const map: Record<string, number> = {};
-    transactions.forEach(tr => {
-      const key = tr.category;
-      map[key] = (map[key] ?? 0) + Number(tr.amount);
+  // Category donut data
+  const expenseByCat = useMemo(() => {
+    const map: Record<string,number> = {};
+    periodFiltered.filter(t => t.type === "expense").forEach(tr => {
+      map[tr.category] = (map[tr.category] ?? 0) + Number(tr.amount);
     });
-    return Object.entries(map).map(([name, value]) => ({ name: t(CAT_KEYS[name] ?? name), value }));
-  }, [transactions, t]);
+    return Object.entries(map)
+      .map(([cat, value]) => ({ name: `${CAT_ICONS[cat]??""} ${t(CAT_KEYS[cat]??cat)}`, value, cat }))
+      .sort((a,b) => b.value - a.value);
+  }, [periodFiltered, t]);
+
+  const incomeByCat = useMemo(() => {
+    const map: Record<string,number> = {};
+    periodFiltered.filter(t => t.type === "income").forEach(tr => {
+      map[tr.category] = (map[tr.category] ?? 0) + Number(tr.amount);
+    });
+    return Object.entries(map)
+      .map(([cat, value]) => ({ name: `${CAT_ICONS[cat]??""} ${t(CAT_KEYS[cat]??cat)}`, value, cat }))
+      .sort((a,b) => b.value - a.value);
+  }, [periodFiltered, t]);
+
+  // Filtered transactions (search + type)
+  const filteredTx = useMemo(() => {
+    let arr = filter === "all" ? periodFiltered : periodFiltered.filter(t => t.type === filter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      arr = arr.filter(t =>
+        t.description.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q) ||
+        String(t.amount).includes(q)
+      );
+    }
+    return arr;
+  }, [periodFiltered, filter, search]);
+
+  // Best / worst month
+  const bestMonth  = useMemo(() => monthlyData.length ? monthlyData.reduce((a,b) => a.profit > b.profit ? a : b) : null, [monthlyData]);
+  const worstMonth = useMemo(() => monthlyData.length ? monthlyData.reduce((a,b) => a.profit < b.profit ? a : b) : null, [monthlyData]);
 
   const handleDelete = async (id: number) => {
     if (!confirm(t("finance.confirm.delete"))) return;
@@ -249,271 +426,615 @@ export default function Finance() {
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["transactions-summary"] });
       toast({ title: t("finance.deleted") });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: e.message });
-    } finally {
-      setDeletingId(null);
-    }
+    } catch (e: any) { toast({ variant: "destructive", title: e.message }); }
+    finally { setDeletingId(null); }
   };
 
-  const runAiAnalysis = async () => {
-    if (transactions.length === 0) return;
+  const runAiAnalysis = useCallback(async () => {
+    if (periodFiltered.length === 0) return;
     setAiLoading(true);
     try {
-      const totalsByCategory: Record<string, { income: number; expense: number }> = {};
-      transactions.forEach(tr => {
-        if (!totalsByCategory[tr.category]) totalsByCategory[tr.category] = { income: 0, expense: 0 };
-        totalsByCategory[tr.category][tr.type] += Number(tr.amount);
+      const catBreakdown: Record<string,{ income:number; expense:number }> = {};
+      periodFiltered.forEach(tr => {
+        if (!catBreakdown[tr.category]) catBreakdown[tr.category] = { income: 0, expense: 0 };
+        catBreakdown[tr.category][tr.type] += Number(tr.amount);
       });
 
       const isAr = lang === "ar";
       const prompt = isAr
-        ? `أنت مستشار مالي لمزرعة دواجن في الموصل، العراق.
-هذه البيانات المالية للمزرعة:
-- إجمالي الدخل: ${fmtAmount(totalIncome)}
-- إجمالي المصاريف: ${fmtAmount(totalExpense)}
-- صافي الربح/الخسارة: ${fmtAmount(profit)}
-- عدد المعاملات: ${transactions.length}
-- تفصيل حسب الفئات: ${JSON.stringify(totalsByCategory, null, 2)}
-- آخر ١٠ معاملات: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
+        ? `أنت مستشار مالي خبير لمزرعة دواجن في الموصل، العراق. حلل هذه البيانات المالية بعمق:
+— إجمالي الدخل: ${fmtAmount(totalIncome, "ar")}
+— إجمالي المصاريف: ${fmtAmount(totalExpense, "ar")}
+— صافي الربح/الخسارة: ${fmtAmount(profit, "ar")} (${marginPct}%)
+— عدد المعاملات: ${periodFiltered.length}
+— تفصيل الفئات: ${JSON.stringify(catBreakdown)}
+— درجة الصحة المالية: ${health.score}/100
 
-قدم تحليلاً مالياً احترافياً شاملاً يتضمن:
-١. تقييم الوضع المالي الحالي
-٢. أكبر بنود المصاريف وكيفية تخفيضها
-٣. فرص زيادة الدخل
-٤. توصيات عملية ومحددة لتحسين الربحية
-٥. مؤشرات الأداء الرئيسية التي يجب متابعتها
-اجعل التحليل دقيقاً ومفيداً ومناسباً لمزرعة دواجن صغيرة في العراق.`
-        : `You are a financial advisor for a poultry farm in Mosul, Iraq.
-Farm financial data:
-- Total income: ${fmtAmount(totalIncome)}
-- Total expenses: ${fmtAmount(totalExpense)}
-- Net profit/loss: ${fmtAmount(profit)}
-- Number of transactions: ${transactions.length}
-- Breakdown by category: ${JSON.stringify(totalsByCategory, null, 2)}
-- Last 10 transactions: ${JSON.stringify(transactions.slice(0, 10).map(tr => ({ date: tr.date, type: tr.type, cat: tr.category, amount: Number(tr.amount) })), null, 2)}
+قدّم تحليلاً مالياً احترافياً شاملاً بالنقاط يتضمن:
+١. تشخيص الوضع المالي الحالي ونقاط القوة والضعف
+٢. أكبر بنود المصاريف وكيفية تخفيضها بشكل عملي
+٣. فرص زيادة الدخل وتوسيع مصادر الإيراد
+٤. توصيات استراتيجية محددة لتحسين الربحية
+٥. مؤشرات الأداء التي يجب متابعتها أسبوعياً
+اجعل التوصيات قابلة للتطبيق فوراً في مزرعة دواجن عراقية صغيرة.`
+        : `You are an expert financial advisor for a poultry farm in Mosul, Iraq. Analyze this financial data in depth:
+— Total income: ${fmtAmount(totalIncome, "sv")}
+— Total expenses: ${fmtAmount(totalExpense, "sv")}
+— Net profit/loss: ${fmtAmount(profit, "sv")} (${marginPct}%)
+— Transactions: ${periodFiltered.length}
+— Category breakdown: ${JSON.stringify(catBreakdown)}
+— Financial health score: ${health.score}/100
 
 Provide a comprehensive professional financial analysis including:
-1. Current financial status assessment
-2. Largest expense categories and how to reduce them
-3. Income growth opportunities
-4. Practical recommendations to improve profitability
-5. Key performance indicators to monitor
-Keep the analysis precise and suitable for a small poultry farm.`;
+1. Current financial status diagnosis — strengths and weaknesses
+2. Top expense categories and practical ways to reduce them
+3. Income growth opportunities and revenue diversification
+4. Strategic recommendations to improve profitability
+5. Weekly KPIs to monitor
+Make recommendations immediately actionable for a small Iraqi poultry farm.`;
 
       const r = await fetch(`${BASE}/api/ai/analyze`, {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt, context: "financial" }),
       });
+
       if (r.ok) {
         const d = await r.json();
         setAiAnalysis(d.analysis ?? d.result ?? d.text ?? "");
       } else {
-        // Bilingual fallback local analysis
-        const margin = totalIncome > 0 ? ((profit / totalIncome) * 100).toFixed(1) : "0";
+        // Smart bilingual local fallback
+        const isAr = lang === "ar";
+        const topExpCat = expenseByCat[0];
+        const topIncCat = incomeByCat[0];
         const lines = isAr ? [
-          `📊 **${t("finance.ai.analyze")}**`,
+          `## 📊 ${t("finance.ai.analyze")}`,
           ``,
-          `💰 **${t("finance.ai.summary")}:**`,
-          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
-          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
-          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
-          `• ${t("finance.ai.margin")}: ${margin}%`,
+          `### 💰 الملخص المالي`,
+          `- **الدخل:** ${fmtAmount(totalIncome, "ar")}`,
+          `- **المصاريف:** ${fmtAmount(totalExpense, "ar")}`,
+          `- **الربح:** ${fmtAmount(profit, "ar")} ${profit >= 0 ? "✅" : "❌"}`,
+          `- **هامش الربح:** ${marginPct}%`,
+          `- **درجة الصحة:** ${health.score}/100 — ${t(`finance.health.${health.grade}`)}`,
           ``,
-          `📈 **${t("finance.ai.notes")}:**`,
-          profit < 0 ? `• ⚠️ ${t("finance.ai.loss.note")}` : `• ✅ ${t("finance.ai.profit.note")}`,
-          totalExpense > 0 ? `• ${t("finance.ai.review.note")}` : "",
-          `• ${t("finance.ai.daily.note")}`,
-        ] : [
-          `📊 **Farm Financial Analysis**`,
-          ``,
-          `💰 **Financial Summary:**`,
-          `• ${t("finance.income")}: ${fmtAmount(totalIncome)}`,
-          `• ${t("finance.expenses")}: ${fmtAmount(totalExpense)}`,
-          `• ${t("finance.profit")}: ${fmtAmount(profit)} ${profit >= 0 ? "✅" : "❌"}`,
-          `• Profit Margin: ${margin}%`,
-          ``,
-          `📈 **Observations:**`,
+          `### 🔍 التشخيص`,
           profit < 0
-            ? `• ⚠️ Farm is currently operating at a loss — review expense categories`
-            : `• ✅ Farm is generating positive profit`,
-          totalExpense > 0 ? `• Top expense categories should be reviewed regularly` : "",
-          `• Record all transactions daily for accurate analysis`,
+            ? `- ⚠️ المزرعة تعمل بخسارة — راجع بنود المصاريف بشكل عاجل`
+            : profit > totalIncome * 0.2
+            ? `- ✅ المزرعة تحقق هامش ربح ممتاز يتجاوز 20%`
+            : `- ℹ️ المزرعة تحقق ربحاً معقولاً — يمكن تحسينه`,
+          topExpCat ? `- 💸 أعلى بند مصروف: **${topExpCat.name}** (${fmtAmount(topExpCat.value, "ar")})` : "",
+          topIncCat ? `- 📈 أعلى مصدر دخل: **${topIncCat.name}** (${fmtAmount(topIncCat.value, "ar")})` : "",
+          ``,
+          `### 💡 التوصيات`,
+          `- سجّل جميع المعاملات يومياً لدقة التحليل`,
+          `- راجع أسعار العلف والأدوية دورياً للحصول على أفضل سعر`,
+          totalExpense > totalIncome * 0.8 ? `- ⚠️ المصاريف مرتفعة — ابحث عن فرص توفير في ${topExpCat?.name ?? "المصاريف"}` : "",
+          `- تابع مؤشرات الأداء أسبوعياً: الدخل اليومي، نسبة الوفيات، تكلفة الكيلو`,
+        ] : [
+          `## 📊 Farm Financial Analysis`,
+          ``,
+          `### 💰 Financial Summary`,
+          `- **Income:** ${fmtAmount(totalIncome, "sv")}`,
+          `- **Expenses:** ${fmtAmount(totalExpense, "sv")}`,
+          `- **Profit:** ${fmtAmount(profit, "sv")} ${profit >= 0 ? "✅" : "❌"}`,
+          `- **Margin:** ${marginPct}%`,
+          `- **Health Score:** ${health.score}/100 — ${t(`finance.health.${health.grade}`)}`,
+          ``,
+          `### 🔍 Diagnosis`,
+          profit < 0
+            ? `- ⚠️ Farm is operating at a loss — urgently review expense categories`
+            : profit > totalIncome * 0.2
+            ? `- ✅ Farm achieves excellent profit margin exceeding 20%`
+            : `- ℹ️ Farm generates reasonable profit — can be improved`,
+          topExpCat ? `- 💸 Top expense: **${topExpCat.name}** (${fmtAmount(topExpCat.value, "sv")})` : "",
+          topIncCat ? `- 📈 Top income source: **${topIncCat.name}** (${fmtAmount(topIncCat.value, "sv")})` : "",
+          ``,
+          `### 💡 Recommendations`,
+          `- Record all transactions daily for accurate analysis`,
+          `- Review feed and medicine prices regularly for best deals`,
+          totalExpense > totalIncome * 0.8 ? `- ⚠️ Expenses are high — find savings opportunities in ${topExpCat?.name ?? "expenses"}` : "",
+          `- Monitor weekly KPIs: daily income, mortality rate, cost per kg`,
         ];
-        setAiAnalysis(lines.filter(Boolean).join("\n"));
+        setAiAnalysis(lines.filter(l => l !== "").join("\n"));
       }
     } catch {
       toast({ variant: "destructive", title: t("finance.ai.error") });
-    } finally {
-      setAiLoading(false);
-    }
-  };
+    } finally { setAiLoading(false); }
+  }, [periodFiltered, lang, totalIncome, totalExpense, profit, marginPct, health, expenseByCat, incomeByCat, t, toast]);
+
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["transactions"] });
+    qc.invalidateQueries({ queryKey: ["transactions-summary"] });
+  }, [qc]);
+
+  const isRtl = lang === "ar";
 
   return (
     <div className="flex flex-col gap-4 pb-6 animate-in fade-in duration-300">
-      {/* Header */}
+
+      {/* ─── Header ─────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-            <DollarSign className="w-6 h-6 text-white" />
+            <Wallet className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold">{t("finance.title")}</h1>
             <p className="text-xs text-muted-foreground">{t("finance.desc")}</p>
           </div>
         </div>
-        <AddTransactionDialog onSuccess={() => {
-          qc.invalidateQueries({ queryKey: ["transactions"] });
-          qc.invalidateQueries({ queryKey: ["transactions-summary"] });
-        }} />
+        <AddTransactionDialog onSuccess={invalidate} />
       </div>
 
-      {/* Stats */}
+      {/* ─── Period Selector ────────────────────────────── */}
+      <div className="flex gap-1.5 p-1 bg-muted/60 rounded-xl overflow-x-auto">
+        {PERIODS.map(({ key, labelKey }) => (
+          <button key={key} onClick={() => setPeriod(key)}
+            className={cn(
+              "flex-shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all",
+              period === key
+                ? "bg-white dark:bg-slate-800 shadow-sm text-emerald-600 dark:text-emerald-400"
+                : "text-muted-foreground hover:text-foreground"
+            )}>
+            {t(labelKey)}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── KPI Cards ──────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label={t("finance.income")} value={fmtAmount(totalIncome)} icon={ArrowUpCircle} color="bg-emerald-500" trend="up" />
-        <StatCard label={t("finance.expense")} value={fmtAmount(totalExpense)} icon={ArrowDownCircle} color="bg-red-500" trend="down" />
-        <StatCard
+        <KpiCard label={t("finance.income")} value={fmtAmount(totalIncome, lang)}
+          sub={`${periodFiltered.filter(t=>t.type==="income").length} ${t("finance.tx.count")}`}
+          icon={ArrowUpCircle} gradient="from-emerald-400 to-teal-500" trend="up" />
+        <KpiCard label={t("finance.expense")} value={fmtAmount(totalExpense, lang)}
+          sub={`${periodFiltered.filter(t=>t.type==="expense").length} ${t("finance.tx.count")}`}
+          icon={ArrowDownCircle} gradient="from-red-400 to-rose-500" trend="down" />
+        <KpiCard
           label={t("finance.profit")}
-          value={fmtAmount(profit)}
+          value={`${profit >= 0 ? "+" : ""}${fmtAmount(profit, lang)}`}
+          sub={`${t("finance.margin.pct")}: ${marginPct}%`}
           icon={profit >= 0 ? TrendingUp : TrendingDown}
-          color={profit >= 0 ? "bg-blue-500" : "bg-orange-500"}
+          gradient={profit >= 0 ? "from-blue-400 to-indigo-500" : "from-orange-400 to-red-500"}
           trend={profit >= 0 ? "up" : "down"}
         />
-        <StatCard label={t("finance.transactions.count")} value={String(transactions.length)} icon={Receipt} color="bg-purple-500" />
+        <KpiCard label={t("finance.transactions.count")} value={String(periodFiltered.length)}
+          sub={`${t("finance.avg.daily")}: ${fmtAmount(avgDaily, lang)}`}
+          icon={Receipt} gradient="from-purple-400 to-violet-500" />
       </div>
 
-      {/* Charts */}
-      {transactions.length > 0 && (
-        <Card className="border-none shadow-sm">
-          <CardHeader className="pb-2 flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold">{t("finance.chart.monthly")}</CardTitle>
-            <div className="flex gap-1">
-              <Button variant={chartView === "bar" ? "default" : "ghost"} size="icon" className="h-7 w-7" onClick={() => setChartView("bar")}>
-                <BarChart2 className="w-3.5 h-3.5" />
-              </Button>
-              <Button variant={chartView === "pie" ? "default" : "ghost"} size="icon" className="h-7 w-7" onClick={() => setChartView("pie")}>
-                <PieIcon className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {chartView === "bar" && monthlyData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: any) => fmtAmount(Number(v))} />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="income" name={t("finance.type.income")} fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="expense" name={t("finance.type.expense")} fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : chartView === "pie" && categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={categoryData} cx="50%" cy="50%" outerRadius={75} dataKey="value" label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: 9 }}>
-                    {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: any) => fmtAmount(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">{t("finance.chart.nodata")}</div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* ─── Tab Navigation ─────────────────────────────── */}
+      <div className="flex gap-0 border-b border-border overflow-x-auto">
+        {TABS.map(({ key, labelKey, icon: Icon }) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap",
+              activeTab === key
+                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}>
+            <Icon className="w-3.5 h-3.5" />
+            {t(labelKey)}
+          </button>
+        ))}
+      </div>
 
-      {/* AI Analysis */}
-      {isAdmin && (
-        <Card className="border-none shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4 text-purple-500" />
-                <span className="text-sm font-semibold">{t("finance.ai.analyze")}</span>
-              </div>
-              <Button variant="outline" size="sm" onClick={runAiAnalysis} disabled={aiLoading || transactions.length === 0} className="h-7 text-xs gap-1.5">
-                {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                {aiLoading ? t("finance.ai.analyzing") : t("finance.ai.run")}
-              </Button>
-            </div>
-            {aiAnalysis && (
-              <div className="bg-purple-50 dark:bg-purple-950/20 rounded-xl p-3 text-xs leading-relaxed whitespace-pre-wrap text-slate-700 dark:text-slate-300 border border-purple-100 dark:border-purple-800/30">
-                {aiAnalysis}
-              </div>
-            )}
-            {!aiAnalysis && !aiLoading && (
-              <p className="text-xs text-muted-foreground">{t("finance.ai.hint")}</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Transactions List */}
-      <Card className="border-none shadow-sm">
-        <CardHeader className="pb-2 flex-row items-center justify-between gap-2 flex-wrap">
-          <CardTitle className="text-sm font-bold">{t("finance.transactions")}</CardTitle>
-          <div className="flex gap-1">
-            {(["all","income","expense"] as const).map(f => (
-              <Button key={f} size="sm" variant={filter === f ? "default" : "ghost"} onClick={() => setFilter(f)} className="h-7 text-xs px-2.5">
-                {t(`finance.filter.${f}`)}
-              </Button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-          ) : filtered.length === 0 ? (
-            <div className="py-10 text-center space-y-2">
-              <Receipt className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-              <p className="text-sm text-muted-foreground">{t("finance.empty")}</p>
-              <p className="text-xs text-muted-foreground">{t("finance.empty.desc")}</p>
-            </div>
+      {/* ─── OVERVIEW TAB ───────────────────────────────── */}
+      {activeTab === "overview" && (
+        <div className="space-y-4">
+          {periodFiltered.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-14 text-center">
+                <DollarSign className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">{t("finance.empty")}</p>
+                <p className="text-muted-foreground/60 text-xs mt-1">{t("finance.empty.desc")}</p>
+              </CardContent>
+            </Card>
           ) : (
-            <div className="divide-y divide-border/50">
-              {filtered.map(tr => (
-                <div key={tr.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group">
-                  <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center shrink-0",
-                    tr.type === "income" ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30")}>
-                    {tr.type === "income"
-                      ? <ArrowUpCircle className="w-4 h-4 text-emerald-600" />
-                      : <ArrowDownCircle className="w-4 h-4 text-red-600" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium truncate">{tr.description}</span>
-                      <Badge variant="secondary" className="text-[9px] h-4 shrink-0">{t(CAT_KEYS[tr.category] ?? tr.category)}</Badge>
+            <>
+              {/* Health Score + Profit Indicator */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="border-none shadow-sm overflow-hidden">
+                  <div className={cn("h-1 bg-gradient-to-r", health.bgColor)} />
+                  <CardHeader className="pb-2 pt-4">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-500" />
+                      {t("finance.health.score")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-4">
+                    <HealthGauge {...health} />
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-lg p-2 text-center">
+                        <p className="text-[10px] text-muted-foreground">{t("finance.income")}</p>
+                        <p className="text-sm font-bold text-emerald-600">{fmtAmount(totalIncome, lang)}</p>
+                      </div>
+                      <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-2 text-center">
+                        <p className="text-[10px] text-muted-foreground">{t("finance.expense")}</p>
+                        <p className="text-sm font-bold text-red-600">{fmtAmount(totalExpense, lang)}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">{tr.date}</span>
-                      {tr.quantity && tr.unit && <span className="text-[10px] text-muted-foreground">{tr.quantity} {tr.unit}</span>}
-                      {tr.authorName && <span className="text-[10px] text-muted-foreground">{tr.authorName}</span>}
+                  </CardContent>
+                </Card>
+
+                {/* Profit breakdown bar */}
+                <Card className="border-none shadow-sm overflow-hidden">
+                  <div className="h-1 bg-gradient-to-r from-blue-400 to-indigo-500" />
+                  <CardHeader className="pb-2 pt-4">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Target className="w-4 h-4 text-blue-500" />
+                      {t("finance.profit.breakdown")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pb-4">
+                    {/* Income bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground flex items-center gap-1"><ArrowUpCircle className="w-3 h-3 text-emerald-500"/>{t("finance.type.income")}</span>
+                        <span className="font-semibold text-emerald-600">{fmtAmount(totalIncome, lang)}</span>
+                      </div>
+                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-700"
+                          style={{ width: totalIncome > 0 ? "100%" : "0%" }} />
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-end shrink-0">
-                    <div className={cn("text-sm font-bold", tr.type === "income" ? "text-emerald-600" : "text-red-600")}>
-                      {tr.type === "income" ? "+" : "-"}{fmtAmount(Number(tr.amount))}
+                    {/* Expense bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground flex items-center gap-1"><ArrowDownCircle className="w-3 h-3 text-red-500"/>{t("finance.type.expense")}</span>
+                        <span className="font-semibold text-red-600">{fmtAmount(totalExpense, lang)}</span>
+                      </div>
+                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-red-400 to-rose-500 rounded-full transition-all duration-700"
+                          style={{ width: totalIncome > 0 ? `${Math.min(100, (totalExpense/totalIncome)*100)}%` : totalExpense > 0 ? "100%" : "0%" }} />
+                      </div>
                     </div>
-                  </div>
-                  {isAdmin && (
-                    <Button
-                      variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(tr.id)}
-                      disabled={deletingId === tr.id}
-                    >
-                      {deletingId === tr.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                    </Button>
+                    {/* Profit */}
+                    <div className={cn("rounded-xl p-3 flex items-center justify-between",
+                      profit >= 0 ? "bg-emerald-50 dark:bg-emerald-950/20" : "bg-red-50 dark:bg-red-950/20")}>
+                      <span className={cn("text-sm font-bold", profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                        {profit >= 0 ? "✅ " : "❌ "}{t("finance.profit")}
+                      </span>
+                      <span className={cn("text-sm font-black", profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                        {profit >= 0 ? "+" : ""}{fmtAmount(profit, lang)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center">{t("finance.margin.pct")}: <strong>{marginPct}%</strong></p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Top Categories */}
+              {expenseByCat.length > 0 && (
+                <Card className="border-none shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <ChevronDown className="w-4 h-4 text-red-500" />
+                      {t("finance.top.expenses")}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2.5 pb-4">
+                    {expenseByCat.slice(0, 5).map((cat, i) => {
+                      const pct = totalExpense > 0 ? (cat.value / totalExpense) * 100 : 0;
+                      return (
+                        <div key={cat.cat} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{cat.name}</span>
+                            <span className="font-semibold">{fmtAmount(cat.value, lang)} <span className="text-muted-foreground">({pct.toFixed(0)}%)</span></span>
+                          </div>
+                          <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${pct}%`, backgroundColor: COLORS_EXPENSE[i % COLORS_EXPENSE.length] }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Best / Worst Month */}
+              {bestMonth && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="border-none shadow-sm bg-emerald-50 dark:bg-emerald-950/20">
+                    <CardContent className="p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground mb-0.5">{t("finance.best.month")}</p>
+                      <p className="text-xs font-bold text-emerald-700">{bestMonth.month}</p>
+                      <p className="text-sm font-black text-emerald-600">+{fmtAmount(bestMonth.profit, lang)}</p>
+                    </CardContent>
+                  </Card>
+                  {worstMonth && worstMonth.month !== bestMonth.month && (
+                    <Card className="border-none shadow-sm bg-red-50 dark:bg-red-950/20">
+                      <CardContent className="p-3 text-center">
+                        <p className="text-[10px] text-muted-foreground mb-0.5">{t("finance.worst.month")}</p>
+                        <p className="text-xs font-bold text-red-700">{worstMonth.month}</p>
+                        <p className="text-sm font-black text-red-600">{fmtAmount(worstMonth.profit, lang)}</p>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── CHARTS TAB ─────────────────────────────────── */}
+      {activeTab === "charts" && (
+        <div className="space-y-4">
+          {monthlyData.length < 1 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-14 text-center">
+                <BarChart2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">{t("finance.chart.nodata")}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Monthly Bar Chart */}
+              <Card className="border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-sm">{t("finance.chart.monthly")}</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: -15, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                      <Tooltip content={<ChartTooltip lang={lang} />} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="income" name={t("finance.type.income")} fill="#10b981" radius={[4,4,0,0]} />
+                      <Bar dataKey="expense" name={t("finance.type.expense")} fill="#ef4444" radius={[4,4,0,0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Profit Trend Line */}
+              <Card className="border-none shadow-sm">
+                <CardHeader className="pb-0">
+                  <CardTitle className="text-sm">{t("finance.chart.trend")}</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={monthlyData} margin={{ top: 4, right: 4, left: -15, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                      <Tooltip content={<ChartTooltip lang={lang} />} />
+                      <Area type="monotone" dataKey="profit" name={t("finance.profit")}
+                        stroke="#3b82f6" fill="url(#profitGrad)" strokeWidth={2.5} dot={{ r: 3, fill: "#3b82f6" }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Expense & Income Donuts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {expenseByCat.length > 0 && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">{t("finance.chart.expense.breakdown")}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie data={expenseByCat} cx="50%" cy="50%" innerRadius={45} outerRadius={75}
+                            dataKey="value" paddingAngle={3}
+                            label={({ percent }: any) => `${(percent*100).toFixed(0)}%`}
+                            labelLine={false} style={{ fontSize: 9 }}>
+                            {expenseByCat.map((_,i) => <Cell key={i} fill={COLORS_EXPENSE[i%COLORS_EXPENSE.length]} />)}
+                          </Pie>
+                          <Tooltip formatter={(v: any) => fmtAmount(Number(v), lang)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex flex-wrap gap-1.5 justify-center mt-1">
+                        {expenseByCat.slice(0,4).map((c,i) => (
+                          <span key={c.cat} className="text-[9px] flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ background: COLORS_EXPENSE[i%COLORS_EXPENSE.length] }} />
+                            {c.name}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                {incomeByCat.length > 0 && (
+                  <Card className="border-none shadow-sm">
+                    <CardHeader className="pb-0">
+                      <CardTitle className="text-sm">{t("finance.chart.income.breakdown")}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-2">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie data={incomeByCat} cx="50%" cy="50%" innerRadius={45} outerRadius={75}
+                            dataKey="value" paddingAngle={3}
+                            label={({ percent }: any) => `${(percent*100).toFixed(0)}%`}
+                            labelLine={false} style={{ fontSize: 9 }}>
+                            {incomeByCat.map((_,i) => <Cell key={i} fill={COLORS_INCOME[i%COLORS_INCOME.length]} />)}
+                          </Pie>
+                          <Tooltip formatter={(v: any) => fmtAmount(Number(v), lang)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex flex-wrap gap-1.5 justify-center mt-1">
+                        {incomeByCat.map((c,i) => (
+                          <span key={c.cat} className="text-[9px] flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ background: COLORS_INCOME[i%COLORS_INCOME.length] }} />
+                            {c.name}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── TRANSACTIONS TAB ───────────────────────────── */}
+      {activeTab === "transactions" && (
+        <div className="space-y-3">
+          {/* Search + Filter */}
+          <div className="flex gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input placeholder={t("finance.search.placeholder")} value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="ps-8 h-8 text-xs" />
+            </div>
+            <div className="flex gap-1">
+              {(["all","income","expense"] as const).map(f => (
+                <Button key={f} size="sm" variant={filter === f ? "default" : "ghost"}
+                  onClick={() => setFilter(f)} className="h-8 text-xs px-2.5">
+                  {t(`finance.filter.${f}`)}
+                </Button>
               ))}
             </div>
+          </div>
+
+          {isLoading ? (
+            <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : filteredTx.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-10 text-center">
+                <Receipt className="w-10 h-10 text-muted-foreground/20 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">{search ? t("finance.no.results") : t("finance.empty")}</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-none shadow-sm">
+              <div className="divide-y divide-border/50">
+                {filteredTx.map(tr => (
+                  <div key={tr.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group">
+                    <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-base",
+                      tr.type === "income" ? "bg-emerald-100 dark:bg-emerald-900/30" : "bg-red-100 dark:bg-red-900/30")}>
+                      {CAT_ICONS[tr.category] ?? (tr.type === "income" ? "📈" : "📉")}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{tr.description}</p>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">
+                          {t(CAT_KEYS[tr.category] ?? tr.category)}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" />{tr.date}
+                        </span>
+                        {tr.authorName && (
+                          <span className="text-[10px] text-muted-foreground opacity-60">{tr.authorName}</span>
+                        )}
+                        {tr.quantity && tr.unit && (
+                          <span className="text-[10px] text-muted-foreground">{tr.quantity} {tr.unit}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={cn("text-sm font-bold",
+                        tr.type === "income" ? "text-emerald-600" : "text-red-600")}>
+                        {tr.type === "income" ? "+" : "-"}{fmtAmount(Number(tr.amount), lang)}
+                      </span>
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-600"
+                          onClick={() => handleDelete(tr.id)}
+                          disabled={deletingId === tr.id}>
+                          {deletingId === tr.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 py-2.5 border-t bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{filteredTx.length} {t("finance.tx.shown")}</span>
+                <span className="font-semibold">{t("finance.tx.net")}: <span className={profit >= 0 ? "text-emerald-600" : "text-red-600"}>{fmtAmount(profit, lang)}</span></span>
+              </div>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {/* ─── AI ANALYSIS TAB ────────────────────────────── */}
+      {activeTab === "ai" && (
+        <div className="space-y-4">
+          <Card className="border-none shadow-sm overflow-hidden">
+            <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                    <Brain className="w-4.5 h-4.5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">{t("finance.ai.analyze")}</p>
+                    <p className="text-[10px] text-muted-foreground">{t("finance.ai.hint")}</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={runAiAnalysis}
+                  disabled={aiLoading || periodFiltered.length === 0}
+                  className="h-8 text-xs gap-1.5 border-purple-200 text-purple-700 hover:bg-purple-50">
+                  {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {aiLoading ? t("finance.ai.analyzing") : t("finance.ai.run")}
+                </Button>
+              </div>
+
+              {/* Quick Stats */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-purple-50 dark:bg-purple-950/20 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground">{t("finance.health.score")}</p>
+                  <p className={cn("text-xl font-black mt-0.5", health.color)}>{health.score}</p>
+                  <p className="text-[9px] text-muted-foreground">/100</p>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground">{t("finance.margin.pct")}</p>
+                  <p className={cn("text-xl font-black mt-0.5", Number(marginPct) >= 0 ? "text-blue-600" : "text-red-600")}>{marginPct}%</p>
+                  <p className="text-[9px] text-muted-foreground">{t("finance.net.margin")}</p>
+                </div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground">{t("finance.transactions.count")}</p>
+                  <p className="text-xl font-black mt-0.5 text-emerald-600">{periodFiltered.length}</p>
+                  <p className="text-[9px] text-muted-foreground">{t("finance.tx.total")}</p>
+                </div>
+              </div>
+
+              {aiAnalysis ? (
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/20 dark:to-indigo-950/20 rounded-xl p-4 text-xs leading-relaxed whitespace-pre-wrap border border-purple-100 dark:border-purple-800/30 text-slate-700 dark:text-slate-300">
+                  {aiAnalysis}
+                </div>
+              ) : !aiLoading && (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-100 dark:bg-purple-900/20 flex items-center justify-center">
+                    <Brain className="w-8 h-8 text-purple-400" />
+                  </div>
+                  <p className="text-sm text-muted-foreground max-w-xs">{t("finance.ai.empty.hint")}</p>
+                  {periodFiltered.length === 0 && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      {t("finance.ai.no.data")}
+                    </Badge>
+                  )}
+                </div>
+              )}
+              {aiLoading && (
+                <div className="flex items-center gap-3 py-6 justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                  <p className="text-sm text-muted-foreground">{t("finance.ai.analyzing")}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
