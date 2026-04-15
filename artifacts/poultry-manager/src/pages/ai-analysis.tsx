@@ -412,11 +412,11 @@ export default function AiAnalysis() {
               </div>
               <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
                 <Sparkles className="w-5 h-5" />
-                ابدأ التحليل العميق
+                ابدأ التحليل العميق / Starta djupanalysen
               </Button>
-              <Button onClick={runFutureRisk} variant="outline" size="lg" className="gap-2 border-amber-500/30 text-amber-700 hover:bg-amber-500/10">
+              <Button onClick={runFutureRisk} size="lg" className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg">
                 <AlertTriangle className="w-5 h-5" />
-                اكتشف مخاطر المستقبل
+                اكتشف مخاطر المستقبل / Upptäck framtida risker
               </Button>
             </div>
           )}
