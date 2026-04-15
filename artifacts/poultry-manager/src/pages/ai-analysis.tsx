@@ -226,11 +226,8 @@ export default function AiAnalysis() {
             <Stethoscope className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              الدكتور نصار
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-medium">6000+ مرجع علمي</span>
-            </h1>
-            <p className="text-xs text-muted-foreground">خبير الدواجن والتفقيس — تحليل عميق لمزرعتك</p>
+            <h1 className="text-xl font-bold flex items-center gap-2">أداة تحليل المزرعة الذكية</h1>
+            <p className="text-xs text-muted-foreground">تحليل دوري للقطيع، التفقيس، المهام، الأهداف، والملاحظات</p>
           </div>
         </div>
       </div>
@@ -252,15 +249,14 @@ export default function AiAnalysis() {
                 <BarChart3 className="w-12 h-12 text-emerald-600" />
               </div>
               <div className="space-y-2 max-w-md">
-                <h2 className="text-lg font-bold">تحليل المزرعة العميق</h2>
+                <h2 className="text-lg font-bold">تحليل شامل وقابل للتنفيذ</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  الذكاء الاصطناعي سيحلل كل بيانات مزرعتك: القطعان، التفقيس، المهام، الأهداف، والملاحظات.
-                  سيكتشف الأخطاء، يعطيك واجبات مرتبة، ويتوقع المستقبل.
+                  تقرأ الأداة كل البيانات المتاحة وتحوّلها إلى: مخاطر، أولويات، أخطاء محتملة، واجبات عملية، وتوقعات تشغيلية.
                 </p>
               </div>
               <Button onClick={runAnalysis} size="lg" className="gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg">
                 <Sparkles className="w-5 h-5" />
-                ابدأ التحليل العميق
+                ابدأ التحليل
               </Button>
             </div>
           )}
@@ -270,8 +266,8 @@ export default function AiAnalysis() {
               <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center animate-pulse">
                 <Stethoscope className="w-10 h-10 text-emerald-600" />
               </div>
-              <p className="font-semibold text-lg">الدكتور نصار يحلل مزرعتك...</p>
-              <p className="text-sm text-muted-foreground">يفحص القطعان، التفقيس، المهام، الأهداف، والملاحظات</p>
+              <p className="font-semibold text-lg">جارٍ تحليل بيانات المزرعة...</p>
+              <p className="text-sm text-muted-foreground">يفحص الفقاسات، القطعان، المهام، الأهداف، والملاحظات</p>
               <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse" style={{ width: "65%" }} />
               </div>
@@ -291,7 +287,7 @@ export default function AiAnalysis() {
                   </div>
                 </div>
                 <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> تحديث
+                  <Sparkles className="w-3.5 h-3.5" /> إعادة التحليل
                 </Button>
               </div>
 
@@ -300,7 +296,7 @@ export default function AiAnalysis() {
                   <CardContent className="p-3 flex items-start gap-3">
                     <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">الأولوية القصوى</p>
+                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">أهم إجراء الآن</p>
                       <p className="text-sm font-medium mt-0.5">{analysis.topPriority}</p>
                     </div>
                   </CardContent>
