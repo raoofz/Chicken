@@ -244,7 +244,8 @@ function daysOld(date: string | Date | null | undefined): number | null {
   return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
 }
 
-function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
+function futureRiskAnalysis(data: RawFarmData, lang: EngineLang = "ar"): FullAnalysis["futureRisk"] {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
   const excludedOverdueTitles = ["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"];
   const overdueTasks = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed && !excludedOverdueTitles.includes(t.title.trim()));
@@ -276,30 +277,30 @@ function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
   );
 
   const level = riskScore >= 85 ? "critical" : riskScore >= 65 ? "high" : riskScore >= 40 ? "medium" : "low";
-  const horizon = riskScore >= 85 ? "24-48 ساعة" : riskScore >= 65 ? "3-7 أيام" : "7-14 يوم";
+  const horizon = riskScore >= 85 ? L("24-48 ساعة", "24-48 timmar") : riskScore >= 65 ? L("3-7 أيام", "3-7 dagar") : L("7-14 يوم", "7-14 dagar");
 
   const triggers = [
-    ...(overdueTasks.length ? [`${overdueTasks.length} مهمة متأخرة`] : []),
-    ...(cycleStress ? [`${cycleStress} دورة نشطة خارج النطاق المثالي`] : []),
-    ...(diseaseSignals ? [`وجود ${diseaseSignals} إشارة مرضية في الملاحظات`] : []),
-    ...(envSignals ? [`مؤشرات بيئية متكررة في الملاحظات اليومية`] : []),
-    ...(weakHistory ? [`سجل فقس ضعيف سابقاً (${weakHistory} دورة)`] : []),
+    ...(overdueTasks.length ? [L(`${overdueTasks.length} مهمة متأخرة`, `${overdueTasks.length} försenade uppgifter`)] : []),
+    ...(cycleStress ? [L(`${cycleStress} دورة نشطة خارج النطاق المثالي`, `${cycleStress} aktiv(a) cykel/cykler utanför optimalt intervall`)] : []),
+    ...(diseaseSignals ? [L(`وجود ${diseaseSignals} إشارة مرضية في الملاحظات`, `${diseaseSignals} sjukdomstecken i anteckningarna`)] : []),
+    ...(envSignals ? [L("مؤشرات بيئية متكررة في الملاحظات اليومية", "Återkommande miljöindikatorer i dagliga anteckningar")] : []),
+    ...(weakHistory ? [L(`سجل فقس ضعيف سابقاً (${weakHistory} دورة)`, `Historik med svag kläckning (${weakHistory} cykel/cykler)`)] : []),
   ];
 
   const actions = [
-    "راجع الحرارة والرطوبة في كل فقاسة الآن ثم كل 30 دقيقة",
-    "أغلق المهام المتأخرة قبل نهاية اليوم",
-    "اعزل أي عنبر تظهر فيه أعراض تنفسية أو نفوق غير طبيعي",
-    "سجل ملاحظة يومية تفصيلية: حرارة، رطوبة، ماء، علف، نفوق، سلوك",
-    "قارن هذه الدورة بأفضل دورة سابقة لتحديد مصدر الخلل",
+    L("راجع الحرارة والرطوبة في كل فقاسة الآن ثم كل 30 دقيقة", "Kontrollera temperatur och fuktighet i varje kläckmaskin nu och sedan var 30:e minut"),
+    L("أغلق المهام المتأخرة قبل نهاية اليوم", "Slutför försenade uppgifter före dagens slut"),
+    L("اعزل أي عنبر تظهر فيه أعراض تنفسية أو نفوق غير طبيعي", "Isolera vilket stall som helst med andningssymptom eller ovanlig dödlighet"),
+    L("سجل ملاحظة يومية تفصيلية: حرارة، رطوبة، ماء، علف، نفوق، سلوك", "Registrera detaljerade dagliga anteckningar: temperatur, fuktighet, vatten, foder, dödlighet, beteende"),
+    L("قارن هذه الدورة بأفضل دورة سابقة لتحديد مصدر الخلل", "Jämför denna cykel med den bästa tidigare cykeln för att identifiera problemkällan"),
   ];
 
   return {
     level,
-    title: riskScore >= 85 ? "خطر مستقبلي وشيك" : riskScore >= 65 ? "خطر مرتفع قادم" : riskScore >= 40 ? "خطر متوسط يحتاج متابعة" : "الخطر المستقبلي منخفض",
+    title: riskScore >= 85 ? L("خطر مستقبلي وشيك", "Överhängande framtida risk") : riskScore >= 65 ? L("خطر مرتفع قادم", "Hög kommande risk") : riskScore >= 40 ? L("خطر متوسط يحتاج متابعة", "Medelhög risk som kräver uppföljning") : L("الخطر المستقبلي منخفض", "Låg framtida risk"),
     summary: riskScore >= 65
-      ? "البيانات الحالية تشير إلى احتمال تراجع قريب إذا لم يتم التدخل السريع."
-      : "لا توجد إشارات حرجة كبيرة حالياً، لكن يلزم الاستمرار في المراقبة اليومية.",
+      ? L("البيانات الحالية تشير إلى احتمال تراجع قريب إذا لم يتم التدخل السريع.", "Aktuell data tyder på risk för nedgång om ingen snabb åtgärd vidtas.")
+      : L("لا توجد إشارات حرجة كبيرة حالياً، لكن يلزم الاستمرار في المراقبة اليومية.", "Inga stora kritiska tecken för tillfället, men fortsatt daglig övervakning krävs."),
     horizon,
     triggers,
     actions,
@@ -345,13 +346,14 @@ function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] 
 }
 
 
-function analyzeEnvironment(cycles: HatchingCycle[]): {
+function analyzeEnvironment(cycles: HatchingCycle[], lang: EngineLang = "ar"): {
   alerts: Alert[];
   anomalies: Anomaly[];
   sectionItems: SectionItem[];
   score: number;
   recommendations: Recommendation[];
 } {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const alerts: Alert[] = [];
   const anomalies: Anomaly[] = [];
   const recommendations: Recommendation[] = [];
@@ -359,11 +361,11 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
   const activeCycles = cycles.filter(c => c.status === "incubating" || c.status === "hatching");
 
   if (activeCycles.length === 0) {
-    items.push({ label: "الدورات النشطة", value: "0", status: "neutral", detail: "لا توجد فقاسات عاملة حالياً" });
+    items.push({ label: L("الدورات النشطة", "Aktiva cykler"), value: "0", status: "neutral", detail: L("لا توجد فقاسات عاملة حالياً", "Inga aktiva kläckmaskiner för tillfället") });
     return { alerts, anomalies, sectionItems: items, score: 70, recommendations };
   }
 
-  items.push({ label: "الدورات النشطة", value: String(activeCycles.length), status: "good" });
+  items.push({ label: L("الدورات النشطة", "Aktiva cykler"), value: String(activeCycles.length), status: "good" });
 
   const temps: number[] = [];
   const hums: number[] = [];
@@ -382,57 +384,57 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
       if (temp > dangerRange.max) {
         alerts.push({
           type: "danger", category: "environment",
-          title: `🔴 حرارة خطيرة — ${c.batchName}`,
-          description: `الحرارة ${temp}°م تتجاوز الحد الأقصى ${dangerRange.max}°م. خطر موت الأجنة خلال ساعات!`,
+          title: L(`🔴 حرارة خطيرة — ${c.batchName}`, `🔴 Farlig temperatur — ${c.batchName}`),
+          description: L(`الحرارة ${temp}°م تتجاوز الحد الأقصى ${dangerRange.max}°م. خطر موت الأجنة خلال ساعات!`, `Temperaturen ${temp}°C överstiger maxgränsen ${dangerRange.max}°C. Risk för embryodöd inom timmar!`),
           severity: 10,
         });
         anomalies.push({
-          title: `حرارة مرتفعة بشكل خطير`,
-          description: `الدفعة "${c.batchName}" عند ${temp}°م — تجاوزت حد الخطر`,
+          title: L("حرارة مرتفعة بشكل خطير", "Farligt hög temperatur"),
+          description: L(`الدفعة "${c.batchName}" عند ${temp}°م — تجاوزت حد الخطر`, `Batch "${c.batchName}" vid ${temp}°C — översteg farlighetsgränsen`),
           severity: "critical", metric: "temperature",
-          currentValue: `${temp}°م`, expectedRange: `${optRange.min}-${optRange.max}°م`, category: "environment",
+          currentValue: `${temp}°C`, expectedRange: `${optRange.min}-${optRange.max}°C`, category: "environment",
         });
         recommendations.push({
           priority: "urgent", category: "environment",
-          title: `خفّض حرارة "${c.batchName}" فوراً`,
-          description: `افتح التهوية، أبعد مصدر الحرارة الزائد، وراقب كل 30 دقيقة حتى تصل ${optRange.max}°م`,
-          reason: `الحرارة ${temp}°م تسبب موت الأجنة وتشوهات`,
-          impact: `إنقاذ الدورة بالكامل`, confidence: 95,
+          title: L(`خفّض حرارة "${c.batchName}" فوراً`, `Sänk temperaturen i "${c.batchName}" omedelbart`),
+          description: L(`افتح التهوية، أبعد مصدر الحرارة الزائد، وراقب كل 30 دقيقة حتى تصل ${optRange.max}°م`, `Öppna ventilationen, ta bort överskottsvärme, övervaka var 30:e minut tills ${optRange.max}°C uppnås`),
+          reason: L(`الحرارة ${temp}°م تسبب موت الأجنة وتشوهات`, `Temperatur ${temp}°C orsakar embryodöd och missbildningar`),
+          impact: L("إنقاذ الدورة بالكامل", "Rädda hela cykeln"), confidence: 95,
         });
       } else if (temp > optRange.max) {
         alerts.push({
           type: "warning", category: "environment",
-          title: `⚠️ حرارة مرتفعة — ${c.batchName}`,
-          description: `${temp}°م أعلى من المثالي (${optRange.max}°م)${isLockdown ? " في مرحلة الإقفال" : ` في اليوم ${dayNum}`}`,
+          title: L(`⚠️ حرارة مرتفعة — ${c.batchName}`, `⚠️ Hög temperatur — ${c.batchName}`),
+          description: L(`${temp}°م أعلى من المثالي (${optRange.max}°م)${isLockdown ? " في مرحلة الإقفال" : ` في اليوم ${dayNum}`}`, `${temp}°C är över optimalt (${optRange.max}°C)${isLockdown ? " i låsningsfasen" : ` dag ${dayNum}`}`),
           severity: 7,
         });
       } else if (temp < dangerRange.min) {
         alerts.push({
           type: "danger", category: "environment",
-          title: `🔴 حرارة منخفضة جداً — ${c.batchName}`,
-          description: `${temp}°م أقل من الحد الأدنى الآمن. الأجنة ستتباطأ في النمو أو تموت.`,
+          title: L(`🔴 حرارة منخفضة جداً — ${c.batchName}`, `🔴 För låg temperatur — ${c.batchName}`),
+          description: L("الأجنة ستتباطأ في النمو أو تموت.", "Embryona kommer att växa långsammare eller dö."),
           severity: 9,
         });
         anomalies.push({
-          title: `انخفاض حراري خطير`, severity: "critical", metric: "temperature",
-          description: `"${c.batchName}" عند ${temp}°م`, category: "environment",
-          currentValue: `${temp}°م`, expectedRange: `${optRange.min}-${optRange.max}°م`,
+          title: L("انخفاض حراري خطير", "Farligt låg temperatur"), severity: "critical", metric: "temperature",
+          description: L(`"${c.batchName}" عند ${temp}°م`, `"${c.batchName}" vid ${temp}°C`), category: "environment",
+          currentValue: `${temp}°C`, expectedRange: `${optRange.min}-${optRange.max}°C`,
         });
       } else if (temp < optRange.min) {
         alerts.push({
           type: "warning", category: "environment",
-          title: `حرارة أقل من المثالي — ${c.batchName}`,
-          description: `${temp}°م (المثالي ${optRange.min}-${optRange.max}°م)`,
+          title: L(`حرارة أقل من المثالي — ${c.batchName}`, `Temperatur under optimalt — ${c.batchName}`),
+          description: L(`${temp}°م (المثالي ${optRange.min}-${optRange.max}°م)`, `${temp}°C (optimalt ${optRange.min}-${optRange.max}°C)`),
           severity: 5,
         });
       } else {
-        items.push({ label: `حرارة ${c.batchName}`, value: `${temp}°م ✓`, status: "good" });
+        items.push({ label: L(`حرارة ${c.batchName}`, `Temp ${c.batchName}`), value: `${temp}°C ✓`, status: "good" });
       }
     } else {
       alerts.push({
         type: "warning", category: "environment",
-        title: `بيانات حرارة مفقودة — ${c.batchName}`,
-        description: `لم تُسجّل قراءة حرارة لهذه الدفعة. التحليل محدود.`,
+        title: L(`بيانات حرارة مفقودة — ${c.batchName}`, `Saknad temperaturdata — ${c.batchName}`),
+        description: L("لم تُسجّل قراءة حرارة لهذه الدفعة. التحليل محدود.", "Ingen temperaturavläsning registrerad för denna batch. Analysen är begränsad."),
         severity: 6,
       });
     }
@@ -444,24 +446,24 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
         const severity = isLockdown && hum < 55 ? "high" : "medium";
         alerts.push({
           type: severity === "high" ? "danger" : "warning", category: "environment",
-          title: `رطوبة منخفضة — ${c.batchName}`,
-          description: `${hum}% (المطلوب ${optHum.min}-${optHum.max}%)${isLockdown ? " — خطر جفاف أغشية الفقس!" : ""}`,
+          title: L(`رطوبة منخفضة — ${c.batchName}`, `Låg luftfuktighet — ${c.batchName}`),
+          description: L(`${hum}% (المطلوب ${optHum.min}-${optHum.max}%)${isLockdown ? " — خطر جفاف أغشية الفقس!" : ""}`, `${hum}% (krävs ${optHum.min}-${optHum.max}%)${isLockdown ? " — risk för torra kläckhinnor!" : ""}`),
           severity: isLockdown ? 8 : 5,
         });
         if (isLockdown) {
           recommendations.push({
             priority: "urgent", category: "environment",
-            title: `ارفع رطوبة "${c.batchName}" فوراً`,
-            description: `أضف ماء دافئ في صينية الفقاسة أو قطعة إسفنج مبللة. الهدف: ${optHum.optimal}%`,
-            reason: `الرطوبة ${hum}% في الإقفال تسبب التصاق الجنين بالقشرة`,
-            impact: `زيادة نسبة الفقس 10-20%`, confidence: 90,
+            title: L(`ارفع رطوبة "${c.batchName}" فوراً`, `Öka luftfuktigheten i "${c.batchName}" omedelbart`),
+            description: L(`أضف ماء دافئ في صينية الفقاسة أو قطعة إسفنج مبللة. الهدف: ${optHum.optimal}%`, `Tillsätt varmt vatten i kläckmaskinens bricka eller en fuktig svamp. Mål: ${optHum.optimal}%`),
+            reason: L(`الرطوبة ${hum}% في الإقفال تسبب التصاق الجنين بالقشرة`, `Fuktighet ${hum}% under låsning orsakar att embryot fastnar i skalet`),
+            impact: L("زيادة نسبة الفقس 10-20%", "Ökar kläckningsprocenten med 10-20%"), confidence: 90,
           });
         }
       } else if (hum > optHum.max) {
         alerts.push({
           type: "warning", category: "environment",
-          title: `رطوبة عالية — ${c.batchName}`,
-          description: `${hum}% أعلى من ${optHum.max}%${!isLockdown ? " — قد تسبب فطريات وبيض مبلل" : ""}`,
+          title: L(`رطوبة عالية — ${c.batchName}`, `Hög luftfuktighet — ${c.batchName}`),
+          description: L(`${hum}% أعلى من ${optHum.max}%${!isLockdown ? " — قد تسبب فطريات وبيض مبلل" : ""}`, `${hum}% är över ${optHum.max}%${!isLockdown ? " — kan orsaka mögel och blöta ägg" : ""}`),
           severity: 4,
         });
       }
@@ -471,7 +473,7 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
       const lt = Number(c.lockdownTemperature);
       const optLock = SCIENCE.incubation.lockdownTempOptimal;
       items.push({
-        label: `حرارة الإقفال ${c.batchName}`, value: `${lt}°م`,
+        label: L(`حرارة الإقفال ${c.batchName}`, `Låsningstemperatur ${c.batchName}`), value: `${lt}°C`,
         status: lt >= optLock.min && lt <= optLock.max ? "good" : lt > 38 ? "danger" : "warning",
       });
     }
@@ -480,8 +482,8 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
     if (daysInCycle > 23 && c.status === "incubating") {
       alerts.push({
         type: "danger", category: "environment",
-        title: `دورة متأخرة — ${c.batchName}`,
-        description: `مرّ ${daysInCycle} يوماً والحالة لا تزال "تحضين". الطبيعي 21 يوماً. تحقق من الدفعة.`,
+        title: L(`دورة متأخرة — ${c.batchName}`, `Försenad cykel — ${c.batchName}`),
+        description: L(`مرّ ${daysInCycle} يوماً والحالة لا تزال "تحضين". الطبيعي 21 يوماً. تحقق من الدفعة.`, `${daysInCycle} dagar har gått och status är fortfarande "inkubation". Normalt 21 dagar. Kontrollera batchen.`),
         severity: 8,
       });
     }
@@ -489,10 +491,10 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
     if (c.status === "incubating" && daysInCycle >= 17 && daysInCycle <= 19 && !c.lockdownDate) {
       recommendations.push({
         priority: "high", category: "environment",
-        title: `حان وقت الإقفال — ${c.batchName}`,
-        description: `اليوم ${daysInCycle} — يجب نقل البيض لوضع الإقفال: خفّض الحرارة لـ 37.0°م وارفع الرطوبة لـ 70%`,
-        reason: `الإقفال في اليوم 18 ضروري لنجاح الفقس`,
-        impact: `ارتفاع نسبة الفقس 15-25%`, confidence: 95,
+        title: L(`حان وقت الإقفال — ${c.batchName}`, `Dags för låsning — ${c.batchName}`),
+        description: L(`اليوم ${daysInCycle} — يجب نقل البيض لوضع الإقفال: خفّض الحرارة لـ 37.0°م وارفع الرطوبة لـ 70%`, `Dag ${daysInCycle} — flytta äggen till låsningsposition: sänk temperaturen till 37,0°C och höj fuktigheten till 70%`),
+        reason: L("الإقفال في اليوم 18 ضروري لنجاح الفقس", "Låsning dag 18 är nödvändig för lyckad kläckning"),
+        impact: L("ارتفاع نسبة الفقس 15-25%", "Ökar kläckningsprocenten med 15-25%"), confidence: 95,
       });
     }
   }
@@ -501,10 +503,10 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
     const sd = stddev(temps);
     if (sd > 0.5) {
       anomalies.push({
-        title: "تذبذب حراري بين الفقاسات",
-        description: `فارق كبير في الحرارة بين الدورات (انحراف ${sd.toFixed(2)}°م) — يدل على عدم معايرة`,
+        title: L("تذبذب حراري بين الفقاسات", "Temperaturvariation mellan kläckmaskiner"),
+        description: L(`فارق كبير في الحرارة بين الدورات (انحراف ${sd.toFixed(2)}°م) — يدل على عدم معايرة`, `Stor temperaturskillnad mellan cykler (avvikelse ${sd.toFixed(2)}°C) — tyder på bristande kalibrering`),
         severity: "medium", metric: "temperature_variance",
-        currentValue: `±${sd.toFixed(2)}°م`, expectedRange: "< 0.3°م", category: "environment",
+        currentValue: `±${sd.toFixed(2)}°C`, expectedRange: L("< 0.3°م", "< 0.3°C"), category: "environment",
       });
     }
   }
@@ -516,7 +518,7 @@ function analyzeEnvironment(cycles: HatchingCycle[]): {
   return { alerts, anomalies, sectionItems: items, score: clamp(envScore, 0, 100), recommendations };
 }
 
-function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
+function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[], lang: EngineLang = "ar"): {
   alerts: Alert[];
   anomalies: Anomaly[];
   sectionItems: SectionItem[];
@@ -525,6 +527,7 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
   recommendations: Recommendation[];
   trends: TrendPoint[];
 } {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const alerts: Alert[] = [];
   const anomalies: Anomaly[] = [];
   const predictions: Prediction[] = [];
@@ -533,15 +536,15 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
   const trendPoints: TrendPoint[] = [];
 
   const totalBirds = flocks.reduce((a, f) => a + f.count, 0);
-  items.push({ label: "إجمالي الطيور", value: String(totalBirds), status: totalBirds > 0 ? "good" : "warning" });
-  items.push({ label: "عدد القطعان", value: String(flocks.length), status: flocks.length > 0 ? "good" : "neutral" });
+  items.push({ label: L("إجمالي الطيور", "Totalt antal fåglar"), value: String(totalBirds), status: totalBirds > 0 ? "good" : "warning" });
+  items.push({ label: L("عدد القطعان", "Antal flockar"), value: String(flocks.length), status: flocks.length > 0 ? "good" : "neutral" });
 
   for (const f of flocks) {
     if (f.count < SCIENCE.flock.minFlockSize) {
       alerts.push({
         type: "info", category: "biological",
-        title: `قطيع صغير — ${f.name}`,
-        description: `${f.count} طير فقط. القطعان الصغيرة أقل كفاءة اقتصادياً.`,
+        title: L(`قطيع صغير — ${f.name}`, `Liten flock — ${f.name}`),
+        description: L(`${f.count} طير فقط. القطعان الصغيرة أقل كفاءة اقتصادياً.`, `Bara ${f.count} fåglar. Små flockar är mindre ekonomiskt effektiva.`),
         severity: 2,
       });
     }
@@ -549,18 +552,18 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
     if (f.ageDays > maxAge) {
       alerts.push({
         type: "warning", category: "biological",
-        title: `عمر متقدم — ${f.name}`,
-        description: `${f.ageDays} يوم (الحد المعتاد ${maxAge} يوم لـ ${f.purpose}). راجع الجدوى الاقتصادية.`,
+        title: L(`عمر متقدم — ${f.name}`, `Hög ålder — ${f.name}`),
+        description: L(`${f.ageDays} يوم (الحد المعتاد ${maxAge} يوم لـ ${f.purpose}). راجع الجدوى الاقتصادية.`, `${f.ageDays} dagar (vanlig gräns ${maxAge} dagar). Granska den ekonomiska lönsamheten.`),
         severity: 4,
       });
     }
     if (f.ageDays <= 7) {
       recommendations.push({
         priority: "high", category: "biological",
-        title: `مراقبة مكثفة — ${f.name}`,
-        description: `القطيع في الأسبوع الأول (${f.ageDays} يوم). راقب: الحرارة 33-35°م، الشرب، النشاط.`,
-        reason: `أول 7 أيام حرجة — 70% من مشاكل التربية تبدأ هنا`,
-        impact: `تقليل النفوق المبكر بنسبة 40-60%`, confidence: 90,
+        title: L(`مراقبة مكثفة — ${f.name}`, `Intensiv övervakning — ${f.name}`),
+        description: L(`القطيع في الأسبوع الأول (${f.ageDays} يوم). راقب: الحرارة 33-35°م، الشرب، النشاط.`, `Flocken är i sin första vecka (${f.ageDays} dagar). Övervaka: temperatur 33-35°C, vattenintag, aktivitet.`),
+        reason: L("أول 7 أيام حرجة — 70% من مشاكل التربية تبدأ هنا", "De första 7 dagarna är kritiska — 70% av uppfödningsproblem börjar här"),
+        impact: L("تقليل النفوق المبكر بنسبة 40-60%", "Minskar tidig dödlighet med 40-60%"), confidence: 90,
       });
     }
   }
@@ -577,10 +580,10 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
     const rateValues = rates.map(r => r.rate);
 
     items.push({
-      label: "معدل الفقس الإجمالي", value: `${overallRate.toFixed(1)}%`,
+      label: L("معدل الفقس الإجمالي", "Total kläckningsprocent"), value: `${overallRate.toFixed(1)}%`,
       status: overallRate >= SCIENCE.incubation.hatchRate.excellent ? "good" :
         overallRate >= SCIENCE.incubation.hatchRate.acceptable ? "warning" : "danger",
-      detail: overallRate >= 85 ? "ممتاز" : overallRate >= 75 ? "جيد" : overallRate >= 65 ? "مقبول" : "ضعيف",
+      detail: overallRate >= 85 ? L("ممتاز", "Utmärkt") : overallRate >= 75 ? L("جيد", "Bra") : overallRate >= 65 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt"),
     });
 
     rates.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -596,20 +599,20 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
 
       if (recentAvg > earlyAvg + 5) {
         predictions.push({
-          title: "تحسن مستمر في الفقس",
-          description: `الأداء تحسّن من ${earlyAvg.toFixed(0)}% إلى ${recentAvg.toFixed(0)}%. التوقع: استمرار التحسن إذا حافظت على نفس الممارسات.`,
-          confidence: "high", probability: 75, timeframe: "الدورة القادمة", category: "biological",
+          title: L("تحسن مستمر في الفقس", "Fortsatt förbättring av kläckning"),
+          description: L(`الأداء تحسّن من ${earlyAvg.toFixed(0)}% إلى ${recentAvg.toFixed(0)}%. التوقع: استمرار التحسن إذا حافظت على نفس الممارسات.`, `Prestandan förbättrades från ${earlyAvg.toFixed(0)}% till ${recentAvg.toFixed(0)}%. Prognos: fortsatt förbättring om samma rutiner behålls.`),
+          confidence: "high", probability: 75, timeframe: L("الدورة القادمة", "Nästa cykel"), category: "biological",
         });
       } else if (recentAvg < earlyAvg - 5) {
         predictions.push({
-          title: "⚠️ تراجع في أداء الفقس",
-          description: `انخفض من ${earlyAvg.toFixed(0)}% إلى ${recentAvg.toFixed(0)}%. يجب مراجعة الحرارة والرطوبة وجودة البيض.`,
-          confidence: "high", probability: 70, timeframe: "فوري", category: "biological",
+          title: L("⚠️ تراجع في أداء الفقس", "⚠️ Försämrad kläckningsprestanda"),
+          description: L(`انخفض من ${earlyAvg.toFixed(0)}% إلى ${recentAvg.toFixed(0)}%. يجب مراجعة الحرارة والرطوبة وجودة البيض.`, `Minskade från ${earlyAvg.toFixed(0)}% till ${recentAvg.toFixed(0)}%. Granska temperatur, fuktighet och äggkvalitet.`),
+          confidence: "high", probability: 70, timeframe: L("فوري", "Omedelbart"), category: "biological",
         });
         alerts.push({
           type: "warning", category: "biological",
-          title: "اتجاه سلبي في نسبة الفقس",
-          description: `انخفاض مستمر في آخر 3 دورات. يحتاج تحقيق فوري.`,
+          title: L("اتجاه سلبي في نسبة الفقس", "Negativ trend i kläckningsprocent"),
+          description: L("انخفاض مستمر في آخر 3 دورات. يحتاج تحقيق فوري.", "Kontinuerlig minskning under de senaste 3 cyklerna. Kräver omedelbar undersökning."),
           severity: 6,
         });
       }
@@ -619,8 +622,8 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
       if (r.rate < SCIENCE.incubation.hatchRate.poor) {
         alerts.push({
           type: "danger", category: "biological",
-          title: `فقس ضعيف جداً — ${r.name}`,
-          description: `${r.rate.toFixed(0)}% فقط. الحد الأدنى المقبول ${SCIENCE.incubation.hatchRate.acceptable}%.`,
+          title: L(`فقس ضعيف جداً — ${r.name}`, `Mycket svag kläckning — ${r.name}`),
+          description: L(`${r.rate.toFixed(0)}% فقط. الحد الأدنى المقبول ${SCIENCE.incubation.hatchRate.acceptable}%.`, `Bara ${r.rate.toFixed(0)}%. Acceptabel minimigräns är ${SCIENCE.incubation.hatchRate.acceptable}%.`),
           severity: 7,
         });
       }
@@ -630,8 +633,8 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
       const sd = stddev(rateValues);
       if (sd > 15) {
         anomalies.push({
-          title: "تذبذب كبير في نسب الفقس",
-          description: `انحراف معياري ${sd.toFixed(1)}% بين الدورات — يدل على عدم ثبات في الإدارة أو جودة البيض`,
+          title: L("تذبذب كبير في نسب الفقس", "Stor variation i kläckningsprocent"),
+          description: L(`انحراف معياري ${sd.toFixed(1)}% بين الدورات — يدل على عدم ثبات في الإدارة أو جودة البيض`, `Standardavvikelse ${sd.toFixed(1)}% mellan cykler — tyder på instabil hantering eller äggkvalitet`),
           severity: "medium", metric: "hatch_rate_variance",
           currentValue: `±${sd.toFixed(1)}%`, expectedRange: "< 10%", category: "biological",
         });
@@ -643,14 +646,14 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
     if (best.rate - worst.rate > 20) {
       recommendations.push({
         priority: "high", category: "biological",
-        title: "ادرس الفارق بين أفضل وأسوأ دورة",
-        description: `أفضل: ${best.name} (${best.rate.toFixed(0)}%) vs أسوأ: ${worst.name} (${worst.rate.toFixed(0)}%). قارن: مصدر البيض، الحرارة، الرطوبة، عمر البيض.`,
-        reason: "فارق 20%+ يعني وجود متغير رئيسي يمكن تحسينه",
-        impact: "رفع المعدل العام 10-15%", confidence: 85,
+        title: L("ادرس الفارق بين أفضل وأسوأ دورة", "Analysera skillnaden mellan bästa och sämsta cykel"),
+        description: L(`أفضل: ${best.name} (${best.rate.toFixed(0)}%) vs أسوأ: ${worst.name} (${worst.rate.toFixed(0)}%). قارن: مصدر البيض، الحرارة، الرطوبة، عمر البيض.`, `Bäst: ${best.name} (${best.rate.toFixed(0)}%) vs Sämst: ${worst.name} (${worst.rate.toFixed(0)}%). Jämför: äggkälla, temperatur, fuktighet, äggålder.`),
+        reason: L("فارق 20%+ يعني وجود متغير رئيسي يمكن تحسينه", "En skillnad på 20%+ innebär att det finns en viktig variabel att förbättra"),
+        impact: L("رفع المعدل العام 10-15%", "Höjer den totala kläckningsprocenten med 10-15%"), confidence: 85,
       });
     }
   } else {
-    items.push({ label: "معدل الفقس", value: "لا توجد بيانات", status: "neutral" });
+    items.push({ label: L("معدل الفقس", "Kläckningsprocent"), value: L("لا توجد بيانات", "Inga data"), status: "neutral" });
   }
 
   const activeCycles = cycles.filter(c => c.status === "incubating" || c.status === "hatching");
@@ -663,11 +666,11 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
         ? mean(completedCycles.map(cc => cc.eggsSet > 0 ? ((cc.eggsHatched ?? 0) / cc.eggsSet) * 100 : 0))
         : 70;
       predictions.push({
-        title: `توقع فقس "${c.batchName}"`,
-        description: `متبقي ${daysLeft} أيام. بناءً على المعدل التاريخي، المتوقع فقس ~${Math.round(c.eggsSet * predictedRate / 100)} صوص من ${c.eggsSet} بيضة (${predictedRate.toFixed(0)}%).`,
+        title: L(`توقع فقس "${c.batchName}"`, `Kläckningsprognos "${c.batchName}"`),
+        description: L(`متبقي ${daysLeft} أيام. بناءً على المعدل التاريخي، المتوقع فقس ~${Math.round(c.eggsSet * predictedRate / 100)} صوص من ${c.eggsSet} بيضة (${predictedRate.toFixed(0)}%).`, `${daysLeft} dagar kvar. Baserat på historisk kläckningsgrad förväntas ~${Math.round(c.eggsSet * predictedRate / 100)} kycklingar av ${c.eggsSet} ägg (${predictedRate.toFixed(0)}%).`),
         confidence: completedCycles.length >= 3 ? "high" : "medium",
         probability: Math.round(predictedRate),
-        timeframe: `${daysLeft} أيام`, category: "biological",
+        timeframe: L(`${daysLeft} أيام`, `${daysLeft} dagar`), category: "biological",
       });
     }
   }
@@ -686,7 +689,7 @@ function analyzeBiological(flocks: Flock[], cycles: HatchingCycle[]): {
   return { alerts, anomalies, sectionItems: items, score: clamp(bioScore, 0, 100), predictions, recommendations, trends: trendPoints };
 }
 
-function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
+function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[], lang: EngineLang = "ar"): {
   alerts: Alert[];
   sectionItems: SectionItem[];
   score: number;
@@ -695,6 +698,7 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   taskTrend: TrendPoint[];
   docTrend: TrendPoint[];
 } {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const alerts: Alert[] = [];
   const recommendations: Recommendation[] = [];
   const predictions: Prediction[] = [];
@@ -707,33 +711,36 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   const todayTasks = tasks.filter(tk => tk.dueDate === t);
   const completionRate = tasks.length > 0 ? (completedTasks.length / tasks.length) * 100 : 0;
 
-  items.push({ label: "إجمالي المهام", value: String(tasks.length), status: tasks.length > 0 ? "good" : "neutral" });
+  items.push({ label: L("إجمالي المهام", "Totalt antal uppgifter"), value: String(tasks.length), status: tasks.length > 0 ? "good" : "neutral" });
   items.push({
-    label: "نسبة الإنجاز", value: `${completionRate.toFixed(0)}%`,
+    label: L("نسبة الإنجاز", "Slutförandeprocent"), value: `${completionRate.toFixed(0)}%`,
     status: completionRate >= SCIENCE.operations.taskCompletionGood ? "good" : completionRate >= 50 ? "warning" : "danger",
   });
   items.push({
-    label: "المتأخرة", value: String(overdueTasks.length),
+    label: L("المتأخرة", "Försenade"), value: String(overdueTasks.length),
     status: overdueTasks.length === 0 ? "good" : overdueTasks.length <= 2 ? "warning" : "danger",
   });
-  items.push({ label: "مهام اليوم", value: String(todayTasks.length), status: todayTasks.length > 0 ? "warning" : "good" });
+  items.push({ label: L("مهام اليوم", "Dagens uppgifter"), value: String(todayTasks.length), status: todayTasks.length > 0 ? "warning" : "good" });
 
   if (overdueTasks.length > 0) {
     alerts.push({
       type: "danger", category: "operational",
-      title: `${overdueTasks.length} مهمة متأخرة`,
-      description: overdueTasks.slice(0, 3).map(tk => `"${tk.title}" (مستحقة ${tk.dueDate})`).join("، "),
+      title: L(`${overdueTasks.length} مهمة متأخرة`, `${overdueTasks.length} försenade uppgifter`),
+      description: overdueTasks.slice(0, 3).map(tk => `"${tk.title}" (${L("مستحقة", "förfallen")} ${tk.dueDate})`).join("، "),
       severity: Math.min(10, 5 + overdueTasks.length * 2),
     });
     recommendations.push({
       priority: "urgent", category: "operational",
-      title: "أغلق المهام المتأخرة اليوم",
-      description: `ابدأ بالأعلى أولوية: ${overdueTasks.sort((a, b) => {
+      title: L("أغلق المهام المتأخرة اليوم", "Slutför försenade uppgifter idag"),
+      description: L(`ابدأ بالأعلى أولوية: ${overdueTasks.sort((a, b) => {
         const pMap: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
         return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
-      }).slice(0, 2).map(tk => `"${tk.title}"`).join("، ")}`,
-      reason: "المهام المتأخرة تتراكم وتسبب خسائر تشغيلية",
-      impact: "تقليل المخاطر التشغيلية", confidence: 95,
+      }).slice(0, 2).map(tk => `"${tk.title}"`).join("، ")}`, `Börja med högsta prioritet: ${overdueTasks.sort((a, b) => {
+        const pMap: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+        return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
+      }).slice(0, 2).map(tk => `"${tk.title}"`).join(", ")}`),
+      reason: L("المهام المتأخرة تتراكم وتسبب خسائر تشغيلية", "Försenade uppgifter ackumuleras och orsakar driftförluster"),
+      impact: L("تقليل المخاطر التشغيلية", "Minskar driftsrisker"), confidence: 95,
     });
   }
 
@@ -741,15 +748,15 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   if (urgentPending.length > 3) {
     alerts.push({
       type: "warning", category: "operational",
-      title: `${urgentPending.length} مهمة عالية الأولوية معلّقة`,
-      description: "تراكم المهام العاجلة يشير إلى ضغط تشغيلي أو نقص في العمالة.",
+      title: L(`${urgentPending.length} مهمة عالية الأولوية معلّقة`, `${urgentPending.length} högt prioriterade uppgifter väntar`),
+      description: L("تراكم المهام العاجلة يشير إلى ضغط تشغيلي أو نقص في العمالة.", "Uppbyggnad av brådskande uppgifter tyder på driftstryck eller personalbrist."),
       severity: 5,
     });
   }
 
   const completedGoals = goals.filter(g => g.completed);
   const activeGoals = goals.filter(g => !g.completed);
-  items.push({ label: "الأهداف المحققة", value: `${completedGoals.length}/${goals.length}`, status: completedGoals.length > 0 ? "good" : "neutral" });
+  items.push({ label: L("الأهداف المحققة", "Uppnådda mål"), value: `${completedGoals.length}/${goals.length}`, status: completedGoals.length > 0 ? "good" : "neutral" });
 
   for (const g of activeGoals) {
     const target = Number(g.targetValue);
@@ -759,8 +766,8 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
     if (g.deadline && g.deadline < t && progress < 100) {
       alerts.push({
         type: "warning", category: "operational",
-        title: `هدف متأخر — ${g.title}`,
-        description: `التقدم ${progress.toFixed(0)}% فقط والموعد النهائي انتهى (${g.deadline}).`,
+        title: L(`هدف متأخر — ${g.title}`, `Försenat mål — ${g.title}`),
+        description: L(`التقدم ${progress.toFixed(0)}% فقط والموعد النهائي انتهى (${g.deadline}).`, `Bara ${progress.toFixed(0)}% framsteg och deadline har passerat (${g.deadline}).`),
         severity: 5,
       });
     }
@@ -770,10 +777,10 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
       if (daysLeft > 0 && daysLeft <= 7 && progress < 80) {
         recommendations.push({
           priority: "high", category: "operational",
-          title: `تسريع هدف "${g.title}"`,
-          description: `متبقي ${daysLeft} أيام والتقدم ${progress.toFixed(0)}% فقط. تحتاج ${(target - current).toFixed(1)} ${g.unit} إضافية.`,
-          reason: "الموعد النهائي قريب جداً",
-          impact: "تحقيق الهدف في الوقت", confidence: 80,
+          title: L(`تسريع هدف "${g.title}"`, `Påskynda mål "${g.title}"`),
+          description: L(`متبقي ${daysLeft} أيام والتقدم ${progress.toFixed(0)}% فقط. تحتاج ${(target - current).toFixed(1)} ${g.unit} إضافية.`, `${daysLeft} dagar kvar och bara ${progress.toFixed(0)}% framsteg. Du behöver ${(target - current).toFixed(1)} ${g.unit} till.`),
+          reason: L("الموعد النهائي قريب جداً", "Deadline är mycket nära"),
+          impact: L("تحقيق الهدف في الوقت", "Uppnå målet i tid"), confidence: 80,
         });
       }
     }
@@ -789,7 +796,7 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   const uniqueNoteDays = new Set(notesLast7.map(n => n.date)).size;
 
   items.push({
-    label: "التوثيق (آخر 7 أيام)", value: `${uniqueNoteDays}/7 أيام`,
+    label: L("التوثيق (آخر 7 أيام)", "Dokumentation (senaste 7 dagar)"), value: `${uniqueNoteDays}/7 ${L("أيام", "dagar")}`,
     status: uniqueNoteDays >= SCIENCE.operations.documentationFreqGood ? "good" :
       uniqueNoteDays >= SCIENCE.operations.documentationFreqMin ? "warning" : "danger",
   });
@@ -797,22 +804,22 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   if (uniqueNoteDays < SCIENCE.operations.documentationFreqMin) {
     alerts.push({
       type: "warning", category: "operational",
-      title: "توثيق ضعيف",
-      description: `${uniqueNoteDays} ملاحظة فقط في آخر أسبوع. التحليل الذكي يحتاج بيانات يومية ليكون دقيقاً.`,
+      title: L("توثيق ضعيف", "Svag dokumentation"),
+      description: L(`${uniqueNoteDays} ملاحظة فقط في آخر أسبوع. التحليل الذكي يحتاج بيانات يومية ليكون دقيقاً.`, `Bara ${uniqueNoteDays} anteckningar den senaste veckan. AI-analysen behöver dagliga data för att vara noggrann.`),
       severity: 5,
     });
     recommendations.push({
       priority: "medium", category: "operational",
-      title: "سجّل ملاحظة يومية",
-      description: "اكتب: الحرارة، الرطوبة، استهلاك العلف/الماء، أي أعراض، النفوق، سلوك القطيع.",
-      reason: "البيانات المنتظمة أساس التوقعات والإنذارات المبكرة",
-      impact: "تحسين دقة التحليل 50%+", confidence: 90,
+      title: L("سجّل ملاحظة يومية", "Registrera dagliga anteckningar"),
+      description: L("اكتب: الحرارة، الرطوبة، استهلاك العلف/الماء، أي أعراض، النفوق، سلوك القطيع.", "Skriv: temperatur, fuktighet, foder/vattenförbrukning, symptom, dödlighet, flockbeteende."),
+      reason: L("البيانات المنتظمة أساس التوقعات والإنذارات المبكرة", "Regelbunden data är grunden för prognoser och tidig varning"),
+      impact: L("تحسين دقة التحليل 50%+", "Förbättrar analysens noggrannhet med 50%+"), confidence: 90,
     });
   }
 
   const weeks = [last30Days.slice(0, 7), last30Days.slice(7, 14), last30Days.slice(14, 21), last30Days.slice(21, 28)];
   const docTrend: TrendPoint[] = weeks.map((w, i) => ({
-    label: `أسبوع ${i + 1}`,
+    label: L(`أسبوع ${i + 1}`, `Vecka ${i + 1}`),
     value: new Set(notes.filter(n => w.includes(n.date)).map(n => n.date)).size,
   }));
 
@@ -822,14 +829,14 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
     if (recent.length > 0) {
       alerts.push({
         type: "danger", category: "operational",
-        title: `إشارات مرضية في الملاحظات الأخيرة`,
-        description: `${recent.length} ملاحظة تحتوي كلمات مرضية: ${recent.slice(0, 2).map(n => `"${n.content.substring(0, 50)}..."`).join("، ")}`,
+        title: L("إشارات مرضية في الملاحظات الأخيرة", "Sjukdomstecken i senaste anteckningar"),
+        description: L(`${recent.length} ملاحظة تحتوي كلمات مرضية: ${recent.slice(0, 2).map(n => `"${n.content.substring(0, 50)}..."`).join("، ")}`, `${recent.length} anteckning(ar) innehåller sjukdomsrelaterade ord: ${recent.slice(0, 2).map(n => `"${n.content.substring(0, 50)}..."`).join(", ")}`),
         severity: 8,
       });
       predictions.push({
-        title: "احتمال تفشي مرضي",
-        description: "الملاحظات الأخيرة تشير إلى أعراض مرضية. يجب فحص القطيع خلال 24 ساعة.",
-        confidence: "medium", probability: 60, timeframe: "24-48 ساعة", category: "biological",
+        title: L("احتمال تفشي مرضي", "Risk för sjukdomsutbrott"),
+        description: L("الملاحظات الأخيرة تشير إلى أعراض مرضية. يجب فحص القطيع خلال 24 ساعة.", "Senaste anteckningar tyder på sjukdomssymptom. Flocken bör inspekteras inom 24 timmar."),
+        confidence: "medium", probability: 60, timeframe: L("24-48 ساعة", "24-48 timmar"), category: "biological",
       });
     }
   }
@@ -840,8 +847,8 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
     if (recentEnv.length >= 3) {
       alerts.push({
         type: "info", category: "operational",
-        title: "ملاحظات بيئية متكررة",
-        description: `${recentEnv.length} ملاحظات عن البيئة في آخر أسبوع. قد يشير لمشكلة بيئية مستمرة.`,
+        title: L("ملاحظات بيئية متكررة", "Återkommande miljöanteckningar"),
+        description: L(`${recentEnv.length} ملاحظات عن البيئة في آخر أسبوع. قد يشير لمشكلة بيئية مستمرة.`, `${recentEnv.length} miljörelaterade anteckningar den senaste veckan. Kan tyda på ett pågående miljöproblem.`),
         severity: 3,
       });
     }
@@ -850,7 +857,7 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   const taskTrend: TrendPoint[] = weeks.map((w, i) => {
     const weekTasks = tasks.filter(tk => tk.createdAt && w.includes(new Date(tk.createdAt).toISOString().split("T")[0]));
     const weekCompleted = weekTasks.filter(tk => tk.completed).length;
-    return { label: `أسبوع ${i + 1}`, value: weekTasks.length > 0 ? Math.round((weekCompleted / weekTasks.length) * 100) : 0 };
+    return { label: L(`أسبوع ${i + 1}`, `Vecka ${i + 1}`), value: weekTasks.length > 0 ? Math.round((weekCompleted / weekTasks.length) * 100) : 0 };
   });
 
   let opsScore = 80;
@@ -863,39 +870,41 @@ function analyzeOperational(tasks: Task[], goals: Goal[], notes: DailyNote[]): {
   return { alerts, sectionItems: items, score: clamp(opsScore, 0, 100), recommendations, predictions, taskTrend, docTrend };
 }
 
-function assessDataQuality(data: RawFarmData): { score: number; label: string; issues: string[] } {
+function assessDataQuality(data: RawFarmData, lang: EngineLang = "ar"): { score: number; label: string; issues: string[] } {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const issues: string[] = [];
   let score = 100;
 
-  if (data.flocks.length === 0) { issues.push("لا توجد قطعان مسجلة"); score -= 20; }
-  if (data.hatchingCycles.length === 0) { issues.push("لا توجد دورات تفقيس"); score -= 15; }
-  if (data.tasks.length === 0) { issues.push("لا توجد مهام"); score -= 10; }
-  if (data.notes.length === 0) { issues.push("لا توجد ملاحظات يومية — البيانات غير كافية للتحليل العميق"); score -= 20; }
-  if (data.goals.length === 0) { issues.push("لا توجد أهداف محددة"); score -= 5; }
+  if (data.flocks.length === 0) { issues.push(L("لا توجد قطعان مسجلة", "Inga registrerade flockar")); score -= 20; }
+  if (data.hatchingCycles.length === 0) { issues.push(L("لا توجد دورات تفقيس", "Inga kläckcykler")); score -= 15; }
+  if (data.tasks.length === 0) { issues.push(L("لا توجد مهام", "Inga uppgifter")); score -= 10; }
+  if (data.notes.length === 0) { issues.push(L("لا توجد ملاحظات يومية — البيانات غير كافية للتحليل العميق", "Inga dagliga anteckningar — otillräcklig data för djupanalys")); score -= 20; }
+  if (data.goals.length === 0) { issues.push(L("لا توجد أهداف محددة", "Inga definierade mål")); score -= 5; }
 
   const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
   const missingTemp = activeCycles.filter(c => !c.temperature).length;
-  if (missingTemp > 0) { issues.push(`${missingTemp} دورة نشطة بدون قراءة حرارة`); score -= missingTemp * 5; }
+  if (missingTemp > 0) { issues.push(L(`${missingTemp} دورة نشطة بدون قراءة حرارة`, `${missingTemp} aktiv(a) cykel/cykler utan temperaturavläsning`)); score -= missingTemp * 5; }
   const missingHum = activeCycles.filter(c => !c.humidity).length;
-  if (missingHum > 0) { issues.push(`${missingHum} دورة نشطة بدون قراءة رطوبة`); score -= missingHum * 5; }
+  if (missingHum > 0) { issues.push(L(`${missingHum} دورة نشطة بدون قراءة رطوبة`, `${missingHum} aktiv(a) cykel/cykler utan fuktighetsavläsning`)); score -= missingHum * 5; }
 
   const last7 = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - i);
     return d.toISOString().split("T")[0];
   });
   const recentNotes = data.notes.filter(n => last7.includes(n.date));
-  if (recentNotes.length < 3) { issues.push("ملاحظات قليلة في آخر 7 أيام"); score -= 10; }
+  if (recentNotes.length < 3) { issues.push(L("ملاحظات قليلة في آخر 7 أيام", "Få anteckningar de senaste 7 dagarna")); score -= 10; }
 
   score = clamp(score, 0, 100);
-  const label = score >= 80 ? "ممتازة" : score >= 60 ? "جيدة" : score >= 40 ? "مقبولة" : "ضعيفة";
+  const label = score >= 80 ? L("ممتازة", "Utmärkt") : score >= 60 ? L("جيدة", "Bra") : score >= 40 ? L("مقبولة", "Acceptabel") : L("ضعيفة", "Svag");
   return { score, label, issues };
 }
 
-export function runFullAnalysis(data: RawFarmData): FullAnalysis {
-  const env = analyzeEnvironment(data.hatchingCycles);
-  const bio = analyzeBiological(data.flocks, data.hatchingCycles);
-  const ops = analyzeOperational(data.tasks, data.goals, data.notes);
-  const dq = assessDataQuality(data);
+export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): FullAnalysis {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
+  const env = analyzeEnvironment(data.hatchingCycles, lang);
+  const bio = analyzeBiological(data.flocks, data.hatchingCycles, lang);
+  const ops = analyzeOperational(data.tasks, data.goals, data.notes, lang);
+  const dq = assessDataQuality(data, lang);
 
   const allAlerts = [...env.alerts, ...bio.alerts, ...ops.alerts].sort((a, b) => b.severity - a.severity);
   const allAnomalies = [...env.anomalies, ...bio.anomalies];
@@ -909,8 +918,8 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
 
   if (dq.score < 50) {
     errors.push({
-      title: "بيانات غير كافية",
-      description: "النظام يحتاج بيانات أكثر ليعمل بدقة عالية.",
+      title: L("بيانات غير كافية", "Otillräcklig data"),
+      description: L("النظام يحتاج بيانات أكثر ليعمل بدقة عالية.", "Systemet behöver mer data för att fungera med hög noggrannhet."),
       solution: dq.issues.slice(0, 3).join("، ") + ".",
     });
   }
@@ -920,9 +929,9 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
     const avgRate = mean(completedCycles.map(c => c.eggsSet > 0 ? ((c.eggsHatched ?? 0) / c.eggsSet) * 100 : 0));
     if (avgRate < SCIENCE.incubation.hatchRate.acceptable) {
       errors.push({
-        title: "معدل فقس ضعيف",
-        description: `المعدل العام ${avgRate.toFixed(0)}% — أقل من الحد المقبول ${SCIENCE.incubation.hatchRate.acceptable}%.`,
-        solution: "راجع: جودة البيض، عمره قبل التحضين، ثبات الحرارة والرطوبة، التقليب، وبروتوكول الإقفال.",
+        title: L("معدل فقس ضعيف", "Svag kläckningsprocent"),
+        description: L(`المعدل العام ${avgRate.toFixed(0)}% — أقل من الحد المقبول ${SCIENCE.incubation.hatchRate.acceptable}%.`, `Total kläckningsprocent ${avgRate.toFixed(0)}% — under acceptabel gräns ${SCIENCE.incubation.hatchRate.acceptable}%.`),
+        solution: L("راجع: جودة البيض، عمره قبل التحضين، ثبات الحرارة والرطوبة، التقليب، وبروتوكول الإقفال.", "Granska: äggkvalitet, äggålder före inkubation, stabil temperatur och fuktighet, vändning och låsningsprotokoll."),
       });
     }
   }
@@ -930,48 +939,48 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
   const overdueTasks = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed);
   if (overdueTasks.length > 3) {
     errors.push({
-      title: "تراكم تشغيلي خطير",
-      description: `${overdueTasks.length} مهمة متأخرة — يدل على ضعف في المتابعة أو نقص الموارد.`,
-      solution: "صنّف المهام حسب الأولوية، فوّض ما يمكن، وأغلق الأقدم أولاً.",
+      title: L("تراكم تشغيلي خطير", "Farlig driftsanhopning"),
+      description: L(`${overdueTasks.length} مهمة متأخرة — يدل على ضعف في المتابعة أو نقص الموارد.`, `${overdueTasks.length} försenade uppgifter — tyder på svag uppföljning eller resursbrist.`),
+      solution: L("صنّف المهام حسب الأولوية، فوّض ما يمكن، وأغلق الأقدم أولاً.", "Prioritera uppgifter, delegera vid möjlighet och slutför de äldsta först."),
     });
   }
 
   const scoreBreakdown = [
-    { category: "البيئة", score: env.score, weight: 35, label: env.score >= 80 ? "جيد" : env.score >= 60 ? "مقبول" : "ضعيف" },
-    { category: "الأحياء", score: bio.score, weight: 35, label: bio.score >= 80 ? "جيد" : bio.score >= 60 ? "مقبول" : "ضعيف" },
-    { category: "العمليات", score: ops.score, weight: 20, label: ops.score >= 80 ? "جيد" : ops.score >= 60 ? "مقبول" : "ضعيف" },
-    { category: "جودة البيانات", score: dq.score, weight: 10, label: dq.label },
+    { category: L("البيئة", "Miljö"), score: env.score, weight: 35, label: env.score >= 80 ? L("جيد", "Bra") : env.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("الأحياء", "Biologi"), score: bio.score, weight: 35, label: bio.score >= 80 ? L("جيد", "Bra") : bio.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("العمليات", "Drift"), score: ops.score, weight: 20, label: ops.score >= 80 ? L("جيد", "Bra") : ops.score >= 60 ? L("مقبول", "Acceptabelt") : L("ضعيف", "Svagt") },
+    { category: L("جودة البيانات", "Datakvalitet"), score: dq.score, weight: 10, label: dq.label },
   ];
 
   const weightedScore = Math.round(
     scoreBreakdown.reduce((sum, s) => sum + s.score * (s.weight / 100), 0)
   );
 
-  const scoreLabel = weightedScore >= 85 ? "ممتاز" :
-    weightedScore >= 70 ? "جيد جداً" :
-    weightedScore >= 55 ? "جيد" :
-    weightedScore >= 40 ? "مقبول" : "حرج";
+  const scoreLabel = weightedScore >= 85 ? L("ممتاز", "Utmärkt") :
+    weightedScore >= 70 ? L("جيد جداً", "Mycket bra") :
+    weightedScore >= 55 ? L("جيد", "Bra") :
+    weightedScore >= 40 ? L("مقبول", "Acceptabelt") : L("حرج", "Kritiskt");
 
   const sections: Section[] = [
-    { icon: "🌡️", title: "البيئة والحرارة", category: "environment", items: env.sectionItems, healthScore: env.score },
-    { icon: "🧬", title: "المؤشرات الحيوية", category: "biological", items: bio.sectionItems, healthScore: bio.score },
-    { icon: "⚙️", title: "العمليات والإدارة", category: "operational", items: ops.sectionItems, healthScore: ops.score },
+    { icon: "🌡️", title: L("البيئة والحرارة", "Miljö och temperatur"), category: "environment", items: env.sectionItems, healthScore: env.score },
+    { icon: "🧬", title: L("المؤشرات الحيوية", "Biologiska indikatorer"), category: "biological", items: bio.sectionItems, healthScore: bio.score },
+    { icon: "⚙️", title: L("العمليات والإدارة", "Drift och förvaltning"), category: "operational", items: ops.sectionItems, healthScore: ops.score },
   ];
 
-  let topPriority = "لا توجد مشاكل عاجلة حالياً — حافظ على نفس الأداء.";
+  let topPriority = L("لا توجد مشاكل عاجلة حالياً — حافظ على نفس الأداء.", "Inga akuta problem just nu — håll samma prestanda.");
   if (allRecs.length > 0) {
     topPriority = allRecs[0].title;
-    if (allRecs.length > 1) topPriority += ` → ثم: ${allRecs[1].title}`;
+    if (allRecs.length > 1) topPriority += L(` → ثم: ${allRecs[1].title}`, ` → Sedan: ${allRecs[1].title}`);
   }
 
   const summaryParts: string[] = [];
   if (allAlerts.filter(a => a.type === "danger").length > 0)
-    summaryParts.push(`🔴 ${allAlerts.filter(a => a.type === "danger").length} تنبيه خطير`);
+    summaryParts.push(L(`🔴 ${allAlerts.filter(a => a.type === "danger").length} تنبيه خطير`, `🔴 ${allAlerts.filter(a => a.type === "danger").length} kritisk varning`));
   if (allAnomalies.length > 0)
-    summaryParts.push(`🔍 ${allAnomalies.length} شذوذ مكتشف`);
-  summaryParts.push(`📊 النتيجة: ${weightedScore}/100 (${scoreLabel})`);
+    summaryParts.push(L(`🔍 ${allAnomalies.length} شذوذ مكتشف`, `🔍 ${allAnomalies.length} avvikelse upptäckt`));
+  summaryParts.push(L(`📊 النتيجة: ${weightedScore}/100 (${scoreLabel})`, `📊 Resultat: ${weightedScore}/100 (${scoreLabel})`));
   if (allPredictions.length > 0)
-    summaryParts.push(`🔮 ${allPredictions.length} توقع`);
+    summaryParts.push(L(`🔮 ${allPredictions.length} توقع`, `🔮 ${allPredictions.length} prognos`));
 
   return {
     score: weightedScore,
@@ -990,7 +999,7 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
       documentationFreq: ops.docTrend,
     },
     topPriority,
-    futureRisk: futureRiskAnalysis(data),
+    futureRisk: futureRiskAnalysis(data, lang),
     aiCapabilities: buildAiCapabilities(data),
     summary: summaryParts.join(" | "),
     timestamp: new Date().toISOString(),
@@ -1328,7 +1337,7 @@ export function buildDailyPlan(data: RawFarmData, lang: EngineLang = "ar"): Dail
 
 export function buildExpertChatReply(message: string, data: RawFarmData): string {
   const lang = detectLang(message);
-  const analysis = runFullAnalysis(data);
+  const analysis = runFullAnalysis(data, lang);
   const lower = message.toLowerCase();
   const wantsRisk = /خطر|مخاطر|مستقبل|تحذير|توقع|what will|predict|future/i.test(message);
   const wantsDetail = /اشرح|فصل|عمق|تفصيل|why|how|لماذا|كيف|حلل/i.test(message);

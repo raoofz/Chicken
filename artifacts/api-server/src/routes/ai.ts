@@ -623,8 +623,8 @@ ${farmData}
 router.post("/ai/analyze-farm", requireAdmin, async (req: Request, res: Response) => {
   try {
     const rawData = await getRawFarmData();
-    const analysis = runFullAnalysis(rawData);
     const lang = String(req.body?.lang ?? "").toLowerCase() === "sv" ? "sv" : "ar";
+    const analysis = runFullAnalysis(rawData, lang);
     res.json({ analysis, timestamp: new Date().toISOString(), mode: "expert-local", lang });
   } catch (err: any) {
     logger.error({ err }, "Farm analysis failed");
