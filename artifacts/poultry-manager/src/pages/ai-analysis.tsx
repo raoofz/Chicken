@@ -509,11 +509,17 @@ export default function AiAnalysis() {
                       <AlertTriangle className="w-4 h-4 text-amber-500" />
                       <h3 className="font-bold">الخطر المستقبلي</h3>
                     </div>
-                    <div className="rounded-2xl border border-border/60 p-3">
-                      <p className="text-sm font-semibold">{analysis.futureRisk.title}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{analysis.futureRisk.horizon}</p>
-                      <p className="text-sm mt-3 leading-7 text-foreground/90">{analysis.futureRisk.summary}</p>
-                    </div>
+                    {analysis.futureRisk ? (
+                      <div className="rounded-2xl border border-border/60 p-3">
+                        <p className="text-sm font-semibold">{analysis.futureRisk.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{analysis.futureRisk.horizon}</p>
+                        <p className="text-sm mt-3 leading-7 text-foreground/90">{analysis.futureRisk.summary}</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-border/60 p-3 text-sm text-muted-foreground">
+                        لا توجد مخاطر مستقبلية واضحة حالياً.
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
