@@ -156,12 +156,6 @@ export default function AiAnalysis() {
   const getScoreRingColor = (score: number) => score >= 80 ? "stroke-emerald-500" : score >= 60 ? "stroke-amber-500" : "stroke-red-500";
   const topAlerts = (analysis?.alerts ?? []).slice(0, 5);
   const topRecommendations = (analysis?.recommendations ?? []).slice(0, 5);
-  const termHelp = [
-    { title: "البيئة", text: "حرارة، رطوبة، تهوية، ونظافة." },
-    { title: "الأحياء", text: "صحة الطيور والكتاكيت والأجنة." },
-    { title: "العمليات", text: "العلف، الماء، التقليب، والتحصين." },
-    { title: "جودة البيانات", text: "هل المعلومات كاملة وحديثة وصحيحة." },
-  ];
 
   const priorityColor = (p: string) => {
     switch (p) { case "urgent": return "bg-red-500 text-white"; case "high": return "bg-orange-500 text-white"; case "medium": return "bg-amber-500 text-white"; default: return "bg-blue-500 text-white"; }
@@ -200,13 +194,6 @@ export default function AiAnalysis() {
             <p className="text-xs text-muted-foreground">تحليل عميق بالمعايير العلمية — كشف شذوذ — توقعات — توصيات</p>
           </div>
         </div>
-      </div>
-
-      <div className="mb-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
-        <p className="text-sm font-semibold mb-1">شرح سريع</p>
-        <p className="text-sm text-muted-foreground leading-7">
-          البيئة: حرارة ورطوبة وتهوية. الأحياء: صحة الطيور. العمليات: العلف والماء والعمل اليومي. جودة البيانات: دقة السجل وحداثته.
-        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-4 pb-4">
