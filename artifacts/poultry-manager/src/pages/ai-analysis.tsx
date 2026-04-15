@@ -267,7 +267,7 @@ export default function AiAnalysis() {
                 <Stethoscope className="w-10 h-10 text-emerald-600" />
               </div>
               <p className="font-semibold text-lg">جارٍ تحليل بيانات المزرعة...</p>
-              <p className="text-sm text-muted-foreground">يفحص الفقاسات، القطعان، المهام، الأهداف، والملاحظات</p>
+              <p className="text-sm text-muted-foreground">يفحص الفقاسات، الدجاجات، المهام، الأهداف، والملاحظات</p>
               <div className="w-48 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full animate-pulse" style={{ width: "65%" }} />
               </div>
