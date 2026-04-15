@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Bird, Egg, CheckCircle2, Target, TrendingUp, ArrowLeft, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { WeatherWidget } from "@/components/WeatherWidget";
 
 export default function Dashboard() {
   const { data: summary, isLoading } = useGetDashboardSummary({ query: { queryKey: getGetDashboardSummaryQueryKey() } });
@@ -113,6 +114,9 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      {/* Weather Widget */}
+      <WeatherWidget />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Link href="/goals">
