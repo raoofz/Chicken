@@ -276,7 +276,6 @@ const translations: Record<string, Record<Lang, string>> = {
 
   "ai.title": { ar: "المستشار الذكي", sv: "AI-rådgivare" },
   "ai.subtitle": { ar: "تحليل شامل: الفقاسة · القطعان · المهام · الأهداف · المذكرات · التوقعات", sv: "Komplett analys: Kläckmaskin · Flockar · Uppgifter · Mål · Anteckningar · Prognoser" },
-  "ai.analyzing": { ar: "جارٍ التحليل...", sv: "Analyserar..." },
   "ai.refresh": { ar: "تحديث التحليل", sv: "Uppdatera analys" },
   "ai.start": { ar: "ابدأ التحليل الذكي", sv: "Starta AI-analys" },
   "ai.restricted": { ar: "وصول مقيّد", sv: "Begränsad åtkomst" },

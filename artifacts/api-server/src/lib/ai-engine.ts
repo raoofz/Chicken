@@ -374,8 +374,8 @@ function analyzeEnvironment(cycles: HatchingCycle[], lang: EngineLang = "ar"): {
   const activeCycles = cycles.filter(c => c.status === "incubating" || c.status === "hatching");
 
   if (activeCycles.length === 0) {
-    items.push({ label: L("الدورات النشطة", "Aktiva cykler"), value: "0", status: "neutral", detail: L("لا توجد فقاسات عاملة حالياً", "Inga aktiva kläckmaskiner för tillfället") });
-    return { alerts, anomalies, sectionItems: items, score: 70, recommendations };
+    items.push({ label: L("الدورات النشطة", "Aktiva cykler"), value: "0", status: "neutral", detail: L("لا توجد فقاسات عاملة حالياً — الحاضنة في وضع راحة", "Inga aktiva kläckmaskiner — maskinen vilar") });
+    return { alerts, anomalies, sectionItems: items, score: 95, recommendations };
   }
 
   items.push({ label: L("الدورات النشطة", "Aktiva cykler"), value: String(activeCycles.length), status: "good" });
@@ -446,9 +446,9 @@ function analyzeEnvironment(cycles: HatchingCycle[], lang: EngineLang = "ar"): {
     } else {
       alerts.push({
         type: "warning", category: "environment",
-        title: L(`بيانات حرارة مفقودة — ${c.batchName}`, `Saknad temperaturdata — ${c.batchName}`),
-        description: L("لم تُسجّل قراءة حرارة لهذه الدفعة. التحليل محدود.", "Ingen temperaturavläsning registrerad för denna batch. Analysen är begränsad."),
-        severity: 6,
+        title: L(`تسجيل الحرارة مطلوب — ${c.batchName}`, `Registrera temperatur — ${c.batchName}`),
+        description: L(`لم تُسجَّل قراءة حرارة لـ"${c.batchName}". سجّلها الآن في صفحة التفقيس لضمان دقة التحليل.`, `Ingen temperaturavläsning för "${c.batchName}". Registrera nu för korrekt analys.`),
+        severity: 3,
       });
     }
 
@@ -1084,9 +1084,13 @@ export function buildQuickSolve(
 ): QuickSolveResult {
   const L = (ar: string, sv: string) => tr(lang, ar, sv);
   const t = today();
-  const cat = issue.category ?? "general";
+
+  /* Smart keyword detection — checks both title and description */
+  const combined = (issue.title + " " + issue.description).toLowerCase();
+  const has = (...words: string[]) => words.some(w => combined.includes(w));
 
   const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
+  const completedCycles = data.hatchingCycles.filter(c => c.status === "completed" && c.eggsHatched != null);
   const pendingTasks = data.tasks.filter(t2 => !t2.completed);
   const overdueTasks = pendingTasks.filter(t2 => t2.dueDate && t2.dueDate < t);
   const totalBirds = data.flocks.reduce((a, f) => a + f.count, 0);
@@ -1097,60 +1101,162 @@ export function buildQuickSolve(
   let summary = "";
   let timeframe = L("24 ساعة", "24 timmar");
 
-  if (cat === "environment" || cat === "incubation") {
-    activeCycles.slice(0, 3).forEach(c => {
-      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
-      relatedFacts.push(L(`${c.batchName}: اليوم ${daysIn}/${c.incubationDays} — ${c.eggsSet} بيضة`, `${c.batchName}: Dag ${daysIn}/${c.incubationDays} — ${c.eggsSet} ägg`));
+  /* ── 1. POOR HATCH RATE (فقس ضعيف) ── */
+  if (has("فقس ضعيف", "نسبة الفقس", "kläckningsgrad", "låg kläck", "hatching rate")) {
+    const lastCompleted = completedCycles.slice(-5);
+    lastCompleted.forEach(c => {
+      const rate = c.eggsSet > 0 ? ((c.eggsHatched! / c.eggsSet) * 100).toFixed(1) : "0";
+      relatedFacts.push(L(`${c.batchName}: فقس ${rate}% (${c.eggsHatched}/${c.eggsSet} بيضة)`, `${c.batchName}: ${rate}% kläckning (${c.eggsHatched}/${c.eggsSet} ägg)`));
     });
-    steps.push(
-      { icon: "🌡️", title: L("قِس الحرارة فوراً في كل حاضنة", "Mät temperaturen i alla kläckmaskiner nu"), detail: L(`الهدف: 37.5-37.8°م. لديك ${activeCycles.length} دورة بـ${totalEggs} بيضة — انحراف ساعتين يضر بالتفقيس`, `Mål: 37.5-37.8°C. Du har ${activeCycles.length} cykler med ${totalEggs} ägg`), urgency: "critical" },
-      { icon: "💧", title: L("افحص مستوى الرطوبة", "Kontrollera fuktighetsnivån"), detail: L("المثالي 55-65% أثناء الحضانة، 65-75% أثناء الفقس. أضف ماء إذا أقل", "Optimal 55-65% under inkubation, 65-75% under kläckning"), urgency: "critical" },
-      { icon: "🔄", title: L("تحقق من آلية التقليب التلقائي", "Kontrollera automatisk vändning"), detail: L("التقليب 3 مرات يومياً حد أدنى. توقف التقليب يقلل الفقس 15-30%", "Minimum 3 vändningar per dag. Stoppad vändning minskar kläckning med 15-30%"), urgency: "high" },
-      { icon: "📋", title: L("سجّل القراءات الآن في المذكرات", "Registrera avläsningarna nu"), detail: L("الحرارة + الرطوبة + حالة كل دفعة — التسجيل يساعدك على متابعة التحسن", "Temperatur + fuktighet + status för varje sats"), urgency: "medium" },
-    );
-    summary = L(`${activeCycles.length} دورة نشطة بـ${totalEggs} بيضة. مشكلة الحرارة تتطلب تدخلاً فورياً — كل ساعة تأخير تزيد الخسائر.`, `${activeCycles.length} aktiva cykler med ${totalEggs} ägg. Temperaturproblem kräver omedelbar åtgärd.`);
-    timeframe = L("أقل من ساعة", "Under 1 timme");
+    activeCycles.forEach(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      relatedFacts.push(L(`جارية — ${c.batchName}: اليوم ${daysIn}/${c.incubationDays}`, `Pågående — ${c.batchName}: Dag ${daysIn}/${c.incubationDays}`));
+    });
+    const avgRate = lastCompleted.length > 0 ? lastCompleted.reduce((a, c) => a + (c.eggsSet > 0 ? (c.eggsHatched! / c.eggsSet * 100) : 0), 0) / lastCompleted.length : 0;
 
-  } else if (cat === "biological") {
-    data.flocks.slice(0, 3).forEach(f => relatedFacts.push(L(`${f.name}: ${f.count} طير — نوع: ${f.type ?? "غير محدد"}`, `${f.name}: ${f.count} fåglar — typ: ${f.type ?? "okänd"}`)));
     steps.push(
-      { icon: "🔍", title: L("افحص جميع القطعان بصرياً الآن", "Inspektera alla flockar visuellt nu"), detail: L(`راقب في ${data.flocks.map(f => f.name).slice(0, 2).join(" و")}: خمول، تجمع، أعراض تنفسية، إسهال`, `Sök efter letargi, klumpning, andningssymtom, diarré`), urgency: "critical" },
-      { icon: "🌡️", title: L("قِس حرارة الطيور المشتبه بها", "Mät kroppstemperaturen på misstänkta fåglar"), detail: L("الطبيعي: 41-41.5°م. أكثر من 42°م → خطر. أقل من 40°م → صدمة", "Normalt: 41-41.5°C. Över 42°C → fara. Under 40°C → chock"), urgency: "critical" },
-      { icon: "🚧", title: L("عزل أي طائر يبدو غير طبيعي فوراً", "Isolera omedelbart onormala fåglar"), detail: L(`العزل يحمي بقية الـ${totalBirds} طير. استخدم قفصاً منفصلاً مع علف وماء نظيف`, `Isolering skyddar de övriga ${totalBirds} fåglarna`), urgency: "high" },
-      { icon: "💊", title: L("راجع برنامج التحصين والأدوية", "Granska vaccinationsplanen"), detail: L("تحقق من آخر جرعة تحصين والموعد القادم — التأخير يرفع خطر الانتشار", "Kontrollera senaste vaccination och nästa schemalagda dos"), urgency: "medium" },
+      { icon: "🌡️", title: L("افحص ثبات الحرارة أولاً — السبب #1 لضعف الفقس", "Kontrollera temperaturstabilitet — orsak #1 till svag kläckning"), detail: L(`المثالي: 37.5-37.8°م. كل ارتفاع 0.3°م يقلل الفقس 5-10%. ثبات الحرارة أهم من مجرد الرقم الصحيح. لديك ${activeCycles.length} دورة نشطة`, `Optimal: 37,5-37,8°C. Varje 0,3°C-höjning minskar kläckning med 5-10%. Stabilitet viktigare än exakt värde. Du har ${activeCycles.length} aktiva cykler`), urgency: "critical" },
+      { icon: "💧", title: L("اضبط الرطوبة بدقة — السبب #2", "Justera fuktigheten noggrant — orsak #2"), detail: L("الحضانة: 55-65%. الإقفال (يوم 18-21): 68-75%. انخفاض الرطوبة → جفاف الأجنة. ارتفاعها → اختناقها. قِسها بميزان رطوبة معايَر", "Inkubation: 55-65%. Lockdown (dag 18-21): 68-75%. Låg fuktighet → uttorkning. Hög → kvävning. Mät med kalibrerad hygrometer"), urgency: "critical" },
+      { icon: "🔄", title: L("راجع التقليب — السبب #3", "Granska vändningsrutinen — orsak #3"), detail: L("المطلوب: 3-5 مرات يومياً حتى اليوم 17. التقليب غير المنتظم يلصق الجنين بالقشرة ويقتله. التوقف يوم 18 إلزامي", "Krävs: 3-5 gånger/dag till och med dag 17. Ojämn vändning klistrar embryot till skalet. Stopp dag 18 är obligatoriskt"), urgency: "high" },
+      { icon: "🥚", title: L("تحقق من جودة البيض المُحضَّن — السبب #4", "Kontrollera kvaliteten på inkuberade ägg — orsak #4"), detail: L("البيض الأكثر من 7 أيام: الفقس ينخفض 1-2% يومياً. البيض المكسور أو الملوث يجب إزالته قبل التحضين. حرارة التخزين: 15-18°م", "Ägg äldre än 7 dagar: kläckning minskar 1-2% per dag. Spruckna/smutsiga ägg måste avlägsnas. Förvaringstemperatur: 15-18°C"), urgency: "high" },
+      { icon: "🔬", title: L("افحص البيض غير المفقوس بالضوء لتحديد سبب الفشل", "Undersök ej kläckta ägg med ljus för att hitta felorsaken"), detail: L("موت اليوم 1-5: تلوث أو سوء بيض. اليوم 6-14: مشكلة تهوية أو رطوبة. اليوم 15-21: مشكلة إقفال أو إفراط حرارة. معرفة السبب تمنع التكرار", "Död dag 1-5: kontamination/äggkvalitet. Dag 6-14: ventilation/fuktighet. Dag 15-21: lockdown/överhettning"), urgency: "medium" },
+      { icon: "📊", title: L("سجّل كل نتائج دوراتك لمقارنة التحسن", "Registrera alla dina cykelresultat för att mäta förbättring"), detail: L(`معدلك الحالي: ${avgRate > 0 ? avgRate.toFixed(0) + "%" : "غير محدد"}. الهدف: 75%+ للبيض المحلي، 85%+ للمخصَّب تجارياً. التسجيل المستمر يكشف النمط`, `Din nuvarande kläckprocent: ${avgRate > 0 ? avgRate.toFixed(0) + "%" : "okänd"}. Mål: 75%+ för lokala ägg, 85%+ för kommersiellt befruktade`), urgency: "medium" },
     );
-    summary = L(`المشكلة الصحية تهدد ${totalBirds} طير في ${data.flocks.length} قطيع. التدخل السريع يمنع الانتشار.`, `Hälsoproblemet hotar ${totalBirds} fåglar i ${data.flocks.length} flockar.`);
-    timeframe = L("1-3 ساعات", "1-3 timmar");
+    summary = L(`فقس ضعيف له أسباب علمية واضحة. ${avgRate > 0 ? `معدلك الحالي ${avgRate.toFixed(0)}%.` : ""} عالج الأسباب الأربعة بالترتيب: حرارة → رطوبة → تقليب → بيض. التحسن واضح خلال دورة واحدة.`, `Svag kläckning har tydliga vetenskapliga orsaker. ${avgRate > 0 ? `Din nuv. kläckprocent: ${avgRate.toFixed(0)}%.` : ""} Behandla fyra orsaker i ordning: temperatur → fuktighet → vändning → ägg.`);
+    timeframe = L("دورة واحدة (21 يوم)", "En cykel (21 dagar)");
 
-  } else if (cat === "operational") {
-    if (overdueTasks.length > 0) relatedFacts.push(L(`المتأخرة: ${overdueTasks.slice(0,3).map(t2 => t2.title).join("، ")}`, `Försenade: ${overdueTasks.slice(0,3).map(t2 => t2.title).join(", ")}`));
-    relatedFacts.push(L(`${data.tasks.filter(t2 => t2.completed).length} مهمة مكتملة من ${data.tasks.length} إجمالاً`, `${data.tasks.filter(t2 => t2.completed).length} klara av ${data.tasks.length} totalt`));
+  /* ── 2. TEMPERATURE CRISIS (حرارة خطيرة/مرتفعة/منخفضة) ── */
+  } else if (has("حرارة خطيرة", "حرارة مرتفعة", "حرارة منخفضة", "حرارة أقل", "انخفاض حراري", "تسجيل الحرارة", "farlig temperatur", "hög temperatur", "låg temperatur", "temperatur")) {
+    activeCycles.forEach(c => {
+      const temp = c.temperature ? `${Number(c.temperature)}°م` : L("غير مسجلة", "ej registrerad");
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      relatedFacts.push(L(`${c.batchName}: حرارة ${temp} — اليوم ${daysIn}/${c.incubationDays}`, `${c.batchName}: Temp ${temp} — dag ${daysIn}/${c.incubationDays}`));
+    });
+    const isHigh = has("مرتفعة", "خطيرة", "تتجاوز", "hög", "farlig", "överstiger");
+    const isMissing = has("تسجيل الحرارة", "مفقودة", "saknad");
+
     steps.push(
-      { icon: "⚡", title: L("ابدأ بالمهام المتأخرة فوراً", "Börja med försenade uppgifter omedelbart"), detail: overdueTasks.length > 0 ? L(`${overdueTasks.length} متأخرة: ${overdueTasks.slice(0,2).map(t2 => t2.title).join("، ")}`, `${overdueTasks.length} försenade: ${overdueTasks.slice(0,2).map(t2 => t2.title).join(", ")}`) : L("لا توجد متأخرة حالياً — ممتاز", "Inga försenade för tillfället — utmärkt"), urgency: "critical" },
-      { icon: "📋", title: L("رتّب المهام: حاضنة → علف → نظافة → توثيق", "Prioritera: kläckning → foder → städning → dokumentation"), detail: L("هذا الترتيب يضمن سلامة الطيور أولاً ثم الكفاءة التشغيلية", "Denna ordning säkerställer fåglarnas säkerhet först"), urgency: "high" },
-      { icon: "👥", title: L("وزّع المهام على الفريق", "Fördela uppgifterna i teamet"), detail: L(`${pendingTasks.length} مهمة معلقة — التوزيع يرفع الكفاءة ويقلل الإجهاد`, `${pendingTasks.length} väntande uppgifter — fördelning höjer effektiviteten`), urgency: "medium" },
+      { icon: "🌡️", title: L(isMissing ? "سجّل الحرارة الآن في صفحة التفقيس" : isHigh ? "اخفض الحرارة فوراً — كل دقيقة مهمة" : "ارفع الحرارة بتدريج آمن", isMissing ? "Registrera temperaturen nu i kläckningssidan" : isHigh ? "Sänk temperaturen omedelbart — varje minut räknas" : "Höj temperaturen gradvis och säkert"), detail: L(isMissing ? `افتح صفحة التفقيس وسجّل قراءة الحرارة لكل دفعة نشطة (${activeCycles.length} دفعة). التحليل الدقيق يعتمد على هذه البيانات` : isHigh ? "افتح باب الحاضنة 30 ثانية. أبعد مصدر الحرارة. لا تضع ثلجاً أو ماء بارداً مباشرة — الصدمة الحرارية تقتل الأجنة" : "افحص الترموستات أولاً. تحقق من إغلاق الباب محكماً. أضف مصدر حرارة تدريجياً. الهدف: 37.5°م", isMissing ? `Öppna kläckningssidan och registrera temperaturavläsning för varje aktiv sats (${activeCycles.length} satser)` : isHigh ? "Öppna luckan 30 sekunder. Ta bort värmekällan. Häll inte is eller kallt vatten direkt" : "Kontrollera termostaten. Se till att luckan är tätslutande. Tillsätt värme gradvis"), urgency: "critical" },
+      { icon: "⏱️", title: L("راقب الحرارة كل 30 دقيقة حتى الاستقرار التام", "Övervaka temperaturen var 30:e minut tills helt stabil"), detail: L("سجّل كل قراءة في الملاحظات مع الوقت. إذا لم تستقر خلال ساعتين → يحتمل عطل في الترموستات", "Registrera varje avläsning med tidpunkt. Om ej stabil efter 2 timmar → möjligt termostatfel"), urgency: "critical" },
+      { icon: "🔧", title: L("اختبر دقة حساس الحرارة بميزان مرجعي", "Testa temperatursensorns noggrannhet med referenstermometer"), detail: L("ضع ميزاناً حرارياً طبياً أو مرجعياً داخل الحاضنة. فرق ±0.5°م → الحاضنة تحتاج معايرة عاجلة", "Placera en medicinsk eller referenstermometer inuti maskinen. ±0,5°C-skillnad → maskinen behöver kalibrering"), urgency: "high" },
+      { icon: "💧", title: L("افحص الرطوبة فوراً — الحرارة تؤثر عليها مباشرة", "Kontrollera fuktigheten direkt — temperaturen påverkar den"), detail: L("ارتفاع الحرارة يخفض الرطوبة. انخفاضها يرفعها. المثالي: 55-65% (الحضانة) / 68-75% (الإقفال)", "Höjd temperatur sänker fuktigheten. Sänkt temp höjer den. Optimal: 55-65% (inkubation) / 68-75% (lockdown)"), urgency: "high" },
     );
-    summary = L(`${pendingTasks.length} مهمة معلقة (${overdueTasks.length} متأخرة). معالجتها رفعت إنجاز المزرعة تاريخياً بـ 25-40%.`, `${pendingTasks.length} väntande (${overdueTasks.length} försenade). Åtgärder ökar gårdens prestanda.`);
+    summary = L(`${isMissing ? "تسجيل الحرارة ضروري لدقة التحليل وسلامة الأجنة." : isHigh ? "أزمة حرارية مرتفعة تهدد الأجنة — كل ساعة تأخير ترفع الخسائر." : "انخفاض الحرارة يبطئ نمو الأجنة ويزيد تشوهات الفقس."} لديك ${totalEggs} بيضة في ${activeCycles.length} دورة نشطة.`, `${isMissing ? "Temperaturregistrering krävs för korrekt analys." : isHigh ? "Temperaturkris hotar embryon — varje timmes fördröjning ökar förlusterna." : "Låg temperatur bromsar embryonas tillväxt."} Du har ${totalEggs} ägg i ${activeCycles.length} aktiva cykler.`);
+    timeframe = L(isMissing ? "الآن" : "أقل من ساعة", isMissing ? "Nu" : "Under 1 timme");
+
+  /* ── 3. DOCUMENTATION QUALITY (توثيق ضعيف) ── */
+  } else if (has("توثيق ضعيف", "توثيق", "تسجيل ضعيف", "مذكرات", "dokumentation", "registrering", "anteckning")) {
+    const sevenDaysAgo = new Date(new Date(t).getTime() - 7 * 86400000).toISOString().split("T")[0];
+    const recentNotes = data.notes.filter(n => n.date >= sevenDaysAgo).length;
+    relatedFacts.push(L(`المذكرات في آخر 7 أيام: ${recentNotes} (الهدف: 5+)`, `Anteckningar senaste 7 dagarna: ${recentNotes} (mål: 5+)`));
+    relatedFacts.push(L(`دورات التفقيس المسجلة: ${data.hatchingCycles.length}`, `Kläckningscykler registrerade: ${data.hatchingCycles.length}`));
+    relatedFacts.push(L(`الطيور المسجلة: ${totalBirds} في ${data.flocks.length} قطعان`, `Registrerade fåglar: ${totalBirds} i ${data.flocks.length} flockar`));
+
+    steps.push(
+      { icon: "📝", title: L("سجّل ملاحظة يومية الآن — أقل من دقيقتين", "Registrera en daganteckning nu — under 2 minuter"), detail: L("اكتب ثلاثة أشياء فقط: 1️⃣ حرارة الحاضنة 2️⃣ حالة الطيور (طبيعية/مشبوهة) 3️⃣ أي ملاحظة غريبة. البساطة أهم من الكمال", "Skriv tre saker: 1️⃣ Kläckmaskinens temperatur 2️⃣ Fåglarnas tillstånd 3️⃣ Något ovanligt. Enkelhet slår perfektion"), urgency: "critical" },
+      { icon: "🌡️", title: L("أكمل بيانات الحرارة في صفحة التفقيس", "Fyll i temperaturdata på kläckningssidan"), detail: L(`${activeCycles.length > 0 ? `${activeCycles.length} دفعة نشطة تنتظر قراءات حرارة ورطوبة — سجّلها الآن` : "ابدأ بتسجيل الحرارة عند كل دورة جديدة منذ أول يوم"}`, `${activeCycles.length > 0 ? `${activeCycles.length} aktiva satser väntar på temperatur- och fuktighetsavläsningar` : "Börja registrera temperatur från dag 1 av varje ny cykel"}`), urgency: "high" },
+      { icon: "🥚", title: L("سجّل نتائج كل دورة تفقيس عند انتهائها", "Registrera resultaten av varje kläckningscykel vid avslut"), detail: L("بيانات الفقس (خرج/وضع) ضرورية لحساب معدل الفقس وتحسين الأداء. بدونها التحليل أعمى", "Kläckdata (kläckta/lagda) krävs för att beräkna kläckprocent. Utan dem är analysen blind"), urgency: "high" },
+      { icon: "📊", title: L("أضف ملاحظة أسبوعية شاملة كل أحد", "Lägg till en heltäckande veckoanteckning varje söndag"), detail: L("5 دقائق كل أسبوع تكفي: الإنتاج + المشاكل + القرارات المتخذة + الخطط. هذا يبني تاريخاً للمزرعة", "5 minuter per vecka räcker: produktion + problem + beslut + planer. Detta bygger gårdens historia"), urgency: "medium" },
+    );
+    summary = L(`التوثيق الضعيف يخفي المشاكل ويجعل الأخطاء تتكرر. ${recentNotes} ملاحظة هذا الأسبوع — الهدف 5+. التحليل الدقيق يعتمد على سجلاتك.`, `Svag dokumentation döljer problem och låter misstag upprepas. ${recentNotes} anteckningar denna vecka — mål: 5+. Exakt analys beror på dina register.`);
+    timeframe = L("هذا الأسبوع (ابدأ الآن)", "Den här veckan (börja nu)");
+
+  /* ── 4. OVERDUE HATCHING CYCLE (دورة متأخرة) ── */
+  } else if (has("دورة متأخرة", "متأخرة", "مرّ", "يوم 23", "يوم 24", "försenad cykel", "dagar har gått", "dag 23")) {
+    const overdueCycles = activeCycles.filter(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      return c.status === "incubating" && daysIn > 22;
+    });
+    overdueCycles.forEach(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      relatedFacts.push(L(`${c.batchName}: اليوم ${daysIn} (متجاوز الـ21) — ${c.eggsSet} بيضة`, `${c.batchName}: Dag ${daysIn} (passerat 21) — ${c.eggsSet} ägg`));
+    });
+
+    steps.push(
+      { icon: "🔦", title: L("افحص البيض بالضوء (candling) الآن", "Kontrollera äggen med ljus (candling) nu"), detail: L("ابحث عن: حركة الجنين (حي)، تشقق القشرة (يفقس الآن)، أو بيضة داكنة كاملة (ميتة). الفحص بالضوء يجيب في 5 دقائق", "Sök efter: embryorörelse (levande), sprickbildning (håller på att kläckas), eller helt mörkt ägg (dött)"), urgency: "critical" },
+      { icon: "🌡️", title: L("تحقق من سجل الحرارة — الانخفاض يؤخر الفقس", "Granska temperaturloggen — låg temp fördröjer kläckning"), detail: L("كل 0.3°م انخفاض عن 37.5°م يؤخر الفقس يوماً إضافياً. الحاضنة بدون حرارة مسجلة تعني عدم اليقين", "Varje 0,3°C under 37,5°C fördröjer kläckning med ~1 extra dag"), urgency: "high" },
+      { icon: "🚫", title: L("لا تفتح الحاضنة إلا للضرورة القصوى", "Öppna bara maskinen om absolut nödvändigt"), detail: L("فتح الحاضنة يفقدها 10-20% رطوبة و1-2°م حرارة. الصيصان الجاهزة للخروج تتضرر من التغيير المفاجئ", "Att öppna maskinen förlorar 10-20% fuktighet och 1-2°C. Kycklingar redo att kläckas skadas av plötsliga förändringar"), urgency: "critical" },
+      { icon: "📋", title: L("بعد اليوم 25: حدّث حالة الدفعة", "Efter dag 25: uppdatera satsens status"), detail: L("إذا لم يحدث أي فقس بعد اليوم 25 → سجّل الدفعة كـ'مكتملة' مع الملاحظات. هذا يحسن دقة التحليل", "Om ingen kläckning skett efter dag 25 → registrera satsen som 'avslutad' med anteckningar"), urgency: "medium" },
+    );
+    summary = L(`دورة متجاوزة الموعد الطبيعي (21 يوماً). السبب الأكثر شيوعاً: انخفاض الحرارة أو تأخر الإقفال. الفحص بالضوء يعطيك الإجابة.`, `Cykel som passerat normalt datum (21 dagar). Vanligaste orsak: låg temperatur eller försenad lockdown.`);
+    timeframe = L("ساعات", "Timmar");
+
+  /* ── 5. LOCKDOWN (إقفال) ── */
+  } else if (has("إقفال", "لوك داون", "يوم 17", "يوم 18", "يوم 19", "lockdown", "dag 18")) {
+    const lockdownCycles = activeCycles.filter(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      return daysIn >= 17 && daysIn <= 19;
+    });
+    lockdownCycles.forEach(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      relatedFacts.push(L(`${c.batchName}: اليوم ${daysIn} — وقت الإقفال`, `${c.batchName}: Dag ${daysIn} — lockdown-dags`));
+    });
+
+    steps.push(
+      { icon: "🔒", title: L("نفّذ بروتوكول الإقفال الكامل الآن", "Utför det fullständiga lockdown-protokollet nu"), detail: L("1️⃣ أوقف التقليب التلقائي نهائياً 2️⃣ ضع البيض بوضع أفقي 3️⃣ ارفع الرطوبة لـ 68-75% 4️⃣ خفّف تدريجياً الحرارة لـ 37.0°م", "1️⃣ Stoppa automatisk vändning 2️⃣ Lägg äggen horisontellt 3️⃣ Höj fuktigheten till 68-75% 4️⃣ Sänk gradvis temperaturen till 37,0°C"), urgency: "critical" },
+      { icon: "🚫", title: L("لا تفتح الحاضنة من اليوم 18 حتى ينتهي الفقس", "Öppna ALDRIG maskinen från dag 18 till kläckning"), detail: L("فتح الحاضنة في مرحلة الإقفال قد يقتل الصيصان الجاهزة. انتظر حتى تجف 90%+ من الصيصان قبل الفتح", "Att öppna maskinen under lockdown kan döda kycklingar som är redo. Vänta tills 90%+ av kycklingarna är torra"), urgency: "critical" },
+      { icon: "💧", title: L("أضف ماء دافئاً (37°م) في صواني الرطوبة", "Tillsätt varmt vatten (37°C) i fuktighetsbrickorna"), detail: L("الماء الدافئ لا يصدم الحاضنة. استخدم صواني كبيرة أو إسفنج مبلل. الرطوبة 68-75% تمنع التصاق الجنين", "Varmt vatten chockar inte maskinen. Använd stora brickor eller fuktig svamp"), urgency: "high" },
+      { icon: "📊", title: L("استعدّ لاستقبال الصيصان بعد 24-72 ساعة", "Förbered dig för att ta emot kycklingar om 24-72 timmar"), detail: L("جهّز حاضنة الصيصان (الفقّاسة): 35°م أول أسبوع، علف صيصان ناعم، ماء نظيف دافئ، تهوية كافية", "Förbered kycklingsinkubatorn: 35°C vecka 1, finmalet kycklingfoder, rent ljummet vatten, tillräcklig ventilation"), urgency: "medium" },
+    );
+    summary = L(`حان وقت الإقفال — الـ 3 أيام الأكثر حساسية في التفقيس. الإجراءات الصحيحة الآن ترفع نسبة الفقس 15-25%.`, `Lockdown-dags — de 3 känsligaste dagarna i kläckning. Korrekta åtgärder nu ökar kläckprocenten med 15-25%.`);
+    timeframe = L("الآن — بدون تأجيل", "Nu — ingen fördröjning");
+
+  /* ── 6. CHICK HEALTH / BIOLOGICAL (صيصان، أعراض) ── */
+  } else if (has("صيصان", "كتاكيت", "طيور", "خمول", "أعراض", "مرض", "kyckling", "fågel", "symptom", "sjuk") || issue.category === "biological") {
+    data.flocks.slice(0, 3).forEach(f => relatedFacts.push(L(`${f.name}: ${f.count} طير — ${f.type ?? "دجاج"}`, `${f.name}: ${f.count} fåglar — ${f.type ?? "höns"}`)));
+    if (totalBirds === 0) relatedFacts.push(L("لا توجد قطعان مسجلة في النظام", "Inga flockar registrerade i systemet"));
+
+    steps.push(
+      { icon: "🔍", title: L("فحص بصري شامل لجميع القطعان الآن", "Fullständig visuell inspektion av alla flockar nu"), detail: L(`راقب في ${data.flocks.length > 0 ? data.flocks.map(f=>f.name).slice(0,3).join(" و") : "القطعان"}: الحركة، الشهية، البراز، الريش، الموضع (الطيور المريضة تنعزل في الزوايا)`, `Observera i ${data.flocks.length > 0 ? data.flocks.map(f=>f.name).slice(0,3).join(", ") : "flockarna"}: rörelse, aptit, avföring, fjädrar, position (sjuka fåglar isolerar sig i hörn)`), urgency: "critical" },
+      { icon: "🌡️", title: L("قِس حرارة أي طائر يبدو مريضاً", "Mät temperaturen hos fåglar som verkar sjuka"), detail: L("الطبيعي: 41.0-41.5°م. فوق 42.5°م → حمى شديدة. دون 40°م → صدمة أو إجهاد حراري. قِس 3-5 طيور من مناطق مختلفة", "Normalt: 41,0-41,5°C. Över 42,5°C → hög feber. Under 40°C → chock. Mät 3-5 fåglar från olika delar"), urgency: "critical" },
+      { icon: "🚧", title: L("عزل أي طائر مشتبه به فوراً في قفص منفصل", "Isolera misstänkta fåglar omedelbart"), detail: L(`الطائر المريض ينقل العدوى للـ${totalBirds} طير في ساعات. العزل يحمي القطيع. الحجر: علف وماء منفصل، دافئ، هادئ`, `Sjuk fågel sprider infektion till ${totalBirds} fåglar på timmar. Karantän: separat mat och vatten, varmt och lugnt`), urgency: "critical" },
+      { icon: "💊", title: L("راجع بروتوكول التحصين — هل كل الجرعات أُعطيت؟", "Granska vaccinationsprotokoll — gavs alla doser?"), detail: L("المطلوب: نيوكاسل (يوم 1+14+28)، جمبورو (يوم 14+21)، كوكسيديا (حسب النوع). الطائر المحصَّن يُقاوم المرض أضعاف المرة", "Nödvändigt: Newcastle (dag 1+14+28), Gumboro (14+21), Koccidios. Vaccinerade fåglar motstår sjukdom mycket bättre"), urgency: "high" },
+      { icon: "📞", title: L("إذا استمرت الأعراض 6+ ساعات → اتصل بطبيب بيطري", "Om symptom kvarstår 6+ timmar → kontakta veterinär"), detail: L("صِف بدقة: عدد المتضررين، الأعراض، متى بدأ، ما آخر شيء تغيّر. التشخيص المبكر ينقذ القطيع", "Beskriv exakt: antal drabbade, symptom, när det började, vad som senast ändrades"), urgency: "medium" },
+    );
+    summary = L(`تدخل صحي عاجل في قطيع بـ${totalBirds} طير. الفحص + العزل + التحصين = 80% من الحل. إذا انتشرت الأعراض → طبيب بيطري.`, `Akut hälsoingripande i flock med ${totalBirds} fåglar. Inspektion + isolering + vaccination = 80% av lösningen.`);
+    timeframe = L("1-6 ساعات", "1-6 timmar");
+
+  /* ── 7. TASKS / OPERATIONAL ── */
+  } else if (has("مهام", "متأخرة", "تراكم", "مهمة", "uppgifter", "försenade", "anhopning") || issue.category === "operational") {
+    if (overdueTasks.length > 0) relatedFacts.push(L(`المتأخرة (${overdueTasks.length}): ${overdueTasks.slice(0,3).map(t2=>t2.title).join("، ")}`, `Försenade (${overdueTasks.length}): ${overdueTasks.slice(0,3).map(t2=>t2.title).join(", ")}`));
+    relatedFacts.push(L(`${data.tasks.filter(t2=>t2.completed).length} منجزة / ${data.tasks.length} إجمالاً`, `${data.tasks.filter(t2=>t2.completed).length} klara / ${data.tasks.length} totalt`));
+
+    steps.push(
+      { icon: "⚡", title: L("الأولوية: حاضنة > صحة الطيور > علف > نظافة > توثيق", "Prioritet: kläckning > fågelhälsa > foder > städning > dokumentation"), detail: overdueTasks.length > 0 ? L(`ابدأ فوراً بـ: "${overdueTasks[0].title}"${overdueTasks[1] ? ` ثم "${overdueTasks[1].title}"` : ""}`, `Börja med: "${overdueTasks[0].title}"${overdueTasks[1] ? ` sedan "${overdueTasks[1].title}"` : ""}`) : L("كل المهام في وقتها — حافظ على هذا الإيقاع", "Alla uppgifter i tid — behåll denna rytm"), urgency: "critical" },
+      { icon: "👥", title: L("وزّع المهام المتراكمة على الفريق بوضوح", "Fördela ackumulerade uppgifter i teamet tydligt"), detail: L(`${pendingTasks.length} مهمة معلقة — من المسؤول عن ماذا؟ التوزيع الواضح يقطع حلقة التأخير`, `${pendingTasks.length} väntande uppgifter — vem ansvarar för vad? Tydlig fördelning bryter fördröjningscykeln`), urgency: "high" },
+      { icon: "⏰", title: L("خصّص 15 دقيقة صباحية يومياً لمراجعة المهام", "Avsätt 15 morgonminuter dagligen för uppgiftsgranskning"), detail: L("المراجعة الصباحية تقلل المهام المتأخرة بـ60% وتحسن التنسيق بين الفريق", "Morgongranskning minskar försenade uppgifter med 60% och förbättrar teamkoordinering"), urgency: "medium" },
+    );
+    summary = L(`${pendingTasks.length} مهمة معلقة (${overdueTasks.length} متأخرة). التنظيم الفوري يمنع تضاعف الضغط ويرفع كفاءة المزرعة.`, `${pendingTasks.length} väntande (${overdueTasks.length} försenade). Omedelbar organisation förhindrar eskalerande press.`);
     timeframe = L("اليوم", "Idag");
 
-  } else if (cat === "goals") {
+  /* ── 8. GOALS ── */
+  } else if (has("أهداف", "هدف", "mål") || issue.category === "goals") {
     const activeGoals = data.goals.filter(g => !g.completed);
-    if (activeGoals.length > 0) relatedFacts.push(L(`الأهداف الجارية: ${activeGoals.slice(0,3).map(g => g.title).join("، ")}`, `Aktiva mål: ${activeGoals.slice(0,3).map(g => g.title).join(", ")}`));
+    activeGoals.slice(0,3).forEach(g => {
+      const pct = Math.min(((parseFloat(g.currentValue)||0)/(parseFloat(g.targetValue)||1)*100),100).toFixed(0);
+      relatedFacts.push(L(`${g.title}: ${pct}%`, `${g.title}: ${pct}%`));
+    });
+
     steps.push(
-      { icon: "📊", title: L("راجع تقدم كل هدف نشط الآن", "Granska varje aktivt måls framsteg nu"), detail: L(`لديك ${activeGoals.length} هدف نشط — حدّث القيم الحالية لكل منهم`, `Du har ${activeGoals.length} aktiva mål — uppdatera aktuella värden`), urgency: "high" },
-      { icon: "🎯", title: L("اختر هدفاً واحداً وطوّر خطة أسبوعية له", "Välj ett mål och skapa en veckoplan"), detail: L("التركيز على هدف واحد في الأسبوع يرفع نسبة الإنجاز من 20% إلى 70%", "Fokus på ett mål per vecka ökar avslutningsgraden från 20% till 70%"), urgency: "high" },
-      { icon: "📅", title: L("اضبط تذكير أسبوعي للمراجعة", "Ställ in veckovis påminnelse"), detail: L("مراجعة دورية تمنع الانجراف وتبقيك على المسار", "Regelbunden granskning förhindrar avdrift"), urgency: "medium" },
+      { icon: "📊", title: L("حدّث القيم الحالية لكل هدف نشط الآن", "Uppdatera aktuella värden för varje aktivt mål nu"), detail: L(`${activeGoals.length} هدف نشط — التحديث يُمكّن التحليل الدقيق ويوضح الفجوة الحقيقية`, `${activeGoals.length} aktiva mål — uppdatering möjliggör exakt analys`), urgency: "high" },
+      { icon: "🎯", title: L("اختر هدفاً واحداً فقط هذا الأسبوع", "Välj bara ett mål den här veckan"), detail: L("التركيز على هدف واحد يرفع نسبة الإنجاز من 20% إلى 70%+. ما الهدف الأكثر تأثيراً على المزرعة الآن؟", "Fokus på ett mål höjer avslutningsgraden från 20% till 70%+"), urgency: "high" },
+      { icon: "📅", title: L("اضبط جلسة أسبوعية ثابتة لمراجعة الأهداف (15 دقيقة)", "Sätt en fast veckolig målgranskning (15 minuter)"), detail: L("الأحد مساءً أو الاثنين صباحاً. المراجعة المنتظمة هي الفرق بين مزرعة تتطور ومزرعة راكدة", "Söndagkväll eller måndag morgon. Regelbunden granskning är skillnaden mellan en framstegsgård och en stillastående"), urgency: "medium" },
     );
-    summary = L(`${activeGoals.length} هدف نشط يحتاج متابعة منتظمة. المراجعة الأسبوعية تضاعف فرص تحقيقها.`, `${activeGoals.length} aktiva mål behöver regelbunden uppföljning.`);
+    summary = L(`${activeGoals.length} هدف نشط يحتاج متابعة منتظمة. التقدم في الأهداف = نمو حقيقي في المزرعة.`, `${activeGoals.length} aktiva mål behöver regelbunden uppföljning. Målframsteg = verklig gårdsutveckling.`);
     timeframe = L("هذا الأسبوع", "Den här veckan");
 
+  /* ── DEFAULT FALLBACK ── */
   } else {
+    if (activeCycles.length > 0) relatedFacts.push(L(`${activeCycles.length} دورة تفقيس نشطة — ${totalEggs} بيضة`, `${activeCycles.length} aktiva kläckningscykler — ${totalEggs} ägg`));
+    if (totalBirds > 0) relatedFacts.push(L(`${totalBirds} طير في ${data.flocks.length} قطعان`, `${totalBirds} fåglar i ${data.flocks.length} flockar`));
+    if (overdueTasks.length > 0) relatedFacts.push(L(`${overdueTasks.length} مهمة متأخرة`, `${overdueTasks.length} försenade uppgifter`));
+
     steps.push(
-      { icon: "🔍", title: L("تحقق من البيانات المرتبطة بالمشكلة", "Kontrollera relaterad data"), detail: issue.description, urgency: "high" },
-      { icon: "📋", title: L("وثّق الحالة الحالية بدقة", "Dokumentera situationen noggrant"), detail: L("تسجيل التفاصيل يسهّل التشخيص والمتابعة لاحقاً", "Detaljerad dokumentation underlättar diagnos och uppföljning"), urgency: "medium" },
-      { icon: "🔄", title: L("راجع الوضع بعد 24 ساعة", "Granska läget efter 24 timmar"), detail: L("قارن الحالة قبل وبعد لقياس التحسن", "Jämför situationen för att mäta förbättringen"), urgency: "medium" },
+      { icon: "🔍", title: L("افحص الوضع مباشرة وبشكل شخصي", "Inspektera situationen direkt och personligen"), detail: issue.description, urgency: "high" },
+      { icon: "📋", title: L("وثّق الحالة في المذكرات بأكبر قدر من التفاصيل", "Dokumentera situationen med så mycket detaljer som möjligt"), detail: L("الوقت + الظروف + ما لاحظته + ما فعلته. التوثيق الدقيق يمنع تكرار المشكلة", "Tidpunkt + omständigheter + vad du observerade + vad du gjorde"), urgency: "high" },
+      { icon: "🔄", title: L("تابع التطور كل ساعتين وقرّر استمرار أو تصعيد", "Följ upp var 2:e timme och besluta om fortsättning eller eskalering"), detail: L("إذا تحسّن الوضع → تابع. إذا استمر → اطلب مساعدة خبير. إذا تدهور → تصرف فوراً", "Förbättring → fortsätt. Oförändrat → rådfråga expert. Försämring → agera omedelbart"), urgency: "medium" },
     );
-    summary = L("تحليل وتوثيق الحالة هي أولى خطوات الحل الفعلي.", "Att analysera och dokumentera situationen är första steget mot en lösning.");
+    summary = L(`الفحص المباشر والتوثيق الدقيق هما أولى خطوات حل أي مشكلة في المزرعة.`, `Direkt inspektion och noggrann dokumentation är de första stegen för att lösa alla gårdsproblem.`);
     timeframe = L("اليوم", "Idag");
   }
 

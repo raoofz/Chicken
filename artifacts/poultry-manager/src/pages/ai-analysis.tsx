@@ -95,6 +95,14 @@ export default function AiAnalysis() {
     return () => window.removeEventListener("nav-reset", handler);
   }, []);
 
+  /* Reset analysis when language changes — engine content is language-specific */
+  useEffect(() => {
+    setAnalysis(null);
+    setTool(null);
+    closeQuickSolve();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
+
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">

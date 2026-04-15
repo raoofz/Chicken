@@ -11,10 +11,10 @@ import Hatching from "@/pages/hatching";
 import Tasks from "@/pages/tasks";
 import Goals from "@/pages/goals";
 import Logs from "@/pages/logs";
+import Notes from "@/pages/notes";
 import Login from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import AiAnalysis from "@/pages/ai-analysis";
-import DailyPlan from "@/pages/daily-plan";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -45,8 +45,8 @@ function AppRoutes() {
         <Route path="/tasks" component={Tasks} />
         <Route path="/goals" component={Goals} />
         <Route path="/logs" component={Logs} />
+        <Route path="/notes" component={Notes} />
         <Route path="/ai" component={AiAnalysis} />
-        <Route path="/daily-plan" component={DailyPlan} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
