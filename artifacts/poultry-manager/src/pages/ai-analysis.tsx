@@ -1,6 +1,5 @@
 /**
- * مراقبة بالصور — Farm Photo Monitoring Hub
- * Replaces the old AI analysis page
+ * Farm Photo Monitoring Hub
  * Shows all farm photos, AI-extracted alerts, trends, and insights
  */
 import { useState, useRef, useCallback } from "react";
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -35,10 +35,7 @@ interface NoteImage {
   createdAt: string;
 }
 
-const IMAGE_CATEGORIES: Record<string, string> = {
-  all: "الكل", general: "عام", health: "صحة الطيور", production: "إنتاج",
-  feeding: "علف وماء", incubator: "حاضنة", flock: "القطيع", maintenance: "صيانة",
-};
+const IMAGE_CAT_KEYS = ["all","general","health","production","feeding","incubator","flock","maintenance"] as const;
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchImages(): Promise<NoteImage[]> {
@@ -55,29 +52,30 @@ async function reanalyzeImage(id: number) {
   if (!r.ok) throw new Error("analyze_error");
   return r.json();
 }
-async function uploadFarmPhoto(file: File, date: string, category: string): Promise<{ id: number }> {
+async function uploadFarmPhoto(file: File, date: string, category: string, errUrlMsg: string, errFileMsg: string, errSaveMsg: string): Promise<{ id: number }> {
   const urlRes = await fetch("/api/notes/images/upload-url", {
     method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
     body: JSON.stringify({ contentType: file.type, name: file.name }),
   });
-  if (!urlRes.ok) { const e = await urlRes.json().catch(() => ({})); throw new Error(e.error ?? "فشل الحصول على رابط الرفع"); }
+  if (!urlRes.ok) { const e = await urlRes.json().catch(() => ({})); throw new Error(e.error ?? errUrlMsg); }
   const { uploadURL, objectPath } = await urlRes.json();
   const uploadRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-  if (!uploadRes.ok) throw new Error("فشل رفع الصورة");
+  if (!uploadRes.ok) throw new Error(errFileMsg);
   const saveRes = await fetch("/api/notes/images/save", {
     method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
     body: JSON.stringify({ objectPath, originalName: file.name, mimeType: file.type, date, category, caption: "" }),
   });
-  if (!saveRes.ok) { const e = await saveRes.json().catch(() => ({})); throw new Error(e.error ?? "فشل حفظ السجل"); }
+  if (!saveRes.ok) { const e = await saveRes.json().catch(() => ({})); throw new Error(e.error ?? errSaveMsg); }
   return saveRes.json();
 }
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  if (status === "done")      return <Badge className="bg-green-100 text-green-700 text-xs gap-1"><CheckCircle className="w-3 h-3"/>تم التحليل</Badge>;
-  if (status === "analyzing") return <Badge className="bg-blue-100 text-blue-700 text-xs gap-1 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/>تحليل...</Badge>;
-  if (status === "failed")    return <Badge className="bg-red-100 text-red-700 text-xs gap-1"><AlertTriangle className="w-3 h-3"/>فشل</Badge>;
-  return <Badge className="bg-slate-100 text-slate-600 text-xs gap-1"><Clock className="w-3 h-3"/>انتظار</Badge>;
+  const { t } = useLanguage();
+  if (status === "done")      return <Badge className="bg-green-100 text-green-700 text-xs gap-1"><CheckCircle className="w-3 h-3"/>{t("ai.status.done")}</Badge>;
+  if (status === "analyzing") return <Badge className="bg-blue-100 text-blue-700 text-xs gap-1 animate-pulse"><Loader2 className="w-3 h-3 animate-spin"/>{t("ai.status.analyzing")}</Badge>;
+  if (status === "failed")    return <Badge className="bg-red-100 text-red-700 text-xs gap-1"><AlertTriangle className="w-3 h-3"/>{t("ai.status.failed")}</Badge>;
+  return <Badge className="bg-slate-100 text-slate-600 text-xs gap-1"><Clock className="w-3 h-3"/>{t("ai.status.waiting")}</Badge>;
 }
 
 function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
@@ -94,11 +92,17 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
   img: NoteImage; isAdmin: boolean;
   onDelete: (id: number) => void; onReanalyze: (id: number) => void;
 }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const imageFileUrl = `/api/notes/images/file/${img.imageUrl.replace(/^\/objects\//, "")}`;
   const criticalAlerts = (img.aiAlerts ?? []).filter(a => a.level === "critical");
   const warningAlerts = (img.aiAlerts ?? []).filter(a => a.level === "warning");
+
+  const catLabel = (cat: string) => {
+    const key = `imgcat.${cat}`;
+    return t(key) !== key ? t(key) : cat;
+  };
 
   return (
     <>
@@ -118,23 +122,23 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
           <div className="absolute top-2 right-2"><StatusBadge status={img.analysisStatus} /></div>
           {criticalAlerts.length > 0 && (
             <div className="absolute bottom-2 left-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-              <AlertTriangle className="w-3 h-3" />تنبيه حرج
+              <AlertTriangle className="w-3 h-3" />{t("ai.critical.badge")}
             </div>
           )}
         </div>
         <CardContent className="p-3 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{img.originalName ?? "صورة"}</p>
+              <p className="text-sm font-medium truncate">{img.originalName ?? t("ai.photo.unnamed")}</p>
               <div className="flex items-center gap-1.5 flex-wrap mt-1">
                 <span className="text-xs text-slate-400">{img.date}</span>
-                {img.category && <Badge variant="secondary" className="text-xs">{IMAGE_CATEGORIES[img.category] ?? img.category}</Badge>}
+                {img.category && <Badge variant="secondary" className="text-xs">{catLabel(img.category)}</Badge>}
                 {img.authorName && <span className="text-xs text-slate-400">{img.authorName}</span>}
               </div>
             </div>
             <div className="flex gap-1 shrink-0">
               {img.analysisStatus === "failed" && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onReanalyze(img.id)} title="إعادة التحليل">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onReanalyze(img.id)} title={t("ai.reanalyze.title")}>
                   <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                 </Button>
               )}
@@ -177,7 +181,7 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
 
           {img.aiConfidence != null && img.analysisStatus === "done" && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400">ثقة التحليل</span>
+              <span className="text-xs text-slate-400">{t("ai.confidence.label")}</span>
               <div className="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
                 <div className={cn("h-full rounded-full", img.aiConfidence >= 80 ? "bg-green-500" : img.aiConfidence >= 60 ? "bg-amber-500" : "bg-red-500")}
                   style={{ width: `${img.aiConfidence}%` }} />
@@ -190,7 +194,7 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
             <div>
               <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800">
                 <Brain className="w-3.5 h-3.5" />
-                {expanded ? "إخفاء التحليل" : "عرض التحليل الكامل"}
+                {expanded ? t("ai.analysis.hide") : t("ai.analysis.show")}
                 {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
               {expanded && (
@@ -203,7 +207,7 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
 
           {img.analysisStatus === "analyzing" && (
             <div className="flex items-center gap-2 text-xs text-blue-600">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />جارٍ تحليل الصورة...
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />{t("ai.analysis.loading")}
             </div>
           )}
         </CardContent>
@@ -214,6 +218,7 @@ function ImageCard({ img, isAdmin, onDelete, onReanalyze }: {
 
 function QuickUpload({ onDone }: { onDone: () => void }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState("general");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -223,20 +228,20 @@ function QuickUpload({ onDone }: { onDone: () => void }) {
     if (!files?.length) return;
     const file = files[0];
     if (!["image/jpeg","image/png","image/webp","image/heic","image/gif"].includes(file.type)) {
-      toast({ title: "نوع غير مدعوم", description: "JPEG, PNG, WebP فقط", variant: "destructive" }); return;
+      toast({ title: t("ai.upload.unsupported.title"), description: t("ai.upload.unsupported.desc"), variant: "destructive" }); return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      toast({ title: "الملف كبير جداً", description: "الحد 10MB", variant: "destructive" }); return;
+      toast({ title: t("ai.upload.tooBig.title"), description: t("ai.upload.tooBig.desc"), variant: "destructive" }); return;
     }
     setUploading(true);
     try {
-      await uploadFarmPhoto(file, today, category);
-      toast({ title: "✓ تم رفع الصورة", description: "جارٍ تحليلها بالذكاء الاصطناعي..." });
+      await uploadFarmPhoto(file, today, category, t("ai.upload.err.url"), t("ai.upload.err.file"), t("ai.upload.err.save"));
+      toast({ title: t("ai.upload.success.title"), description: t("ai.upload.success.desc") });
       onDone();
     } catch (err: any) {
-      toast({ title: "فشل الرفع", description: err.message, variant: "destructive" });
+      toast({ title: t("ai.upload.fail.title"), description: err.message, variant: "destructive" });
     } finally { setUploading(false); }
-  }, [today, category, toast, onDone]);
+  }, [today, category, toast, onDone, t]);
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -244,14 +249,14 @@ function QuickUpload({ onDone }: { onDone: () => void }) {
       <Select value={category} onValueChange={setCategory}>
         <SelectTrigger className="h-9 w-36 text-sm"><SelectValue /></SelectTrigger>
         <SelectContent>
-          {Object.entries(IMAGE_CATEGORIES).filter(([k]) => k !== "all").map(([v, l]) => (
-            <SelectItem key={v} value={v}>{l}</SelectItem>
+          {IMAGE_CAT_KEYS.filter(k => k !== "all").map(k => (
+            <SelectItem key={k} value={k}>{t(`imgcat.${k}`)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
       <Button onClick={() => inputRef.current?.click()} disabled={uploading} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
         {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-        {uploading ? "جارٍ الرفع..." : "رفع صورة"}
+        {uploading ? t("ai.upload.uploading") : t("ai.upload.btn")}
       </Button>
     </div>
   );
@@ -261,6 +266,7 @@ function QuickUpload({ onDone }: { onDone: () => void }) {
 export default function AiAnalysis() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const qc = useQueryClient();
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -274,13 +280,13 @@ export default function AiAnalysis() {
 
   const delImage = useMutation({
     mutationFn: deleteImage,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["noteImages"] }); toast({ title: "تم الحذف" }); setDeleteImageId(null); },
-    onError: () => toast({ title: "فشل الحذف", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["noteImages"] }); toast({ title: t("ai.delete.success") }); setDeleteImageId(null); },
+    onError: () => toast({ title: t("ai.delete.fail"), variant: "destructive" }),
   });
   const reanalyze = useMutation({
     mutationFn: reanalyzeImage,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["noteImages"] }); toast({ title: "جارٍ إعادة التحليل..." }); },
-    onError: () => toast({ title: "فشل التحليل", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["noteImages"] }); toast({ title: t("ai.reanalyze.success") }); },
+    onError: () => toast({ title: t("ai.reanalyze.fail"), variant: "destructive" }),
   });
 
   const totalImages = images.length;
@@ -294,7 +300,7 @@ export default function AiAnalysis() {
     : 0;
 
   const tagFreq: Record<string, number> = {};
-  images.forEach((img: NoteImage) => { (img.aiTags ?? []).forEach((t: string) => { tagFreq[t] = (tagFreq[t] ?? 0) + 1; }); });
+  images.forEach((img: NoteImage) => { (img.aiTags ?? []).forEach((tg: string) => { tagFreq[tg] = (tagFreq[tg] ?? 0) + 1; }); });
   const topTags = Object.entries(tagFreq).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
   const recentCritical = images
@@ -316,9 +322,9 @@ export default function AiAnalysis() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Camera className="w-7 h-7 text-indigo-600" />مراقبة المزرعة بالصور
+            <Camera className="w-7 h-7 text-indigo-600" />{t("ai.monitoring.title")}
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">تحليل تلقائي بالذكاء الاصطناعي لصور المزرعة والطيور والحاضنات</p>
+          <p className="text-sm text-slate-500 mt-0.5">{t("ai.monitoring.desc")}</p>
         </div>
         <QuickUpload onDone={() => qc.invalidateQueries({ queryKey: ["noteImages"] })} />
       </div>
@@ -332,7 +338,7 @@ export default function AiAnalysis() {
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <p className="font-semibold text-red-800">{criticalCount} تنبيه حرج يستوجب الاهتمام الفوري</p>
+                <p className="font-semibold text-red-800">{criticalCount} {t("ai.critical.banner")}</p>
                 <div className="mt-2 space-y-1">
                   {recentCritical.map((img: NoteImage) =>
                     (img.aiAlerts ?? []).filter((a: any) => a.level === "critical").map((a: any, i: number) => (
@@ -351,17 +357,17 @@ export default function AiAnalysis() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="إجمالي الصور" value={totalImages} color="text-indigo-600" />
-        <StatCard label="تم تحليلها" value={analyzedImages} sub={avgConfidence > 0 ? `متوسط الثقة ${avgConfidence}%` : undefined} color="text-green-600" />
-        <StatCard label="تنبيهات حرجة" value={criticalCount} sub={warningCount > 0 ? `+ ${warningCount} تحذير` : undefined} color={criticalCount > 0 ? "text-red-600" : "text-slate-400"} />
-        <StatCard label="في الانتظار" value={pendingImages} color={pendingImages > 0 ? "text-amber-600" : "text-slate-400"} />
+        <StatCard label={t("ai.stat.total.photos")} value={totalImages} color="text-indigo-600" />
+        <StatCard label={t("ai.stat.analyzed")} value={analyzedImages} sub={avgConfidence > 0 ? `${t("ai.stat.avgConf")} ${avgConfidence}%` : undefined} color="text-green-600" />
+        <StatCard label={t("ai.stat.critical.alerts")} value={criticalCount} sub={warningCount > 0 ? `+ ${warningCount} ${t("ai.stat.warning.label")}` : undefined} color={criticalCount > 0 ? "text-red-600" : "text-slate-400"} />
+        <StatCard label={t("ai.stat.pending")} value={pendingImages} color={pendingImages > 0 ? "text-amber-600" : "text-slate-400"} />
       </div>
 
       {/* Hot topics */}
       {topTags.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-slate-600"><Tag className="w-4 h-4" />أكثر ما يظهر في الصور</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2 text-slate-600"><Tag className="w-4 h-4" />{t("ai.hot.title")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {topTags.map(([tag, count]) => (
@@ -379,24 +385,24 @@ export default function AiAnalysis() {
         <Select value={filterCategory} onValueChange={setFilterCategory}>
           <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {Object.entries(IMAGE_CATEGORIES).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+            {IMAGE_CAT_KEYS.map(k => <SelectItem key={k} value={k}>{t(`imgcat.${k}`)}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="الحالة" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder={t("ai.filter.status")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">كل الحالات</SelectItem>
-            <SelectItem value="alerts">لديها تنبيهات</SelectItem>
-            <SelectItem value="done">تم التحليل</SelectItem>
-            <SelectItem value="pending">في الانتظار</SelectItem>
+            <SelectItem value="all">{t("ai.filter.all")}</SelectItem>
+            <SelectItem value="alerts">{t("ai.filter.alerts")}</SelectItem>
+            <SelectItem value="done">{t("ai.filter.done")}</SelectItem>
+            <SelectItem value="pending">{t("ai.filter.pending")}</SelectItem>
           </SelectContent>
         </Select>
         {(filterCategory !== "all" || filterStatus !== "all") && (
           <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterCategory("all"); setFilterStatus("all"); }}>
-            <X className="w-3 h-3 mr-1" />مسح الفلتر
+            <X className="w-3 h-3 mr-1" />{t("ai.filter.clear")}
           </Button>
         )}
-        <span className="text-xs text-slate-400 mr-auto">{filtered.length} صورة</span>
+        <span className="text-xs text-slate-400 mr-auto">{filtered.length} {t("ai.filter.unit")}</span>
       </div>
 
       {/* Grid */}
@@ -410,11 +416,11 @@ export default function AiAnalysis() {
             <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
               <Camera className="w-8 h-8 text-slate-300" />
             </div>
-            <p className="text-slate-500 font-medium">{images.length === 0 ? "لا توجد صور بعد" : "لا توجد صور تطابق الفلتر"}</p>
+            <p className="text-slate-500 font-medium">{images.length === 0 ? t("ai.empty.noPhotos") : t("ai.empty.noMatch")}</p>
             {images.length === 0 && (
               <>
-                <p className="text-slate-400 text-sm">ارفع أول صورة من المزرعة باستخدام زر "رفع صورة" أعلاه</p>
-                <p className="text-slate-400 text-xs">يمكنك أيضاً رفع الصور من صفحة "ملاحظات يومية"</p>
+                <p className="text-slate-400 text-sm">{t("ai.empty.hint1")}</p>
+                <p className="text-slate-400 text-xs">{t("ai.empty.hint2")}</p>
               </>
             )}
           </div>
@@ -434,12 +440,12 @@ export default function AiAnalysis() {
       <AlertDialog open={deleteImageId !== null} onOpenChange={open => !open && setDeleteImageId(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>حذف الصورة؟</AlertDialogTitle>
-            <AlertDialogDescription>سيتم حذف الصورة وتحليلها نهائياً.</AlertDialogDescription>
+            <AlertDialogTitle>{t("ai.delete.dialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("ai.delete.dialog.desc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteImageId && delImage.mutate(deleteImageId)}>حذف</AlertDialogAction>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => deleteImageId && delImage.mutate(deleteImageId)}>{t("delete")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

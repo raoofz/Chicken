@@ -54,13 +54,13 @@ export default function DailyPlanPage() {
       });
       if (!res.ok) {
         const d = await res.json();
-        throw new Error(d.error ?? "فشل");
+        throw new Error(d.error ?? t("plan.error"));
       }
       const data = await res.json();
       setPlan(data.plan);
       setCheckedSlots(new Set());
     } catch (err: any) {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: t("adv.error"), description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -90,10 +90,10 @@ export default function DailyPlanPage() {
 
   const riskLabel = (level: string) => {
     switch (level) {
-      case "critical": return "حرج";
-      case "high": return "مرتفع";
-      case "medium": return "متوسط";
-      default: return "منخفض";
+      case "critical": return t("plan.risk.critical");
+      case "high": return t("plan.risk.high");
+      case "medium": return t("plan.risk.medium");
+      default: return t("plan.risk.low");
     }
   };
 
@@ -121,8 +121,8 @@ export default function DailyPlanPage() {
             <CalendarClock className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">الخطة اليومية الذكية</h1>
-            <p className="text-xs text-muted-foreground">جدول عملك من الصباح للمساء — مبني من بيانات مزرعتك</p>
+            <h1 className="text-xl font-bold">{t("plan.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("plan.desc")}</p>
           </div>
         </div>
         <Button
@@ -133,7 +133,7 @@ export default function DailyPlanPage() {
           className="gap-2"
         >
           <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-          تحديث
+          {t("plan.refresh")}
         </Button>
       </div>
 
@@ -141,7 +141,7 @@ export default function DailyPlanPage() {
         {loading && !plan && (
           <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
             <Loader2 className="w-10 h-10 animate-spin text-amber-600" />
-            <p className="text-sm text-muted-foreground">جارٍ بناء خطتك اليومية...</p>
+            <p className="text-sm text-muted-foreground">{t("plan.loading")}</p>
           </div>
         )}
 
@@ -157,7 +157,7 @@ export default function DailyPlanPage() {
                   <div className="flex items-center gap-3">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{progress}%</div>
-                      <div className="text-[10px] text-muted-foreground">{completedCount}/{totalSlots} مهمة</div>
+                      <div className="text-[10px] text-muted-foreground">{completedCount}/{totalSlots} {t("plan.task.unit")}</div>
                     </div>
                   </div>
                 </div>
@@ -169,7 +169,7 @@ export default function DailyPlanPage() {
                 <CardContent className="p-3 flex items-center gap-3">
                   <div className={cn("w-3 h-3 rounded-full", riskColor(plan.riskLevel))} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold">مستوى الخطر: {riskLabel(plan.riskLevel)}</p>
+                    <p className="text-xs font-semibold">{t("plan.risk.label")} {riskLabel(plan.riskLevel)}</p>
                     <p className="text-[11px] text-muted-foreground truncate">{plan.riskSummary}</p>
                   </div>
                 </CardContent>
@@ -248,8 +248,8 @@ export default function DailyPlanPage() {
               <Card className="border-none shadow-sm bg-emerald-50 dark:bg-emerald-950/20">
                 <CardContent className="p-4 text-center">
                   <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">أحسنت! أنهيت كل مهام اليوم</p>
-                  <p className="text-xs text-muted-foreground mt-1">لا تنسَ تسجيل ملاحظاتك اليومية قبل النوم.</p>
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{t("plan.complete.title")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t("plan.complete.desc")}</p>
                 </CardContent>
               </Card>
             )}

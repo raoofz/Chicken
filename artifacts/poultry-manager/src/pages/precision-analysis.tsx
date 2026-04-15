@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 import {
   Bird, Egg, ClipboardList, BookOpen, Target,
@@ -46,17 +47,18 @@ interface Precision { riskLevel: string; riskScore: number; failureProbability: 
 
 // ─── Scan steps ───────────────────────────────────────────────────────────────
 const SCAN_STEPS = [
-  { key: "flocks",  icon: Users,         label: "القطعان",           delay: 300  },
-  { key: "cycles",  icon: Egg,           label: "دورات التفقيس",     delay: 600  },
-  { key: "tasks",   icon: ClipboardList, label: "المهام",            delay: 900  },
-  { key: "notes",   icon: BookOpen,      label: "الملاحظات اليومية", delay: 1200 },
-  { key: "goals",   icon: Target,        label: "الأهداف",           delay: 1500 },
-  { key: "alerts",  icon: Bell,          label: "التنبيهات",         delay: 1800 },
-  { key: "ai",      icon: Zap,           label: "التحليل الذكي",     delay: 2100 },
+  { key: "flocks",  icon: Users,         labelKey: "scan.step.flocks", delay: 300  },
+  { key: "cycles",  icon: Egg,           labelKey: "scan.step.cycles", delay: 600  },
+  { key: "tasks",   icon: ClipboardList, labelKey: "scan.step.tasks",  delay: 900  },
+  { key: "notes",   icon: BookOpen,      labelKey: "scan.step.notes",  delay: 1200 },
+  { key: "goals",   icon: Target,        labelKey: "scan.step.goals",  delay: 1500 },
+  { key: "alerts",  icon: Bell,          labelKey: "scan.step.alerts", delay: 1800 },
+  { key: "ai",      icon: Zap,           labelKey: "scan.step.ai",     delay: 2100 },
 ];
 
 // ─── Mini helpers ─────────────────────────────────────────────────────────────
 const Ring = ({ score, size = 100 }: { score: number; size?: number }) => {
+  const { t } = useLanguage();
   const r = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (score / 100) * circ;
@@ -71,7 +73,7 @@ const Ring = ({ score, size = 100 }: { score: number; size?: number }) => {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-black" style={{ color }}>{score}</span>
-        <span className="text-[10px] text-gray-400 font-medium">صحة المزرعة</span>
+        <span className="text-[10px] text-gray-400 font-medium">{t("scan.health.label")}</span>
       </div>
     </div>
   );
@@ -121,8 +123,9 @@ function PhaseRow({
     : s === "warn" ? { bg: "bg-yellow-50 border-yellow-200", text: "text-yellow-700", badge: "text-yellow-600" }
     : { bg: "bg-red-50 border-red-200", text: "text-red-700", badge: "text-red-600" };
 
+  const { t } = useLanguage();
   const statusLabel = (s: "good" | "warn" | "bad" | null) =>
-    s === "good" ? "✓ ممتاز" : s === "warn" ? "⚠ على الحدود" : "✗ خارج النطاق";
+    s === "good" ? t("scan.phase.excellent") : s === "warn" ? t("scan.phase.borderline") : t("scan.phase.outOfRange");
 
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50 p-2.5">
@@ -165,6 +168,7 @@ function PhaseRow({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function FarmScanPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { toast } = useToast();
   const [scan, setScan] = useState<FarmScan | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -197,9 +201,9 @@ export default function FarmScanPage() {
       const data: FarmScan = await res.json();
       setScan(data);
       setLastAt(new Date().toLocaleTimeString("ar-SA"));
-      if (silent) toast({ title: "🔄 تحديث تلقائي", description: "تم تحديث بيانات المزرعة" });
+      if (silent) toast({ title: t("scan.autoRefresh"), description: t("scan.autoRefresh.desc") });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "خطأ", description: e.message });
+      toast({ variant: "destructive", title: t("scan.error"), description: e.message });
     } finally { setScanning(false); setScanStep(-1); }
   }, [toast]);
 
@@ -225,7 +229,7 @@ export default function FarmScanPage() {
   if (!user || user.role !== "admin") {
     return (
       <div className="flex items-center justify-center h-64 text-gray-400 gap-2" dir="rtl">
-        <Shield className="h-5 w-5" />للمديرين فقط
+        <Shield className="h-5 w-5" />{t("scan.adminOnly")}
       </div>
     );
   }
@@ -239,8 +243,8 @@ export default function FarmScanPage() {
             <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-200 mb-4">
               <Activity className="h-10 w-10 text-white" />
             </div>
-            <h1 className="text-2xl font-black text-gray-900">فحص المزرعة</h1>
-            <p className="text-gray-400 text-sm mt-1">جارٍ فحص كل البيانات...</p>
+            <h1 className="text-2xl font-black text-gray-900">{t("scan.title")}</h1>
+            <p className="text-gray-400 text-sm mt-1">{t("scan.checking")}</p>
           </div>
           <div className="space-y-3">
             {SCAN_STEPS.map((step, i) => {
@@ -265,10 +269,10 @@ export default function FarmScanPage() {
                   </div>
                   <span className={cn("font-semibold text-sm",
                     done ? "text-green-700" : active ? "text-amber-700" : "text-gray-300")}>
-                    {step.label}
+                    {t(step.labelKey)}
                   </span>
-                  {done && <span className="mr-auto text-xs text-green-500 font-medium">✓ تم</span>}
-                  {active && <span className="mr-auto text-xs text-amber-500 font-medium animate-pulse">جارٍ الفحص...</span>}
+                  {done && <span className="mr-auto text-xs text-green-500 font-medium">{t("scan.step.done")}</span>}
+                  {active && <span className="mr-auto text-xs text-amber-500 font-medium animate-pulse">{t("scan.step.running")}</span>}
                 </div>
               );
             })}
@@ -284,7 +288,7 @@ export default function FarmScanPage() {
       <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
         <button onClick={() => fetchScan(false)}
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95">
-          <Activity className="h-5 w-5" />ابدأ فحص المزرعة
+          <Activity className="h-5 w-5" />{t("scan.start")}
         </button>
       </div>
     );
@@ -302,12 +306,12 @@ export default function FarmScanPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-black text-gray-900">فحص المزرعة</h1>
-            {lastAt && <p className="text-xs text-gray-400">آخر تحديث: {lastAt} · تلقائي كل 30 ث</p>}
+            <h1 className="text-base font-black text-gray-900">{t("scan.title")}</h1>
+            {lastAt && <p className="text-xs text-gray-400">{t("scan.lastUpdated")} {lastAt} {t("scan.autoEvery")}</p>}
           </div>
           <button onClick={() => fetchScan(false)}
             className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm shadow-amber-200 transition-all">
-            <RefreshCw className="h-3.5 w-3.5" />فحص الآن
+            <RefreshCw className="h-3.5 w-3.5" />{t("scan.now")}
           </button>
         </div>
       </div>
@@ -322,19 +326,19 @@ export default function FarmScanPage() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-lg font-black leading-tight mb-1">
-                {scan.healthScore >= 80 ? "🟢 المزرعة بحالة ممتازة" :
-                 scan.healthScore >= 60 ? "🟡 المزرعة تحتاج اهتماماً" :
-                 scan.healthScore >= 40 ? "🟠 توجد مشاكل تحتاج تدخلاً" :
-                 "🔴 وضع حرج — تصرف الآن"}
+                {scan.healthScore >= 80 ? t("scan.health.excellent") :
+                 scan.healthScore >= 60 ? t("scan.health.attention") :
+                 scan.healthScore >= 40 ? t("scan.health.problems") :
+                 t("scan.health.critical")}
               </div>
               <p className="text-white/80 text-xs">
                 {new Date(scan.scannedAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })}
               </p>
               <div className="grid grid-cols-3 gap-2 mt-3">
                 {[
-                  { n: tasks.overdue, label: "مهام متأخرة", warn: tasks.overdue > 0 },
-                  { n: cycles.active, label: "دورة نشطة", warn: false },
-                  { n: notes.streak, label: "أيام توثيق", warn: notes.streak === 0 },
+                  { n: tasks.overdue, label: t("scan.stat.overdueTasks"), warn: tasks.overdue > 0 },
+                  { n: cycles.active, label: t("scan.stat.activeCycle"), warn: false },
+                  { n: notes.streak, label: t("scan.stat.docStreak"), warn: notes.streak === 0 },
                 ].map((s, i) => (
                   <div key={i} className={cn("rounded-xl px-2 py-2 text-center", s.warn ? "bg-red-500/30" : "bg-white/15")}>
                     <div className="text-xl font-black">{s.n}</div>
@@ -350,7 +354,7 @@ export default function FarmScanPage() {
         {criticalAlerts.length > 0 && (
           <div className="rounded-2xl bg-red-50 border border-red-200 p-4 space-y-2">
             <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-2">
-              <AlertTriangle className="h-4 w-4" />تنبيهات عاجلة ({criticalAlerts.length})
+              <AlertTriangle className="h-4 w-4" />{t("scan.alerts.critical")} ({criticalAlerts.length})
             </div>
             {criticalAlerts.map((a, i) => (
               <div key={i} className="flex items-start gap-2.5 text-sm text-red-800 bg-white rounded-xl p-3 border border-red-100 shadow-sm">
@@ -363,7 +367,7 @@ export default function FarmScanPage() {
         {warningAlerts.length > 0 && (
           <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-2">
             <div className="flex items-center gap-2 text-amber-700 font-bold text-sm mb-2">
-              <AlertTriangle className="h-4 w-4" />تحذيرات ({warningAlerts.length})
+              <AlertTriangle className="h-4 w-4" />{t("scan.alerts.warning")} ({warningAlerts.length})
             </div>
             {warningAlerts.map((a, i) => (
               <div key={i} className="flex items-start gap-2.5 text-sm text-amber-800 bg-white rounded-xl p-3 border border-amber-100 shadow-sm">
@@ -375,15 +379,15 @@ export default function FarmScanPage() {
         )}
 
         {/* ── TASKS ── */}
-        <Section title={`المهام — ${tasks.overdue > 0 ? `⚠️ ${tasks.overdue} متأخرة` : `${tasks.pending} قادمة`}`}
+        <Section title={`${t("scan.tasks.title")} — ${tasks.overdue > 0 ? `⚠️ ${tasks.overdue} ${t("scan.tasks.overdue")}` : `${tasks.pending} ${t("scan.tasks.upcoming")}`}`}
           icon={ClipboardList} color="#f59e0b">
           {/* Summary tiles — clickable */}
           <div className="grid grid-cols-4 gap-2 mb-4">
             {[
-              { n: tasks.overdue,   label: "متأخرة",  bg: "bg-red-100",   text: "text-red-700",   filter: "overdue"  },
-              { n: tasks.today,     label: "اليوم",   bg: "bg-amber-100", text: "text-amber-700", filter: "today"    },
-              { n: tasks.pending,   label: "قادمة",   bg: "bg-blue-100",  text: "text-blue-700",  filter: "upcoming" },
-              { n: tasks.completed, label: "مكتملة",  bg: "bg-green-100", text: "text-green-700", filter: "done"     },
+              { n: tasks.overdue,   label: t("scan.tasks.label.overdue"),  bg: "bg-red-100",   text: "text-red-700",   filter: "overdue"  },
+              { n: tasks.today,     label: t("scan.tasks.label.today"),    bg: "bg-amber-100", text: "text-amber-700", filter: "today"    },
+              { n: tasks.pending,   label: t("scan.tasks.label.upcoming"), bg: "bg-blue-100",  text: "text-blue-700",  filter: "upcoming" },
+              { n: tasks.completed, label: t("scan.tasks.label.done"),     bg: "bg-green-100", text: "text-green-700", filter: "done"     },
             ].map((s, i) => (
               <a key={i} href="/tasks"
                 className={cn("rounded-xl py-2 px-1 text-center cursor-pointer hover:opacity-80 active:scale-95 transition-all", s.bg)}>
@@ -395,7 +399,7 @@ export default function FarmScanPage() {
 
           {/* Task list — clickable items */}
           {tasks.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">لا توجد مهام مسجلة</div>
+            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.tasks.none")}</div>
           ) : (
             <div className="space-y-2">
               {tasks.list.map(t => (
@@ -435,22 +439,22 @@ export default function FarmScanPage() {
         </Section>
 
         {/* ── HATCHING CYCLES ── */}
-        <Section title={`دورات التفقيس — ${cycles.active} نشطة · ${cycles.completed} مكتملة`}
+        <Section title={`${t("scan.cycles.title")} — ${cycles.active} ${t("scan.cycles.active")} · ${cycles.completed} ${t("scan.cycles.completed")}`}
           icon={Egg} color="#8b5cf6">
           {cycles.avgHatchRate != null && (
             <div className="flex items-center gap-3 mb-4 bg-purple-50 rounded-xl p-3 border border-purple-100">
               <Star className="h-5 w-5 text-purple-500" />
               <div>
-                <div className="text-sm font-bold text-purple-800">متوسط نسبة الفقس: {cycles.avgHatchRate}%</div>
+                <div className="text-sm font-bold text-purple-800">{t("scan.cycles.avgHatch")} {cycles.avgHatchRate}%</div>
                 <div className="text-xs text-purple-500">
-                  {cycles.avgHatchRate >= 75 ? "أداء ممتاز" : cycles.avgHatchRate >= 65 ? "أداء مقبول" : "أداء يحتاج تحسين"}
+                  {cycles.avgHatchRate >= 75 ? t("scan.cycles.perf.good") : cycles.avgHatchRate >= 65 ? t("scan.cycles.perf.ok") : t("scan.cycles.perf.poor")}
                 </div>
               </div>
             </div>
           )}
 
           {cycles.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">لا توجد دورات تفقيس</div>
+            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.cycles.none")}</div>
           ) : (
             <div className="space-y-3">
               {cycles.list.map(c => (
@@ -470,7 +474,7 @@ export default function FarmScanPage() {
                         c.status === "hatching" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
                       )}>{c.statusLabel}</span>
                       {c.daysRunning != null && c.status !== "completed" && (
-                        <span className="text-[10px] text-gray-400">اليوم {c.daysRunning} من 21</span>
+                        <span className="text-[10px] text-gray-400">{t("scan.cycles.day")} {c.daysRunning} / 21</span>
                       )}
                     </div>
                   </div>
@@ -478,7 +482,7 @@ export default function FarmScanPage() {
                   {/* Eggs stats */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="bg-white rounded-xl p-2.5 border text-center">
-                      <div className="text-xs text-gray-400 mb-0.5">البيض المحضون</div>
+                      <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.eggs")}</div>
                       <div className="text-lg font-black text-gray-800">{c.eggsSet}</div>
                     </div>
                     {c.hatchRate != null ? (
@@ -486,14 +490,14 @@ export default function FarmScanPage() {
                         c.hatchRate >= 75 ? "bg-green-50 border-green-200" :
                         c.hatchRate >= 65 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
                       )}>
-                        <div className="text-xs text-gray-400 mb-0.5">نسبة الفقس</div>
+                        <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.hatchRate")}</div>
                         <div className={cn("text-lg font-black",
                           c.hatchRate >= 75 ? "text-green-700" : c.hatchRate >= 65 ? "text-yellow-700" : "text-red-700"
                         )}>{c.hatchRate}%</div>
                       </div>
                     ) : c.daysRunning != null ? (
                       <div className="bg-white rounded-xl p-2.5 border text-center">
-                        <div className="text-xs text-gray-400 mb-0.5">أيام منذ البداية</div>
+                        <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.daysSince")}</div>
                         <div className="text-lg font-black text-gray-800">{c.daysRunning} / 21</div>
                       </div>
                     ) : null}
@@ -505,13 +509,13 @@ export default function FarmScanPage() {
                       {/* Phase label */}
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-px bg-gray-200" />
-                        <span className="text-[10px] text-gray-400 font-bold">درجات الحرارة والرطوبة</span>
+                        <span className="text-[10px] text-gray-400 font-bold">{t("scan.cycles.tempHumid")}</span>
                         <div className="flex-1 h-px bg-gray-200" />
                       </div>
 
                       {/* Phase 1: Incubation (day 1-18) */}
                       <PhaseRow
-                        label="مرحلة الحضانة (اليوم 1 – 18)"
+                        label={t("scan.cycles.phase1")}
                         temp={c.temperature}
                         humidity={c.humidity}
                         tempStatus={c.tempStatus}
@@ -522,7 +526,7 @@ export default function FarmScanPage() {
 
                       {/* Phase 2: Lockdown (day 18-21) */}
                       <PhaseRow
-                        label="مرحلة الفقس (اليوم 18 – 21)"
+                        label={t("scan.cycles.phase2")}
                         temp={c.lockdownTemperature}
                         humidity={c.lockdownHumidity}
                         tempStatus={c.lockdownTempStatus}
@@ -539,8 +543,8 @@ export default function FarmScanPage() {
                             : "bg-purple-100 text-purple-700 border border-purple-200"
                         )}>
                           {c.isLockdownPhase
-                            ? "🔒 الآن في مرحلة الفقس — لا تفتح الحاضنة"
-                            : `📅 الآن في مرحلة الحضانة — اليوم ${c.daysRunning}`
+                            ? t("scan.cycles.lockdown")
+                            : `${t("scan.cycles.incubating")} ${c.daysRunning}`
                           }
                         </div>
                       )}
@@ -553,9 +557,9 @@ export default function FarmScanPage() {
         </Section>
 
         {/* ── FLOCKS ── */}
-        <Section title={`القطعان — ${flocks.total} قطيع`} icon={Users} color="#06b6d4" defaultOpen={flocks.total > 0}>
+        <Section title={`${t("scan.flocks.title")} — ${flocks.total} ${t("scan.flocks.flock")}`} icon={Users} color="#06b6d4" defaultOpen={flocks.total > 0}>
           {flocks.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">لا توجد قطعان مسجلة</div>
+            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.flocks.none")}</div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {flocks.list.map(f => (
@@ -566,10 +570,10 @@ export default function FarmScanPage() {
                     </div>
                     <div className="font-bold text-sm text-gray-800 truncate">{f.name}</div>
                   </div>
-                  {f.breed && <div className="text-xs text-gray-500 mb-1">النوع: {f.breed}</div>}
+                  {f.breed && <div className="text-xs text-gray-500 mb-1">{t("scan.flocks.type")} {f.breed}</div>}
                   <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-bold">{f.count} طير</span>
-                    {f.age && <span className="text-gray-400">{f.age} أسبوع</span>}
+                    <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-bold">{f.count} {t("scan.flocks.birds")}</span>
+                    {f.age && <span className="text-gray-400">{f.age} {t("scan.flocks.week")}</span>}
                   </div>
                 </div>
               ))}
@@ -578,23 +582,23 @@ export default function FarmScanPage() {
         </Section>
 
         {/* ── NOTES ── */}
-        <Section title={`الملاحظات — ${notes.total} ملاحظة · سلسلة ${notes.streak} يوم`}
+        <Section title={`${t("scan.notes.title")} — ${notes.total} ${t("scan.notes.note")} · ${t("scan.notes.streak")} ${notes.streak} ${t("scan.notes.days")}`}
           icon={BookOpen} color="#10b981">
           {notes.streak > 0 ? (
             <div className="flex items-center gap-2 mb-4 bg-emerald-50 rounded-xl p-3 border border-emerald-100">
               <CheckCircle2 className="h-5 w-5 text-emerald-500" />
               <div className="text-sm text-emerald-700">
-                <strong>{notes.streak} يوم</strong> متواصل من التوثيق — ممتاز!
+                <strong>{notes.streak} {t("scan.notes.days")}</strong> {t("scan.notes.streak.good")}
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2 mb-4 bg-red-50 rounded-xl p-3 border border-red-100">
               <AlertTriangle className="h-4 w-4 text-red-500" />
-              <div className="text-sm text-red-700">لم تُسجَّل ملاحظة اليوم — سجّل ما حدث الآن</div>
+              <div className="text-sm text-red-700">{t("scan.notes.streak.none")}</div>
             </div>
           )}
           {notes.recent.length === 0 ? (
-            <div className="text-center py-3 text-gray-400 text-sm">لا توجد ملاحظات بعد</div>
+            <div className="text-center py-3 text-gray-400 text-sm">{t("scan.notes.none")}</div>
           ) : (
             <div className="space-y-2">
               {notes.recent.map(n => (
@@ -612,7 +616,7 @@ export default function FarmScanPage() {
 
         {/* ── GOALS ── */}
         {goals.total > 0 && (
-          <Section title={`الأهداف — ${goals.completed}/${goals.total} مكتمل`}
+          <Section title={`${t("scan.goals.title")} — ${goals.completed} ${t("scan.goals.of")} ${goals.total} ${t("scan.goals.completed")}`}
             icon={Target} color="#f97316">
             <div className="space-y-3">
               {goals.list.map(g => (
@@ -643,7 +647,7 @@ export default function FarmScanPage() {
 
         {/* ── AI PRECISION SUMMARY ── */}
         {precision && (
-          <Section title="التحليل الذكي — ملخص" icon={Zap} color="#6366f1">
+          <Section title={t("scan.ai.title")} icon={Zap} color="#6366f1">
             <div className="grid grid-cols-2 gap-3 mb-4">
               {/* Risk */}
               <div className={cn("rounded-2xl p-4 text-center border",
@@ -656,13 +660,13 @@ export default function FarmScanPage() {
                   precision.riskLevel === "high" ? "text-orange-600" :
                   precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
                 )}>{precision.riskScore}</div>
-                <div className="text-xs text-gray-500 mt-0.5">مستوى الخطر /100</div>
+                <div className="text-xs text-gray-500 mt-0.5">{t("scan.ai.risk")}</div>
                 <div className={cn("text-xs font-bold mt-1",
                   precision.riskLevel === "critical" ? "text-red-600" :
                   precision.riskLevel === "high" ? "text-orange-600" :
                   precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
                 )}>
-                  {precision.riskLevel === "critical" ? "🔴 حرج" : precision.riskLevel === "high" ? "🟠 مرتفع" : precision.riskLevel === "medium" ? "🟡 متوسط" : "🟢 منخفض"}
+                  {precision.riskLevel === "critical" ? t("scan.ai.risk.critical") : precision.riskLevel === "high" ? t("scan.ai.risk.high") : precision.riskLevel === "medium" ? t("scan.ai.risk.medium") : t("scan.ai.risk.low")}
                 </div>
               </div>
 
@@ -671,13 +675,13 @@ export default function FarmScanPage() {
                 <div className="text-3xl font-black text-indigo-700">
                   {precision.nextHatchRate?.toFixed(0) ?? "—"}%
                 </div>
-                <div className="text-xs text-gray-500 mt-0.5">توقع الفقس القادم</div>
+                <div className="text-xs text-gray-500 mt-0.5">{t("scan.ai.nextHatch")}</div>
                 <div className="flex items-center justify-center gap-1 mt-1">
                   {precision.trend === "improving" ? <TrendingUp className="h-3.5 w-3.5 text-green-500" /> :
                    precision.trend === "declining" ? <TrendingDown className="h-3.5 w-3.5 text-red-500" /> :
                    <Minus className="h-3.5 w-3.5 text-gray-400" />}
                   <span className="text-xs text-gray-500">
-                    {precision.trend === "improving" ? "في تحسّن" : precision.trend === "declining" ? "في تراجع" : "مستقر"}
+                    {precision.trend === "improving" ? t("scan.ai.trend.improving") : precision.trend === "declining" ? t("scan.ai.trend.declining") : t("scan.ai.trend.stable")}
                   </span>
                 </div>
               </div>
@@ -688,13 +692,13 @@ export default function FarmScanPage() {
               <div className="bg-white border border-gray-100 rounded-xl p-3 flex items-start gap-2">
                 <Activity className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="text-xs text-gray-400">السبب الرئيسي</div>
+                  <div className="text-xs text-gray-400">{t("scan.ai.cause")}</div>
                   <div className="text-sm font-bold text-gray-800">{precision.primaryCause}</div>
                 </div>
               </div>
               <div className="bg-white border border-gray-100 rounded-xl p-3">
                 <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                  <span>مستوى الثقة بالتحليل</span>
+                  <span>{t("scan.ai.confidence")}</span>
                   <span className="font-bold text-indigo-600">{precision.confidence}%</span>
                 </div>
                 <Bar value={precision.confidence}
@@ -706,22 +710,22 @@ export default function FarmScanPage() {
 
         {/* ── IMAGE CV REPORT ── */}
         {imageReport && (
-          <Section title={`تقارير صور المزرعة — آخر 7 أيام`} icon={Camera} color="#8b5cf6" defaultOpen={false}>
+          <Section title={t("scan.imgReport.title")} icon={Camera} color="#8b5cf6" defaultOpen={false}>
             {imageReport.analyzedCount === 0 ? (
               <div className="text-center py-6 text-gray-400">
                 <Camera className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">لا توجد صور محللة في الأسبوع الماضي</p>
-                <p className="text-xs mt-1">ارفع صوراً من المزرعة من صفحة الملاحظات</p>
+                <p className="text-sm">{t("scan.imgReport.none")}</p>
+                <p className="text-xs mt-1">{t("scan.imgReport.hint")}</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Summary stats */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { label: "صور محللة", value: imageReport.analyzedCount, color: "text-indigo-700" },
-                    { label: "متوسط الخطر", value: `${imageReport.summary.overallRisk}/100`,
+                    { label: t("scan.imgReport.analyzed"), value: imageReport.analyzedCount, color: "text-indigo-700" },
+                    { label: t("scan.imgReport.avgRisk"), value: `${imageReport.summary.overallRisk}/100`,
                       color: imageReport.summary.overallRisk >= 65 ? "text-red-700" : imageReport.summary.overallRisk >= 35 ? "text-amber-700" : "text-emerald-700" },
-                    { label: "متوسط الصحة", value: `${imageReport.summary.avgHealthScore}%`, color: "text-emerald-700" },
+                    { label: t("scan.imgReport.avgHealth"), value: `${imageReport.summary.avgHealthScore}%`, color: "text-emerald-700" },
                   ].map((s, i) => (
                     <div key={i} className="bg-white border border-gray-100 rounded-xl p-3 text-center">
                       <div className={cn("text-xl font-black", s.color)}>{s.value}</div>
@@ -733,10 +737,10 @@ export default function FarmScanPage() {
                 {/* Trend indicators */}
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: "النشاط الحركي", value: imageReport.summary.avgActivityLevel, trend: imageReport.summary.activityTrend },
-                    { label: "نظافة الأرضية", value: imageReport.summary.avgFloorCleanliness, trend: "stable" },
-                    { label: "التكدس", value: imageReport.summary.avgCrowdingScore, trend: imageReport.summary.riskTrend === "down" ? "down" : "up", invertGood: true },
-                    { label: "الإضاءة", value: imageReport.summary.avgLightingScore, trend: "stable" },
+                    { label: t("scan.imgReport.activity"), value: imageReport.summary.avgActivityLevel, trend: imageReport.summary.activityTrend },
+                    { label: t("scan.imgReport.cleanliness"), value: imageReport.summary.avgFloorCleanliness, trend: "stable" },
+                    { label: t("scan.imgReport.crowding"), value: imageReport.summary.avgCrowdingScore, trend: imageReport.summary.riskTrend === "down" ? "down" : "up", invertGood: true },
+                    { label: t("scan.imgReport.lighting"), value: imageReport.summary.avgLightingScore, trend: "stable" },
                   ].map((m, i) => {
                     const good = m.invertGood ? m.value <= 35 : m.value >= 65;
                     const warn = m.invertGood ? m.value <= 60 : m.value >= 40;
@@ -757,17 +761,17 @@ export default function FarmScanPage() {
                 {/* Daily breakdown */}
                 {imageReport.dailyBreakdown && imageReport.dailyBreakdown.length > 0 && (
                   <div>
-                    <p className="text-xs text-gray-400 mb-2">التفاصيل اليومية</p>
+                    <p className="text-xs text-gray-400 mb-2">{t("scan.imgReport.daily")}</p>
                     <div className="space-y-1.5">
                       {imageReport.dailyBreakdown.map((d: any, i: number) => (
                         <div key={i} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
                           <span className="text-xs text-gray-600">{d.date}</span>
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-gray-400">{d.imageCount} صورة</span>
+                            <span className="text-[10px] text-gray-400">{d.imageCount} {t("scan.imgReport.photos")}</span>
                             <span className={cn("text-xs font-bold", d.avgRisk >= 65 ? "text-red-600" : d.avgRisk >= 35 ? "text-amber-600" : "text-emerald-600")}>
-                              خطر: {d.avgRisk}
+                              {t("scan.imgReport.risk")} {d.avgRisk}
                             </span>
-                            <span className="text-[10px] text-gray-400">صحة: {d.avgHealth}%</span>
+                            <span className="text-[10px] text-gray-400">{t("scan.imgReport.health")} {d.avgHealth}%</span>
                           </div>
                         </div>
                       ))}
@@ -778,7 +782,7 @@ export default function FarmScanPage() {
             )}
             <div className="mt-3 text-center">
               <button onClick={fetchImageReport} className="text-xs text-purple-500 hover:text-purple-700 flex items-center gap-1 mx-auto">
-                <RefreshCw className="h-3 w-3" />تحديث التقرير
+                <RefreshCw className="h-3 w-3" />{t("scan.imgReport.refresh")}
               </button>
             </div>
           </Section>
@@ -788,7 +792,7 @@ export default function FarmScanPage() {
         {infoAlerts.length > 0 && (
           <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4 space-y-2">
             <div className="flex items-center gap-2 text-blue-600 font-bold text-xs mb-1">
-              <Bell className="h-3.5 w-3.5" />ملاحظات
+              <Bell className="h-3.5 w-3.5" />{t("scan.alerts.info")}
             </div>
             {infoAlerts.map((a, i) => (
               <div key={i} className="text-xs text-blue-700 flex items-start gap-2">
@@ -799,7 +803,7 @@ export default function FarmScanPage() {
         )}
 
         <div className="text-center text-xs text-gray-300 pb-4">
-          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — فحص المزرعة
+          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — {t("scan.footer")}
         </div>
       </div>
     </div>
