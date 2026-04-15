@@ -1,527 +1,636 @@
 /**
- * صفحة التحليل الذكي للمزرعة
- * يعمل تلقائياً ويتحدث كلما تغيرت البيانات
+ * صفحة المسح الشامل للمزرعة
+ * تعرض كل شيء دفعة واحدة بشكل احترافي
  */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Brain, Loader2, TrendingUp, TrendingDown, Minus,
-  Activity, AlertTriangle, CheckCircle2, Shield,
-  Target, RefreshCw, Info, XCircle,
-  Database, Eye, Bell, Zap,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Bird, Egg, ClipboardList, BookOpen, Target,
+  AlertTriangle, CheckCircle2, XCircle, Clock,
+  Thermometer, Droplets, TrendingUp, TrendingDown, Minus,
+  Shield, RefreshCw, Loader2, ChevronDown, ChevronUp,
+  Zap, Activity, Star, Calendar, Users,
+  ArrowRight, Bell,
+} from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface RollingStats { window: number; count: number; mean: number; std: number; variance: number; min: number; max: number; rateOfChange: number; trend: { slope: number; r2: number; n: number } | null; }
-interface AnomalyPoint { index: number; date: string; value: number; zScore: number; type: "spike" | "drop"; severity: "critical" | "high" | "low"; }
-interface ChangePoint { index: number; date: string; direction: "shift_up" | "shift_down"; magnitude: number; }
-interface FeatureVector { rolling3d: RollingStats | null; rolling7d: RollingStats | null; rolling14d: RollingStats | null; ewmaSlope: number; autocorrelationLag1: number; anomalies: AnomalyPoint[]; changePoints: ChangePoint[]; globalMean: number; globalStd: number; globalVariance: number; globalStability: number; sampleSize: number; }
-interface AdaptiveThresholds { hatchRate: { good: number; acceptable: number; poor: number }; temperature: { optimal_lo: number; optimal_hi: number }; humidity: { optimal_lo: number; optimal_hi: number }; source: string; }
-interface DataQualityReport { score: number; sufficient: boolean; issues: string[]; warnings: string[]; minimumMetByCriteria: Record<string, boolean>; }
-interface RiskFactor { name: string; nameAr: string; weight: number; rawValue: number; normalized: number; evidence: string; }
-interface RiskModel { factors: RiskFactor[]; failureProbability: number; riskScore: number; riskLevel: "critical" | "high" | "medium" | "low"; }
-interface CausalPathway { id: string; nameAr: string; causalEffect: number; evidence: string; isTrueCause: boolean; weight: number; }
-interface CausalResult { pathways: CausalPathway[]; primaryCause: string; }
-interface ConfidenceResult { score: number; breakdown: Record<string, { weight: number; value: number; reason: string }>; }
-interface PrecisionOutput { dataQuality: DataQualityReport; features: FeatureVector; adaptiveThresholds: AdaptiveThresholds; riskModel: RiskModel; prediction: { nextCycleHatchRate: number | null; ci95: [number, number] | null; failureProbability48h: number; trend: "improving" | "declining" | "stable"; }; anomalyTimeline: AnomalyPoint[]; changePoints: ChangePoint[]; causal: CausalResult; confidence: ConfidenceResult; meta: { computedAt: string; inputHash: string; modelMetrics: Record<string, number>; }; }
-interface MonitorReport { accuracy: { resolvedCount: number; mae: number; accuracyRate: number; } | null; stuckDetection: { isStuck: boolean; reason: string | null; }; recentPredictions: Array<{ id: number; createdAt: string; predictedHatchRate: number | null; actualHatchRate: number | null; error: number | null; confidenceScore: number | null; resolved: boolean; }>; recommendation: string; }
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface FarmScan {
+  scannedAt: string;
+  healthScore: number;
+  flocks: { total: number; list: FLock[] };
+  cycles: { total: number; active: number; completed: number; avgHatchRate: number | null; list: Cycle[] };
+  tasks: { total: number; overdue: number; today: number; completed: number; pending: number; list: Task[] };
+  notes: { total: number; streak: number; recent: Note[] };
+  goals: { total: number; completed: number; list: Goal[] };
+  alerts: Alert[];
+  precision: Precision | null;
+}
+interface FLock { id: number; name: string; breed: string | null; count: number; age: number | null; purpose: string | null; }
+interface Cycle { id: number; name: string; status: string; statusLabel: string; eggsSet: number; eggsHatched: number | null; hatchRate: number | null; hatchLabel: string | null; startDate: string | null; daysRunning: number | null; temperature: number | null; humidity: number | null; tempStatus: "good" | "warn" | "bad" | null; humidStatus: "good" | "warn" | "bad" | null; breed: string | null; }
+interface Task { id: number; title: string; completed: boolean; dueDate: string | null; priority: string; category: string | null; isOverdue: boolean; isToday: boolean; daysOverdue: number; statusLabel: string; statusType: "overdue" | "today" | "upcoming" | "done"; }
+interface Note { id: number; date: string; content: string; author: string | null; }
+interface Goal { id: number; title: string; completed: boolean; targetValue: number | null; currentValue: number | null; unit: string | null; progress: number | null; dueDate: string | null; }
+interface Alert { level: "critical" | "warning" | "info"; message: string; category: string; }
+interface Precision { riskLevel: string; riskScore: number; failureProbability: number; nextHatchRate: number | null; trend: string; confidence: number; primaryCause: string; dataQualityScore: number; }
 
-// ─── تسميات بسيطة للعوامل ────────────────────────────────────────────────────
-const factorLabels: Record<string, string> = {
-  hatch_rate:    "نسبة الفقس",
-  temperature:   "درجة الحرارة",
-  humidity:      "الرطوبة",
-  trend:         "اتجاه الأداء",
-  operations:    "المهام المتأخرة",
-  documentation: "التوثيق اليومي",
-};
+// ─── Scan steps ───────────────────────────────────────────────────────────────
+const SCAN_STEPS = [
+  { key: "flocks",  icon: Users,         label: "القطعان",           delay: 300  },
+  { key: "cycles",  icon: Egg,           label: "دورات التفقيس",     delay: 600  },
+  { key: "tasks",   icon: ClipboardList, label: "المهام",            delay: 900  },
+  { key: "notes",   icon: BookOpen,      label: "الملاحظات اليومية", delay: 1200 },
+  { key: "goals",   icon: Target,        label: "الأهداف",           delay: 1500 },
+  { key: "alerts",  icon: Bell,          label: "التنبيهات",         delay: 1800 },
+  { key: "ai",      icon: Zap,           label: "التحليل الذكي",     delay: 2100 },
+];
 
-const riskBg: Record<string, string> = {
-  critical: "bg-red-500", high: "bg-orange-500", medium: "bg-yellow-500", low: "bg-green-500",
-};
-const riskText: Record<string, string> = {
-  critical: "text-red-700", high: "text-orange-700", medium: "text-yellow-700", low: "text-green-700",
-};
-const riskBorder: Record<string, string> = {
-  critical: "bg-red-50 border-red-200", high: "bg-orange-50 border-orange-200", medium: "bg-yellow-50 border-yellow-200", low: "bg-green-50 border-green-200",
-};
-const riskLabel: Record<string, string> = {
-  critical: "🔴 خطر شديد — تدخل فوري", high: "🟠 خطر مرتفع — تصرف اليوم",
-  medium: "🟡 متوسط — راقب الوضع", low: "🟢 جيد — استمر",
-};
-
-// ─── مكونات مساعدة ────────────────────────────────────────────────────────────
-function Bar({ value, max = 100, color = "bg-amber-500" }: { value: number; max?: number; color?: string }) {
+// ─── Mini helpers ─────────────────────────────────────────────────────────────
+const Ring = ({ score, size = 100 }: { score: number; size?: number }) => {
+  const r = (size - 12) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
+  const color = score >= 75 ? "#22c55e" : score >= 50 ? "#f59e0b" : "#ef4444";
   return (
-    <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-      <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${Math.min(100, (value / max) * 100)}%` }} />
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
+          strokeLinecap="round" strokeDasharray={circ}
+          style={{ strokeDashoffset: offset, transition: "stroke-dashoffset 1.2s ease" }} />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-black" style={{ color }}>{score}</span>
+        <span className="text-[10px] text-gray-400 font-medium">صحة المزرعة</span>
+      </div>
+    </div>
+  );
+};
+
+const Bar = ({ value, max = 100, color = "#f59e0b" }: { value: number; max?: number; color?: string }) => (
+  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+    <div className="h-full rounded-full transition-all duration-700"
+      style={{ width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }} />
+  </div>
+);
+
+function Section({ title, icon: Icon, color, children, defaultOpen = true }: {
+  title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <button onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: color + "20" }}>
+            <Icon className="h-4 w-4" style={{ color }} />
+          </div>
+          <span className="font-bold text-gray-800 text-sm">{title}</span>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
     </div>
   );
 }
 
-function Card2({ title, icon: Icon, children, accent = false }: { title: string; icon: any; children: React.ReactNode; accent?: boolean }) {
-  return (
-    <Card className={cn("border shadow-sm", accent && "border-amber-200")}>
-      <CardHeader className="pb-2 pt-4 px-5">
-        <CardTitle className="text-sm font-bold text-gray-800 flex items-center gap-2">
-          <Icon className={cn("h-4 w-4", accent ? "text-amber-600" : "text-gray-500")} />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-5 pb-5">{children}</CardContent>
-    </Card>
-  );
-}
-
-// ─── المكوّن الرئيسي ──────────────────────────────────────────────────────────
-export default function PrecisionAnalysis() {
+// ─── Main ─────────────────────────────────────────────────────────────────────
+export default function FarmScanPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [scan, setScan] = useState<FarmScan | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanStep, setScanStep] = useState(-1);
+  const [lastAt, setLastAt] = useState<string | null>(null);
+  const fpRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<PrecisionOutput | null>(null);
-  const [monitor, setMonitor] = useState<MonitorReport | null>(null);
-  const [tab, setTab] = useState<"main" | "history">("main");
-  const [dataChanged, setDataChanged] = useState(false);
-  const [lastHash, setLastHash] = useState<string | null>(null);
-  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
-  const fingerprintRef = useRef<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ── التحليل ──────────────────────────────────────────────────────────────
-  const runAnalysis = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchScan = useCallback(async (silent = false) => {
+    if (!silent) { setScanning(true); setScanStep(0); setScan(null); }
     try {
-      const resp = await fetch("/api/ai/precision", {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" }, body: "{}",
-      });
-      if (!resp.ok) throw new Error((await resp.json()).error ?? resp.statusText);
-      const data = await resp.json();
-      setResult(data.result);
-      setDataChanged(false);
-      setLastHash(data.result.meta.inputHash);
-      fingerprintRef.current = data.result.meta.inputHash;
-      setLastRunAt(new Date().toLocaleTimeString("ar-SA"));
-      if (!silent) toast({ title: "✅ تم التحليل", description: "النتائج محدّثة بأحدث بيانات المزرعة" });
+      // Animate through scan steps
+      if (!silent) {
+        for (let i = 0; i < SCAN_STEPS.length; i++) {
+          await new Promise(r => setTimeout(r, 320));
+          setScanStep(i);
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      const res = await fetch("/api/ai/farm-scan", { credentials: "include" });
+      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+      const data: FarmScan = await res.json();
+      setScan(data);
+      setLastAt(new Date().toLocaleTimeString("ar-SA"));
+      if (silent) toast({ title: "🔄 تحديث تلقائي", description: "تم تحديث بيانات المزرعة" });
     } catch (e: any) {
-      if (!silent) toast({ variant: "destructive", title: "خطأ في التحليل", description: e.message });
-    } finally {
-      if (!silent) setLoading(false);
-    }
+      toast({ variant: "destructive", title: "خطأ", description: e.message });
+    } finally { setScanning(false); setScanStep(-1); }
   }, [toast]);
 
-  // ── فحص تغيّر البيانات ───────────────────────────────────────────────────
   const checkFingerprint = useCallback(async () => {
     try {
-      const resp = await fetch("/api/ai/fingerprint", { credentials: "include" });
-      if (!resp.ok) return;
-      const { fingerprint } = await resp.json();
-      if (fingerprintRef.current && fingerprint !== fingerprintRef.current) {
-        setDataChanged(true);
-        // Auto re-run silently
-        fingerprintRef.current = fingerprint;
-        await runAnalysis(true);
-        toast({ title: "🔄 تحديث تلقائي", description: "البيانات تغيّرت — جارٍ تحديث التحليل" });
-      } else if (!fingerprintRef.current) {
-        fingerprintRef.current = fingerprint;
-      }
+      const res = await fetch("/api/ai/fingerprint", { credentials: "include" });
+      if (!res.ok) return;
+      const { fingerprint } = await res.json();
+      if (fpRef.current && fingerprint !== fpRef.current) {
+        fpRef.current = fingerprint;
+        await fetchScan(true);
+      } else if (!fpRef.current) { fpRef.current = fingerprint; }
     } catch { /* silent */ }
-  }, [runAnalysis, toast]);
+  }, [fetchScan]);
 
-  // ── التحليل الأولي عند فتح الصفحة + مؤقت كل 30 ثانية ─────────────────────
   useEffect(() => {
-    runAnalysis(false);
-    intervalRef.current = setInterval(checkFingerprint, 30_000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    fetchScan(false);
+    timerRef.current = setInterval(checkFingerprint, 30_000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── سجل المراقبة ─────────────────────────────────────────────────────────
-  const loadMonitor = useCallback(async () => {
-    try {
-      const resp = await fetch("/api/ai/monitor", { credentials: "include" });
-      if (!resp.ok) return;
-      const data = await resp.json();
-      setMonitor(data.report);
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => {
-    if (tab === "history") loadMonitor();
-  }, [tab, loadMonitor]);
 
   if (!user || user.role !== "admin") {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500 gap-2">
+      <div className="flex items-center justify-center h-64 text-gray-400 gap-2" dir="rtl">
         <Shield className="h-5 w-5" />للمديرين فقط
       </div>
     );
   }
 
-  return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4" dir="rtl">
+  // ── SCANNING SCREEN ──────────────────────────────────────────────────────────
+  if (scanning) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 flex flex-col items-center justify-center p-8" dir="rtl">
+        <div className="w-full max-w-sm">
+          {/* Logo area */}
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-200 mb-4">
+              <Activity className="h-10 w-10 text-white" />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900">مسح المزرعة</h1>
+            <p className="text-gray-400 text-sm mt-1">جارٍ فحص كل البيانات...</p>
+          </div>
 
-      {/* ── رأس الصفحة ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Brain className="h-5 w-5 text-amber-600" />
-            التحليل الذكي للمزرعة
-          </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            يتحدث تلقائياً كل 30 ثانية
-            {lastRunAt && ` · آخر تحديث ${lastRunAt}`}
-          </p>
+          {/* Scan steps */}
+          <div className="space-y-3">
+            {SCAN_STEPS.map((step, i) => {
+              const Icon = step.icon;
+              const done = i < scanStep;
+              const active = i === scanStep;
+              return (
+                <div key={step.key}
+                  className={cn("flex items-center gap-3 px-5 py-3.5 rounded-2xl border transition-all duration-500",
+                    done ? "bg-green-50 border-green-200" :
+                    active ? "bg-amber-50 border-amber-300 shadow-sm" :
+                    "bg-white border-gray-100 opacity-50"
+                  )}>
+                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all",
+                    done ? "bg-green-500" : active ? "bg-amber-500" : "bg-gray-100")}>
+                    {done
+                      ? <CheckCircle2 className="h-5 w-5 text-white" />
+                      : active
+                        ? <Loader2 className="h-5 w-5 text-white animate-spin" />
+                        : <Icon className="h-4 w-4 text-gray-300" />
+                    }
+                  </div>
+                  <span className={cn("font-semibold text-sm",
+                    done ? "text-green-700" : active ? "text-amber-700" : "text-gray-300")}>
+                    {step.label}
+                  </span>
+                  {done && <span className="mr-auto text-xs text-green-500 font-medium">✓ تم</span>}
+                  {active && <span className="mr-auto text-xs text-amber-500 font-medium animate-pulse">جارٍ الفحص...</span>}
+                </div>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant={tab === "main" ? "default" : "outline"} onClick={() => setTab("main")} className={tab === "main" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}>
-            <Brain className="h-3.5 w-3.5 ml-1" />التحليل
-          </Button>
-          <Button size="sm" variant={tab === "history" ? "default" : "outline"} onClick={() => setTab("history")} className={tab === "history" ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}>
-            <Eye className="h-3.5 w-3.5 ml-1" />السجل
-          </Button>
+      </div>
+    );
+  }
+
+  // ── EMPTY STATE ────────────────────────────────────────────────────────────
+  if (!scan) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
+        <button onClick={() => fetchScan(false)}
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95">
+          <Activity className="h-5 w-5" />ابدأ مسح المزرعة
+        </button>
+      </div>
+    );
+  }
+
+  // ── MAIN DASHBOARD ────────────────────────────────────────────────────────
+  const { flocks, cycles, tasks, notes, goals, alerts, precision } = scan;
+  const criticalAlerts = alerts.filter(a => a.level === "critical");
+  const warningAlerts = alerts.filter(a => a.level === "warning");
+  const infoAlerts = alerts.filter(a => a.level === "info");
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      {/* ── HEADER BAR ── */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-black text-gray-900">مسح شامل للمزرعة</h1>
+            {lastAt && <p className="text-xs text-gray-400">آخر تحديث: {lastAt} · تلقائي كل 30 ث</p>}
+          </div>
+          <button onClick={() => fetchScan(false)}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm shadow-amber-200 transition-all">
+            <RefreshCw className="h-3.5 w-3.5" />مسح الآن
+          </button>
         </div>
       </div>
 
-      {/* ── إشعار تحديث البيانات ── */}
-      {dataChanged && (
-        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
-          <Bell className="h-4 w-4 flex-shrink-0 animate-pulse" />
-          البيانات تغيّرت — جارٍ التحديث التلقائي...
-        </div>
-      )}
+      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
 
-      {/* ── زر التحديث اليدوي ── */}
-      <Button onClick={() => runAnalysis(false)} disabled={loading} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 text-sm">
-        {loading
-          ? <><Loader2 className="h-4 w-4 animate-spin ml-2" />جارٍ التحليل...</>
-          : <><RefreshCw className="h-4 w-4 ml-2" />تحديث التحليل الآن</>}
-      </Button>
-
-      {/* ══════════════════════════════════════════════════════ */}
-      {/* تبويب التحليل الرئيسي */}
-      {/* ══════════════════════════════════════════════════════ */}
-      {tab === "main" && result && (
-        <div className="space-y-4">
-
-          {/* ── جودة البيانات ── */}
-          <Card2 title="حالة البيانات" icon={Database}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold border", result.dataQuality.sufficient ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200")}>
-                {result.dataQuality.sufficient
-                  ? <><CheckCircle2 className="h-4 w-4" />البيانات كافية للتحليل</>
-                  : <><XCircle className="h-4 w-4" />بيانات ناقصة — التحليل غير ممكن</>}
-              </div>
-              <span className="text-sm text-gray-500">{result.dataQuality.score}/100 نقطة</span>
+        {/* ── HEALTH SCORE + QUICK STATS ── */}
+        <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-3xl p-5 text-white shadow-xl shadow-amber-200">
+          <div className="flex items-center gap-5">
+            <div className="bg-white/20 rounded-2xl p-1">
+              <Ring score={scan.healthScore} size={90} />
             </div>
-            <Bar value={result.dataQuality.score} color={result.dataQuality.score >= 70 ? "bg-green-500" : result.dataQuality.score >= 40 ? "bg-yellow-500" : "bg-red-500"} />
-            <div className="mt-3 grid grid-cols-2 gap-1.5">
-              {Object.entries(result.dataQuality.minimumMetByCriteria).map(([k, v]) => (
-                <div key={k} className={cn("flex items-center gap-1.5 text-xs px-2 py-1.5 rounded border", v ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-600")}>
-                  {v ? <CheckCircle2 className="h-3 w-3 flex-shrink-0" /> : <XCircle className="h-3 w-3 flex-shrink-0" />}
-                  {k === "hasCompletedCycles" ? "دورات مكتملة" : k === "hasTemperatureData" ? "قراءات الحرارة" : k === "hasSufficientHistory" ? "تاريخ كافٍ (3+ دورات)" : k === "hasDocumentation" ? "ملاحظات يومية" : k === "hasActiveCycles" ? "دورات نشطة" : k}
-                </div>
-              ))}
-            </div>
-            {result.dataQuality.issues.map((iss, i) => (
-              <div key={i} className="mt-2 flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded px-3 py-2">
-                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />{iss}
+            <div className="flex-1 min-w-0">
+              <div className="text-lg font-black leading-tight mb-1">
+                {scan.healthScore >= 80 ? "🟢 المزرعة بحالة ممتازة" :
+                 scan.healthScore >= 60 ? "🟡 المزرعة تحتاج اهتماماً" :
+                 scan.healthScore >= 40 ? "🟠 توجد مشاكل تحتاج تدخلاً" :
+                 "🔴 وضع حرج — تصرف الآن"}
               </div>
-            ))}
-            {result.dataQuality.warnings.map((w, i) => (
-              <div key={i} className="mt-1.5 flex items-start gap-2 text-xs text-yellow-700 bg-yellow-50 rounded px-3 py-2">
-                <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />{w}
-              </div>
-            ))}
-          </Card2>
-
-          {/* ── مستوى الخطر ── */}
-          <Card2 title="مستوى الخطر الحالي" icon={Shield} accent>
-            <div className="flex items-center gap-4 mb-4">
-              <div className={cn("w-20 h-20 rounded-full flex flex-col items-center justify-center font-black text-2xl text-white shadow-lg", riskBg[result.riskModel.riskLevel])}>
-                {result.riskModel.riskScore}
-                <span className="text-xs font-normal">/ 100</span>
-              </div>
-              <div>
-                <div className={cn("text-base font-bold", riskText[result.riskModel.riskLevel])}>
-                  {riskLabel[result.riskModel.riskLevel]}
-                </div>
-                <div className="text-sm text-gray-600 mt-1">
-                  احتمال مشكلة خلال 48 ساعة: <strong>{(result.riskModel.failureProbability * 100).toFixed(0)}%</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* عوامل الخطر */}
-            <div className="space-y-2.5">
-              {result.riskModel.factors.map((f) => (
-                <div key={f.name}>
-                  <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span className="font-medium">{factorLabels[f.name] ?? f.nameAr}</span>
-                    <span className="text-gray-400">{f.evidence}</span>
-                  </div>
-                  <Bar
-                    value={f.normalized * 100}
-                    max={120}
-                    color={f.normalized > 0.7 ? "bg-red-500" : f.normalized > 0.4 ? "bg-yellow-500" : "bg-green-500"}
-                  />
-                </div>
-              ))}
-            </div>
-          </Card2>
-
-          {/* ── توقع الدورة القادمة ── */}
-          <Card2 title="توقع الدورة القادمة" icon={Target} accent>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-                <div className="text-3xl font-black text-amber-700">
-                  {result.prediction.nextCycleHatchRate?.toFixed(0) ?? "—"}%
-                </div>
-                <div className="text-xs text-amber-600 mt-1">نسبة الفقس المتوقعة</div>
-                {result.prediction.ci95 && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    بين {result.prediction.ci95[0].toFixed(0)}% و {result.prediction.ci95[1].toFixed(0)}%
-                  </div>
-                )}
-              </div>
-              <div className={cn("border rounded-xl p-4 text-center", result.prediction.failureProbability48h > 65 ? "bg-red-50 border-red-200" : result.prediction.failureProbability48h > 45 ? "bg-orange-50 border-orange-200" : "bg-green-50 border-green-200")}>
-                <div className={cn("text-3xl font-black", result.prediction.failureProbability48h > 65 ? "text-red-700" : result.prediction.failureProbability48h > 45 ? "text-orange-700" : "text-green-700")}>
-                  {result.prediction.failureProbability48h.toFixed(0)}%
-                </div>
-                <div className="text-xs text-gray-600 mt-1">خطر خلال 48 ساعة</div>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center flex flex-col items-center justify-center">
-                {result.prediction.trend === "improving" ? <TrendingUp className="h-8 w-8 text-green-600 mb-1" /> : result.prediction.trend === "declining" ? <TrendingDown className="h-8 w-8 text-red-600 mb-1" /> : <Minus className="h-8 w-8 text-gray-500 mb-1" />}
-                <div className="text-xs text-blue-700 font-bold">
-                  {result.prediction.trend === "improving" ? "أداء في تحسّن" : result.prediction.trend === "declining" ? "أداء في تراجع" : "أداء مستقر"}
-                </div>
-              </div>
-            </div>
-          </Card2>
-
-          {/* ── أسباب المشكلة ── */}
-          <Card2 title="أسباب المشكلة" icon={Activity}>
-            <div className="mb-3 px-3 py-2 bg-amber-50 rounded-lg border border-amber-100 text-sm">
-              <span className="text-gray-500">السبب الرئيسي: </span>
-              <span className="font-bold text-amber-800">{result.causal.primaryCause}</span>
-            </div>
-            <div className="space-y-2">
-              {result.causal.pathways.map((p) => (
-                <div key={p.id} className="border rounded-lg p-3 bg-white">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-gray-800">{p.nameAr}</span>
-                    <span className={cn("text-sm font-bold", p.causalEffect > 10 ? "text-red-600" : p.causalEffect > 5 ? "text-orange-600" : "text-green-600")}>
-                      {p.causalEffect.toFixed(1) === "0.0" ? "لا تأثير" : `${p.causalEffect.toFixed(1)}% تأثير`}
-                    </span>
-                  </div>
-                  <Bar value={p.causalEffect} max={40} color={p.causalEffect > 15 ? "bg-red-500" : p.causalEffect > 8 ? "bg-orange-500" : "bg-green-400"} />
-                  <div className="text-xs text-gray-400 mt-1.5">{p.evidence}</div>
-                </div>
-              ))}
-            </div>
-          </Card2>
-
-          {/* ── قراءات غير عادية ── */}
-          <Card2 title="قراءات غير عادية" icon={AlertTriangle}>
-            {result.anomalyTimeline.length === 0 && result.changePoints.length === 0 ? (
-              <div className="flex items-center gap-2 py-3 text-green-700 bg-green-50 rounded-lg border border-green-200 px-4 text-sm">
-                <CheckCircle2 className="h-4 w-4" />
-                لا توجد قراءات غير عادية — الأداء منتظم
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {result.anomalyTimeline.map((a, i) => (
-                  <div key={i} className={cn("flex items-center justify-between rounded-lg px-3 py-2.5 text-sm border", a.severity === "critical" ? "bg-red-50 border-red-200" : a.severity === "high" ? "bg-orange-50 border-orange-200" : "bg-yellow-50 border-yellow-200")}>
-                    <div className="flex items-center gap-2">
-                      {a.type === "drop" ? <TrendingDown className="h-4 w-4 text-red-600" /> : <TrendingUp className="h-4 w-4 text-green-600" />}
-                      <div>
-                        <div className="font-medium">{a.date}</div>
-                        <div className="text-xs text-gray-500">قيمة: {a.value.toFixed(1)}% — {a.type === "drop" ? "انخفاض مفاجئ" : "ارتفاع مفاجئ"}</div>
-                      </div>
-                    </div>
-                    <span className={cn("text-xs font-bold px-2 py-0.5 rounded border", a.severity === "critical" ? "bg-red-100 text-red-700 border-red-200" : a.severity === "high" ? "bg-orange-100 text-orange-700 border-orange-200" : "bg-yellow-100 text-yellow-700 border-yellow-200")}>
-                      {a.severity === "critical" ? "خطر شديد" : a.severity === "high" ? "غير عادي" : "لاحظ"}
-                    </span>
-                  </div>
-                ))}
-                {result.changePoints.map((cp, i) => (
-                  <div key={i} className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg px-3 py-2.5 text-sm">
-                    <div>
-                      <div className="font-medium">{cp.date}</div>
-                      <div className="text-xs text-gray-500">{cp.direction === "shift_down" ? "انخفاض مفاجئ في الأداء" : "ارتفاع مفاجئ في الأداء"}</div>
-                    </div>
-                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded border border-orange-200">تغيّر مفاجئ</span>
+              <p className="text-white/80 text-xs">
+                {new Date(scan.scannedAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })}
+              </p>
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {[
+                  { n: tasks.overdue, label: "مهام متأخرة", warn: tasks.overdue > 0 },
+                  { n: cycles.active, label: "دورة نشطة", warn: false },
+                  { n: notes.streak, label: "أيام توثيق", warn: notes.streak === 0 },
+                ].map((s, i) => (
+                  <div key={i} className={cn("rounded-xl px-2 py-2 text-center", s.warn ? "bg-red-500/30" : "bg-white/15")}>
+                    <div className="text-xl font-black">{s.n}</div>
+                    <div className="text-[10px] text-white/80 leading-tight">{s.label}</div>
                   </div>
                 ))}
               </div>
-            )}
-          </Card2>
-
-          {/* ── إحصائيات الأداء ── */}
-          <Card2 title="إحصائيات أداء المزرعة" icon={Activity}>
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {[
-                { label: "متوسط نسبة الفقس", value: `${result.features.globalMean.toFixed(1)}%`, desc: "كل الدورات" },
-                { label: "الانحراف العادي", value: `±${result.features.globalStd.toFixed(1)}%`, desc: "مدى التذبذب" },
-                { label: "استقرار الأداء", value: `${(result.features.globalStability * 100).toFixed(0)}%`, desc: "100% = مثالي" },
-                { label: "اتجاه الأداء", value: `${result.features.ewmaSlope > 0 ? "+" : ""}${result.features.ewmaSlope.toFixed(2)}`, desc: "لكل دورة" },
-                { label: "عدد الدورات", value: result.features.sampleSize.toString(), desc: "دورات محللة" },
-                { label: "ارتباط البيانات", value: result.features.autocorrelationLag1 > 0.3 ? "منتظم" : result.features.autocorrelationLag1 < -0.3 ? "متذبذب" : "عشوائي", desc: "نمط البيانات" },
-              ].map((s, i) => (
-                <div key={i} className="bg-gray-50 rounded-xl p-3 text-center border">
-                  <div className="text-lg font-bold text-amber-700">{s.value}</div>
-                  <div className="text-xs font-medium text-gray-700 mt-0.5">{s.label}</div>
-                  <div className="text-xs text-gray-400">{s.desc}</div>
-                </div>
-              ))}
             </div>
-
-            {/* نافذة 7 أيام */}
-            {result.features.rolling7d && result.features.rolling7d.count > 0 && (
-              <div className="border rounded-xl p-3 bg-white">
-                <div className="text-xs font-bold text-gray-600 mb-2">آخر 7 أيام ({result.features.rolling7d.count} قراءة)</div>
-                <div className="grid grid-cols-4 gap-2 text-xs text-center">
-                  <div><span className="text-gray-400 block">متوسط</span><span className="font-bold">{result.features.rolling7d.mean.toFixed(1)}%</span></div>
-                  <div><span className="text-gray-400 block">أعلى</span><span className="font-bold">{result.features.rolling7d.max.toFixed(1)}%</span></div>
-                  <div><span className="text-gray-400 block">أدنى</span><span className="font-bold">{result.features.rolling7d.min.toFixed(1)}%</span></div>
-                  <div><span className="text-gray-400 block">التغيّر</span><span className={cn("font-bold", result.features.rolling7d.rateOfChange > 0 ? "text-green-600" : result.features.rolling7d.rateOfChange < 0 ? "text-red-600" : "text-gray-600")}>{result.features.rolling7d.rateOfChange > 0 ? "+" : ""}{result.features.rolling7d.rateOfChange.toFixed(1)}%</span></div>
-                </div>
-              </div>
-            )}
-          </Card2>
-
-          {/* ── المعايير المعتمدة ── */}
-          <Card2 title="المعايير المعتمدة للمزرعة" icon={Target}>
-            <div className={cn("mb-2 text-xs px-3 py-1.5 rounded border inline-block", result.adaptiveThresholds.source === "farm_history" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200")}>
-              {result.adaptiveThresholds.source === "farm_history" ? "✓ مشتقة من تاريخ مزرعتك" : "📖 معايير علمية افتراضية"}
-            </div>
-            <div className="grid grid-cols-3 gap-3 mt-2">
-              <div className="bg-gray-50 rounded-xl p-3 border text-xs">
-                <div className="font-bold text-gray-700 mb-2">نسبة الفقس</div>
-                <div className="space-y-1">
-                  <div className="flex justify-between"><span className="text-green-600">ممتاز</span><span className="font-bold">{result.adaptiveThresholds.hatchRate.good}%+</span></div>
-                  <div className="flex justify-between"><span className="text-yellow-600">مقبول</span><span className="font-bold">{result.adaptiveThresholds.hatchRate.acceptable}%+</span></div>
-                  <div className="flex justify-between"><span className="text-red-600">ضعيف</span><span className="font-bold">أقل {result.adaptiveThresholds.hatchRate.poor}%</span></div>
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border text-xs">
-                <div className="font-bold text-gray-700 mb-2">درجة الحرارة</div>
-                <div className="text-green-600 font-bold">{result.adaptiveThresholds.temperature.optimal_lo}° – {result.adaptiveThresholds.temperature.optimal_hi}°</div>
-                <div className="text-gray-400 mt-1">النطاق المثالي</div>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-3 border text-xs">
-                <div className="font-bold text-gray-700 mb-2">الرطوبة</div>
-                <div className="text-green-600 font-bold">{result.adaptiveThresholds.humidity.optimal_lo}% – {result.adaptiveThresholds.humidity.optimal_hi}%</div>
-                <div className="text-gray-400 mt-1">النطاق المثالي</div>
-              </div>
-            </div>
-          </Card2>
-
-          {/* ── درجة الثقة بالنتائج ── */}
-          <Card2 title="مدى الثقة بهذا التحليل" icon={Zap}>
-            <div className="flex items-center gap-4 mb-3">
-              <div className="text-4xl font-black text-amber-700">
-                {result.confidence.score}<span className="text-lg text-gray-400">/100</span>
-              </div>
-              <div className="flex-1">
-                <Bar value={result.confidence.score} color={result.confidence.score >= 70 ? "bg-green-500" : result.confidence.score >= 40 ? "bg-yellow-500" : "bg-red-500"} />
-                <div className="text-xs text-gray-400 mt-1">
-                  {result.confidence.score >= 70 ? "ثقة عالية — النتائج موثوقة" : result.confidence.score >= 40 ? "ثقة متوسطة — أضف المزيد من الدورات" : "ثقة منخفضة — النظام في مرحلة التعلم"}
-                </div>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              {Object.entries(result.confidence.breakdown).map(([k, v]) => (
-                <div key={k} className="flex items-center gap-2 text-xs">
-                  <span className="w-32 text-gray-500 flex-shrink-0">
-                    {k === "sampleSize" ? "حجم البيانات" : k === "modelFit" ? "دقة النموذج" : k === "dataCoverage" ? "اكتمال البيانات" : "السجل التاريخي"}
-                  </span>
-                  <div className="flex-1"><Bar value={v.value} color="bg-amber-500" /></div>
-                  <span className="font-bold text-gray-700 w-8 text-left">{v.value.toFixed(0)}%</span>
-                </div>
-              ))}
-            </div>
-          </Card2>
-
-          {/* ── وقت آخر تحليل ── */}
-          <div className="text-center text-xs text-gray-400 pb-2">
-            آخر تحليل: {new Date(result.meta.computedAt).toLocaleString("ar-SA")} · بصمة البيانات: {result.meta.inputHash}
           </div>
         </div>
-      )}
 
-      {/* ══════════════════════════════════════════════════════ */}
-      {/* تبويب السجل التاريخي */}
-      {/* ══════════════════════════════════════════════════════ */}
-      {tab === "history" && (
-        <div className="space-y-4">
-          {monitor ? (
-            <>
-              {/* صحة النظام */}
-              <Card2 title="أداء التحليل الذكي" icon={Activity}>
-                <div className="text-sm text-gray-700 mb-3">{monitor.recommendation}</div>
-                {monitor.accuracy ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: "متوسط الخطأ", value: `${monitor.accuracy.mae}%`, color: monitor.accuracy.mae < 5 ? "text-green-700" : monitor.accuracy.mae < 10 ? "text-yellow-700" : "text-red-700", desc: "كلما قلّ كلما أفضل" },
-                      { label: "نسبة الدقة", value: `${monitor.accuracy.accuracyRate}%`, color: monitor.accuracy.accuracyRate >= 70 ? "text-green-700" : "text-orange-700", desc: "توقعات ضمن ±5%" },
-                      { label: "توقعات محللة", value: monitor.accuracy.resolvedCount.toString(), color: "text-gray-700", desc: "دورات تم مقارنتها" },
-                    ].map((m, i) => (
-                      <div key={i} className="bg-gray-50 border rounded-xl p-3 text-center">
-                        <div className={cn("text-xl font-bold", m.color)}>{m.value}</div>
-                        <div className="text-xs text-gray-600 font-medium mt-0.5">{m.label}</div>
-                        <div className="text-xs text-gray-400">{m.desc}</div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-gray-400 text-sm">
-                    النظام في مرحلة التعلم — أكمل المزيد من الدورات لبناء السجل
-                  </div>
-                )}
-                {monitor.stuckDetection.isStuck && (
-                  <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700">
-                    <strong>تنبيه:</strong> {monitor.stuckDetection.reason}
-                  </div>
-                )}
-              </Card2>
+        {/* ── CRITICAL ALERTS ── */}
+        {criticalAlerts.length > 0 && (
+          <div className="rounded-2xl bg-red-50 border border-red-200 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-2">
+              <AlertTriangle className="h-4 w-4" />تنبيهات عاجلة ({criticalAlerts.length})
+            </div>
+            {criticalAlerts.map((a, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-sm text-red-800 bg-white rounded-xl p-3 border border-red-100 shadow-sm">
+                <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                {a.message}
+              </div>
+            ))}
+          </div>
+        )}
+        {warningAlerts.length > 0 && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-amber-700 font-bold text-sm mb-2">
+              <AlertTriangle className="h-4 w-4" />تحذيرات ({warningAlerts.length})
+            </div>
+            {warningAlerts.map((a, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-sm text-amber-800 bg-white rounded-xl p-3 border border-amber-100 shadow-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                {a.message}
+              </div>
+            ))}
+          </div>
+        )}
 
-              {/* سجل التوقعات */}
-              {monitor.recentPredictions.length > 0 && (
-                <Card2 title="سجل التوقعات الأخيرة" icon={Database}>
-                  <div className="space-y-2">
-                    {monitor.recentPredictions.map((p) => (
-                      <div key={p.id} className="border rounded-xl p-3 bg-white text-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleString("ar-SA")}</span>
-                          <span className={cn("text-xs px-2 py-0.5 rounded border font-medium", p.resolved ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-500 border-gray-200")}>
-                            {p.resolved ? "✓ تم التحقق" : "بانتظار النتيجة"}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-2 text-xs text-center">
-                          <div><span className="text-gray-400 block">التوقع</span><span className="font-bold">{p.predictedHatchRate?.toFixed(0) ?? "—"}%</span></div>
-                          <div><span className="text-gray-400 block">الفعلي</span><span className="font-bold">{p.actualHatchRate?.toFixed(0) ?? "—"}%</span></div>
-                          <div><span className="text-gray-400 block">الفرق</span><span className={cn("font-bold", p.error != null ? (Math.abs(p.error) < 5 ? "text-green-600" : "text-red-600") : "text-gray-400")}>{p.error != null ? `${p.error > 0 ? "+" : ""}${p.error.toFixed(1)}%` : "—"}</span></div>
-                          <div><span className="text-gray-400 block">الثقة</span><span className="font-bold">{p.confidenceScore ?? "—"}%</span></div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card2>
-              )}
-            </>
+        {/* ── TASKS ── */}
+        <Section title={`المهام — ${tasks.overdue > 0 ? `⚠️ ${tasks.overdue} متأخرة` : `${tasks.pending} قادمة`}`}
+          icon={ClipboardList} color="#f59e0b">
+          {/* Summary row */}
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {[
+              { n: tasks.overdue, label: "متأخرة", bg: "bg-red-100", text: "text-red-700" },
+              { n: tasks.today,   label: "اليوم",  bg: "bg-amber-100", text: "text-amber-700" },
+              { n: tasks.pending, label: "قادمة",  bg: "bg-blue-100", text: "text-blue-700" },
+              { n: tasks.completed, label: "مكتملة", bg: "bg-green-100", text: "text-green-700" },
+            ].map((s, i) => (
+              <div key={i} className={cn("rounded-xl py-2 px-1 text-center", s.bg)}>
+                <div className={cn("text-xl font-black", s.text)}>{s.n}</div>
+                <div className={cn("text-[10px] font-medium", s.text)}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Task list */}
+          {tasks.list.length === 0 ? (
+            <div className="text-center py-4 text-gray-400 text-sm">لا توجد مهام مسجلة</div>
           ) : (
-            <div className="text-center py-10 text-gray-400">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-              جارٍ تحميل السجل...
+            <div className="space-y-2">
+              {tasks.list.map(t => (
+                <div key={t.id} className={cn("flex items-center gap-3 rounded-xl px-3.5 py-3 border",
+                  t.statusType === "overdue" ? "bg-red-50 border-red-200" :
+                  t.statusType === "today" ? "bg-amber-50 border-amber-200" :
+                  t.statusType === "done" ? "bg-gray-50 border-gray-100" : "bg-white border-gray-100"
+                )}>
+                  <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
+                    t.statusType === "overdue" ? "bg-red-500" :
+                    t.statusType === "today" ? "bg-amber-500" :
+                    t.statusType === "done" ? "bg-green-500" : "bg-blue-400"
+                  )}>
+                    {t.statusType === "done" ? <CheckCircle2 className="h-4 w-4 text-white" /> :
+                     t.statusType === "overdue" ? <XCircle className="h-4 w-4 text-white" /> :
+                     t.statusType === "today" ? <Clock className="h-4 w-4 text-white" /> :
+                     <ArrowRight className="h-4 w-4 text-white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={cn("text-sm font-semibold truncate", t.completed && "line-through text-gray-400")}>{t.title}</div>
+                    {t.dueDate && <div className="text-xs text-gray-400">{t.dueDate}</div>}
+                  </div>
+                  <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0",
+                    t.statusType === "overdue" ? "bg-red-100 text-red-700" :
+                    t.statusType === "today" ? "bg-amber-100 text-amber-700" :
+                    t.statusType === "done" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                  )}>
+                    {t.statusLabel}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
+        </Section>
+
+        {/* ── HATCHING CYCLES ── */}
+        <Section title={`دورات التفقيس — ${cycles.active} نشطة · ${cycles.completed} مكتملة`}
+          icon={Egg} color="#8b5cf6">
+          {cycles.avgHatchRate != null && (
+            <div className="flex items-center gap-3 mb-4 bg-purple-50 rounded-xl p-3 border border-purple-100">
+              <Star className="h-5 w-5 text-purple-500" />
+              <div>
+                <div className="text-sm font-bold text-purple-800">متوسط نسبة الفقس: {cycles.avgHatchRate}%</div>
+                <div className="text-xs text-purple-500">
+                  {cycles.avgHatchRate >= 75 ? "أداء ممتاز" : cycles.avgHatchRate >= 65 ? "أداء مقبول" : "أداء يحتاج تحسين"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {cycles.list.length === 0 ? (
+            <div className="text-center py-4 text-gray-400 text-sm">لا توجد دورات تفقيس</div>
+          ) : (
+            <div className="space-y-3">
+              {cycles.list.map(c => (
+                <div key={c.id} className={cn("rounded-2xl border p-4",
+                  c.status === "completed" ? "bg-gray-50 border-gray-100" :
+                  c.status === "hatching" ? "bg-emerald-50 border-emerald-200" : "bg-purple-50 border-purple-200"
+                )}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="font-bold text-sm text-gray-900">{c.name}</div>
+                      {c.breed && <div className="text-xs text-gray-400">{c.breed}</div>}
+                    </div>
+                    <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg",
+                      c.status === "completed" ? "bg-gray-200 text-gray-600" :
+                      c.status === "hatching" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
+                    )}>{c.statusLabel}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-white rounded-xl p-2.5 border text-center">
+                      <div className="text-xs text-gray-400 mb-0.5">البيض المحضون</div>
+                      <div className="text-lg font-black text-gray-800">{c.eggsSet}</div>
+                    </div>
+                    {c.hatchRate != null ? (
+                      <div className={cn("rounded-xl p-2.5 border text-center",
+                        c.hatchRate >= 75 ? "bg-green-50 border-green-200" :
+                        c.hatchRate >= 65 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
+                      )}>
+                        <div className="text-xs text-gray-400 mb-0.5">نسبة الفقس</div>
+                        <div className={cn("text-lg font-black",
+                          c.hatchRate >= 75 ? "text-green-700" : c.hatchRate >= 65 ? "text-yellow-700" : "text-red-700"
+                        )}>{c.hatchRate}%</div>
+                      </div>
+                    ) : c.daysRunning != null ? (
+                      <div className="bg-white rounded-xl p-2.5 border text-center">
+                        <div className="text-xs text-gray-400 mb-0.5">أيام منذ البداية</div>
+                        <div className="text-lg font-black text-gray-800">{c.daysRunning}</div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Temp + Humidity */}
+                  {(c.temperature != null || c.humidity != null) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {c.temperature != null && (
+                        <div className={cn("flex items-center gap-2 rounded-xl p-2.5 border",
+                          c.tempStatus === "good" ? "bg-green-50 border-green-200" :
+                          c.tempStatus === "warn" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
+                        )}>
+                          <Thermometer className={cn("h-4 w-4 flex-shrink-0",
+                            c.tempStatus === "good" ? "text-green-600" : c.tempStatus === "warn" ? "text-yellow-600" : "text-red-600")} />
+                          <div>
+                            <div className="text-xs text-gray-500">الحرارة</div>
+                            <div className={cn("font-black text-sm",
+                              c.tempStatus === "good" ? "text-green-700" : c.tempStatus === "warn" ? "text-yellow-700" : "text-red-700"
+                            )}>{c.temperature}°C</div>
+                          </div>
+                          <span className={cn("mr-auto text-xs font-bold",
+                            c.tempStatus === "good" ? "text-green-600" : c.tempStatus === "warn" ? "text-yellow-600" : "text-red-600"
+                          )}>{c.tempStatus === "good" ? "✓ ممتاز" : c.tempStatus === "warn" ? "⚠ حدود" : "✗ خطأ"}</span>
+                        </div>
+                      )}
+                      {c.humidity != null && (
+                        <div className={cn("flex items-center gap-2 rounded-xl p-2.5 border",
+                          c.humidStatus === "good" ? "bg-blue-50 border-blue-200" :
+                          c.humidStatus === "warn" ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
+                        )}>
+                          <Droplets className={cn("h-4 w-4 flex-shrink-0",
+                            c.humidStatus === "good" ? "text-blue-600" : c.humidStatus === "warn" ? "text-yellow-600" : "text-red-600")} />
+                          <div>
+                            <div className="text-xs text-gray-500">الرطوبة</div>
+                            <div className={cn("font-black text-sm",
+                              c.humidStatus === "good" ? "text-blue-700" : c.humidStatus === "warn" ? "text-yellow-700" : "text-red-700"
+                            )}>{c.humidity}%</div>
+                          </div>
+                          <span className={cn("mr-auto text-xs font-bold",
+                            c.humidStatus === "good" ? "text-blue-600" : c.humidStatus === "warn" ? "text-yellow-600" : "text-red-600"
+                          )}>{c.humidStatus === "good" ? "✓ ممتاز" : c.humidStatus === "warn" ? "⚠ حدود" : "✗ خطأ"}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* ── FLOCKS ── */}
+        <Section title={`القطعان — ${flocks.total} قطيع`} icon={Users} color="#06b6d4" defaultOpen={flocks.total > 0}>
+          {flocks.list.length === 0 ? (
+            <div className="text-center py-4 text-gray-400 text-sm">لا توجد قطعان مسجلة</div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {flocks.list.map(f => (
+                <div key={f.id} className="bg-cyan-50 border border-cyan-200 rounded-2xl p-3.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center">
+                      <Bird className="h-4 w-4 text-white" />
+                    </div>
+                    <div className="font-bold text-sm text-gray-800 truncate">{f.name}</div>
+                  </div>
+                  {f.breed && <div className="text-xs text-gray-500 mb-1">النوع: {f.breed}</div>}
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-bold">{f.count} طير</span>
+                    {f.age && <span className="text-gray-400">{f.age} أسبوع</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* ── NOTES ── */}
+        <Section title={`الملاحظات — ${notes.total} ملاحظة · سلسلة ${notes.streak} يوم`}
+          icon={BookOpen} color="#10b981">
+          {notes.streak > 0 ? (
+            <div className="flex items-center gap-2 mb-4 bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <div className="text-sm text-emerald-700">
+                <strong>{notes.streak} يوم</strong> متواصل من التوثيق — ممتاز!
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 mb-4 bg-red-50 rounded-xl p-3 border border-red-100">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <div className="text-sm text-red-700">لم تُسجَّل ملاحظة اليوم — سجّل ما حدث الآن</div>
+            </div>
+          )}
+          {notes.recent.length === 0 ? (
+            <div className="text-center py-3 text-gray-400 text-sm">لا توجد ملاحظات بعد</div>
+          ) : (
+            <div className="space-y-2">
+              {notes.recent.map(n => (
+                <div key={n.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{n.date}</span>
+                    {n.author && <span className="text-xs text-gray-400">{n.author}</span>}
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{n.content || "—"}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {/* ── GOALS ── */}
+        {goals.total > 0 && (
+          <Section title={`الأهداف — ${goals.completed}/${goals.total} مكتمل`}
+            icon={Target} color="#f97316">
+            <div className="space-y-3">
+              {goals.list.map(g => (
+                <div key={g.id} className={cn("rounded-xl border p-3.5",
+                  g.completed ? "bg-green-50 border-green-200" : "bg-white border-gray-100")}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-gray-800">{g.title}</span>
+                    {g.completed
+                      ? <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      : g.dueDate && <span className="text-xs text-gray-400">{g.dueDate}</span>}
+                  </div>
+                  {g.progress != null && !g.completed && (
+                    <div>
+                      <div className="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>{g.currentValue} / {g.targetValue} {g.unit ?? ""}</span>
+                        <span>{g.progress}%</span>
+                      </div>
+                      <Bar value={g.progress} color={g.progress >= 75 ? "#22c55e" : g.progress >= 40 ? "#f59e0b" : "#ef4444"} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── AI PRECISION SUMMARY ── */}
+        {precision && (
+          <Section title="التحليل الذكي — ملخص" icon={Zap} color="#6366f1">
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* Risk */}
+              <div className={cn("rounded-2xl p-4 text-center border",
+                precision.riskLevel === "critical" ? "bg-red-50 border-red-200" :
+                precision.riskLevel === "high" ? "bg-orange-50 border-orange-200" :
+                precision.riskLevel === "medium" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"
+              )}>
+                <div className={cn("text-3xl font-black",
+                  precision.riskLevel === "critical" ? "text-red-600" :
+                  precision.riskLevel === "high" ? "text-orange-600" :
+                  precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
+                )}>{precision.riskScore}</div>
+                <div className="text-xs text-gray-500 mt-0.5">مستوى الخطر /100</div>
+                <div className={cn("text-xs font-bold mt-1",
+                  precision.riskLevel === "critical" ? "text-red-600" :
+                  precision.riskLevel === "high" ? "text-orange-600" :
+                  precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
+                )}>
+                  {precision.riskLevel === "critical" ? "🔴 حرج" : precision.riskLevel === "high" ? "🟠 مرتفع" : precision.riskLevel === "medium" ? "🟡 متوسط" : "🟢 منخفض"}
+                </div>
+              </div>
+
+              {/* Next hatch rate */}
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-center">
+                <div className="text-3xl font-black text-indigo-700">
+                  {precision.nextHatchRate?.toFixed(0) ?? "—"}%
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">توقع الفقس القادم</div>
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  {precision.trend === "improving" ? <TrendingUp className="h-3.5 w-3.5 text-green-500" /> :
+                   precision.trend === "declining" ? <TrendingDown className="h-3.5 w-3.5 text-red-500" /> :
+                   <Minus className="h-3.5 w-3.5 text-gray-400" />}
+                  <span className="text-xs text-gray-500">
+                    {precision.trend === "improving" ? "في تحسّن" : precision.trend === "declining" ? "في تراجع" : "مستقر"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary cause + confidence */}
+            <div className="space-y-2">
+              <div className="bg-white border border-gray-100 rounded-xl p-3 flex items-start gap-2">
+                <Activity className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="text-xs text-gray-400">السبب الرئيسي</div>
+                  <div className="text-sm font-bold text-gray-800">{precision.primaryCause}</div>
+                </div>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-3">
+                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                  <span>مستوى الثقة بالتحليل</span>
+                  <span className="font-bold text-indigo-600">{precision.confidence}%</span>
+                </div>
+                <Bar value={precision.confidence}
+                  color={precision.confidence >= 70 ? "#22c55e" : precision.confidence >= 40 ? "#f59e0b" : "#ef4444"} />
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {/* ── INFO ALERTS ── */}
+        {infoAlerts.length > 0 && (
+          <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4 space-y-2">
+            <div className="flex items-center gap-2 text-blue-600 font-bold text-xs mb-1">
+              <Bell className="h-3.5 w-3.5" />ملاحظات
+            </div>
+            {infoAlerts.map((a, i) => (
+              <div key={i} className="text-xs text-blue-700 flex items-start gap-2">
+                <span className="text-blue-400 mt-0.5">•</span>{a.message}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="text-center text-xs text-gray-300 pb-4">
+          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — بصمة المزرعة
         </div>
-      )}
+      </div>
     </div>
   );
 }
