@@ -3,7 +3,7 @@ import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNote
 import { sql } from "drizzle-orm";
 import OpenAI from "openai";
 import { logger } from "../lib/logger";
-import { runFullAnalysis, buildExpertChatReply } from "../lib/ai-engine";
+import { runFullAnalysis, buildExpertChatReply, buildQuickSolve } from "../lib/ai-engine";
 
 const router: IRouter = Router();
 
@@ -740,6 +740,21 @@ router.get("/ai/encyclopedia", requireAdmin, (_req: Request, res: Response) => {
   ];
 
   res.json({ sections });
+});
+
+/* ── Quick Solve: instant AI solution for a specific issue ── */
+router.post("/ai/quick-solve", requireAdmin, async (req, res) => {
+  try {
+    const { title, description, category, lang } = req.body as {
+      title: string; description: string; category?: string; lang?: string;
+    };
+    const data = await getRawFarmData();
+    const result = buildQuickSolve({ title, description, category }, data, lang === "sv" ? "sv" : "ar");
+    res.json({ result });
+  } catch (err: any) {
+    logger.error(err);
+    res.status(500).json({ error: err.message ?? "خطأ في الحل السريع" });
+  }
 });
 
 export default router;

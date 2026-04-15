@@ -1039,25 +1039,122 @@ function buildLiveInsights(data: RawFarmData, lang: EngineLang): LiveInsight[] {
     badge: completedGoals.length > 0 ? L(`${completedGoals.length} منجز`, `${completedGoals.length} uppnådda`) : undefined,
   });
 
-  // 6. Notes activity (last 7 days)
+  // 6. Overall task completion rate (practical operational indicator)
+  const allTasks = data.tasks;
+  const completedTasks = allTasks.filter(t2 => t2.completed);
+  const completionRate = allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0;
+  const completionStatus: LiveInsight["status"] = completionRate >= 80 ? "good" : completionRate >= 50 ? "warning" : "critical";
   const sevenDaysAgo = new Date(new Date(t).getTime() - 7 * 86400000).toISOString().split("T")[0];
   const recentNotes = data.notes.filter(n => n.date >= sevenDaysAgo);
   const notesStatus: LiveInsight["status"] = recentNotes.length >= 5 ? "good" : recentNotes.length >= 2 ? "warning" : "critical";
   insights.push({
-    id: "notes",
-    icon: "📝",
-    title: L("المذكرات (7 أيام)", "Anteckningar (7 dagar)"),
-    value: String(recentNotes.length),
-    unit: L("ملاحظة", "anteckningar"),
-    detail: recentNotes.length === 0
-      ? L("لم تُسجَّل أي ملاحظات الأسبوع الماضي — التوثيق ضعيف", "Inga anteckningar förra veckan — svag dokumentation")
-      : recentNotes.length >= 5
-        ? L(`توثيق منتظم — آخر ملاحظة: ${recentNotes[recentNotes.length - 1].date}`, `Regelbunden dokumentation — senaste: ${recentNotes[recentNotes.length - 1].date}`)
-        : L(`توثيق متوسط — زد التسجيل لمتابعة أفضل`, `Måttlig dokumentation — öka registreringen för bättre uppföljning`),
-    status: notesStatus,
+    id: "completion",
+    icon: "✅",
+    title: L("إنجاز المهام الكلي", "Total uppgiftskomplettering"),
+    value: allTasks.length > 0 ? String(completionRate) : "—",
+    unit: allTasks.length > 0 ? "%" : "",
+    detail: allTasks.length === 0
+      ? L("لا توجد مهام مسجلة بعد", "Inga uppgifter registrerade")
+      : L(`${completedTasks.length} منجزة من ${allTasks.length} إجمالاً — ${overdueTasks.length} متأخرة`, `${completedTasks.length} klara av ${allTasks.length} totalt — ${overdueTasks.length} försenade`),
+    status: completionStatus,
+    trend: completionRate >= 80 ? "up" : completionRate >= 50 ? "stable" : "down",
+    badge: overdueTasks.length > 0 ? L(`${overdueTasks.length} متأخرة`, `${overdueTasks.length} försenade`) : completedTasks.length > 0 ? L(`${completedTasks.length} منجزة`, `${completedTasks.length} klara`) : undefined,
   });
 
   return insights;
+}
+
+/* ─────────────────────────────────────────────────────────
+   buildQuickSolve — Fast AI solution engine for a specific
+   issue, using real farm data to produce actionable steps
+───────────────────────────────────────────────────────── */
+export interface QuickSolveStep {
+  icon: string; title: string; detail: string;
+  urgency: "critical" | "high" | "medium";
+}
+export interface QuickSolveResult {
+  steps: QuickSolveStep[]; summary: string;
+  timeframe: string; relatedFacts: string[];
+}
+
+export function buildQuickSolve(
+  issue: { title: string; description: string; category?: string },
+  data: RawFarmData,
+  lang: EngineLang = "ar"
+): QuickSolveResult {
+  const L = (ar: string, sv: string) => tr(lang, ar, sv);
+  const t = today();
+  const cat = issue.category ?? "general";
+
+  const activeCycles = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching");
+  const pendingTasks = data.tasks.filter(t2 => !t2.completed);
+  const overdueTasks = pendingTasks.filter(t2 => t2.dueDate && t2.dueDate < t);
+  const totalBirds = data.flocks.reduce((a, f) => a + f.count, 0);
+  const totalEggs = activeCycles.reduce((a, c) => a + c.eggsSet, 0);
+
+  const steps: QuickSolveStep[] = [];
+  const relatedFacts: string[] = [];
+  let summary = "";
+  let timeframe = L("24 ساعة", "24 timmar");
+
+  if (cat === "environment" || cat === "incubation") {
+    activeCycles.slice(0, 3).forEach(c => {
+      const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
+      relatedFacts.push(L(`${c.batchName}: اليوم ${daysIn}/${c.incubationDays} — ${c.eggsSet} بيضة`, `${c.batchName}: Dag ${daysIn}/${c.incubationDays} — ${c.eggsSet} ägg`));
+    });
+    steps.push(
+      { icon: "🌡️", title: L("قِس الحرارة فوراً في كل حاضنة", "Mät temperaturen i alla kläckmaskiner nu"), detail: L(`الهدف: 37.5-37.8°م. لديك ${activeCycles.length} دورة بـ${totalEggs} بيضة — انحراف ساعتين يضر بالتفقيس`, `Mål: 37.5-37.8°C. Du har ${activeCycles.length} cykler med ${totalEggs} ägg`), urgency: "critical" },
+      { icon: "💧", title: L("افحص مستوى الرطوبة", "Kontrollera fuktighetsnivån"), detail: L("المثالي 55-65% أثناء الحضانة، 65-75% أثناء الفقس. أضف ماء إذا أقل", "Optimal 55-65% under inkubation, 65-75% under kläckning"), urgency: "critical" },
+      { icon: "🔄", title: L("تحقق من آلية التقليب التلقائي", "Kontrollera automatisk vändning"), detail: L("التقليب 3 مرات يومياً حد أدنى. توقف التقليب يقلل الفقس 15-30%", "Minimum 3 vändningar per dag. Stoppad vändning minskar kläckning med 15-30%"), urgency: "high" },
+      { icon: "📋", title: L("سجّل القراءات الآن في المذكرات", "Registrera avläsningarna nu"), detail: L("الحرارة + الرطوبة + حالة كل دفعة — التسجيل يساعدك على متابعة التحسن", "Temperatur + fuktighet + status för varje sats"), urgency: "medium" },
+    );
+    summary = L(`${activeCycles.length} دورة نشطة بـ${totalEggs} بيضة. مشكلة الحرارة تتطلب تدخلاً فورياً — كل ساعة تأخير تزيد الخسائر.`, `${activeCycles.length} aktiva cykler med ${totalEggs} ägg. Temperaturproblem kräver omedelbar åtgärd.`);
+    timeframe = L("أقل من ساعة", "Under 1 timme");
+
+  } else if (cat === "biological") {
+    data.flocks.slice(0, 3).forEach(f => relatedFacts.push(L(`${f.name}: ${f.count} طير — نوع: ${f.type ?? "غير محدد"}`, `${f.name}: ${f.count} fåglar — typ: ${f.type ?? "okänd"}`)));
+    steps.push(
+      { icon: "🔍", title: L("افحص جميع القطعان بصرياً الآن", "Inspektera alla flockar visuellt nu"), detail: L(`راقب في ${data.flocks.map(f => f.name).slice(0, 2).join(" و")}: خمول، تجمع، أعراض تنفسية، إسهال`, `Sök efter letargi, klumpning, andningssymtom, diarré`), urgency: "critical" },
+      { icon: "🌡️", title: L("قِس حرارة الطيور المشتبه بها", "Mät kroppstemperaturen på misstänkta fåglar"), detail: L("الطبيعي: 41-41.5°م. أكثر من 42°م → خطر. أقل من 40°م → صدمة", "Normalt: 41-41.5°C. Över 42°C → fara. Under 40°C → chock"), urgency: "critical" },
+      { icon: "🚧", title: L("عزل أي طائر يبدو غير طبيعي فوراً", "Isolera omedelbart onormala fåglar"), detail: L(`العزل يحمي بقية الـ${totalBirds} طير. استخدم قفصاً منفصلاً مع علف وماء نظيف`, `Isolering skyddar de övriga ${totalBirds} fåglarna`), urgency: "high" },
+      { icon: "💊", title: L("راجع برنامج التحصين والأدوية", "Granska vaccinationsplanen"), detail: L("تحقق من آخر جرعة تحصين والموعد القادم — التأخير يرفع خطر الانتشار", "Kontrollera senaste vaccination och nästa schemalagda dos"), urgency: "medium" },
+    );
+    summary = L(`المشكلة الصحية تهدد ${totalBirds} طير في ${data.flocks.length} قطيع. التدخل السريع يمنع الانتشار.`, `Hälsoproblemet hotar ${totalBirds} fåglar i ${data.flocks.length} flockar.`);
+    timeframe = L("1-3 ساعات", "1-3 timmar");
+
+  } else if (cat === "operational") {
+    if (overdueTasks.length > 0) relatedFacts.push(L(`المتأخرة: ${overdueTasks.slice(0,3).map(t2 => t2.title).join("، ")}`, `Försenade: ${overdueTasks.slice(0,3).map(t2 => t2.title).join(", ")}`));
+    relatedFacts.push(L(`${data.tasks.filter(t2 => t2.completed).length} مهمة مكتملة من ${data.tasks.length} إجمالاً`, `${data.tasks.filter(t2 => t2.completed).length} klara av ${data.tasks.length} totalt`));
+    steps.push(
+      { icon: "⚡", title: L("ابدأ بالمهام المتأخرة فوراً", "Börja med försenade uppgifter omedelbart"), detail: overdueTasks.length > 0 ? L(`${overdueTasks.length} متأخرة: ${overdueTasks.slice(0,2).map(t2 => t2.title).join("، ")}`, `${overdueTasks.length} försenade: ${overdueTasks.slice(0,2).map(t2 => t2.title).join(", ")}`) : L("لا توجد متأخرة حالياً — ممتاز", "Inga försenade för tillfället — utmärkt"), urgency: "critical" },
+      { icon: "📋", title: L("رتّب المهام: حاضنة → علف → نظافة → توثيق", "Prioritera: kläckning → foder → städning → dokumentation"), detail: L("هذا الترتيب يضمن سلامة الطيور أولاً ثم الكفاءة التشغيلية", "Denna ordning säkerställer fåglarnas säkerhet först"), urgency: "high" },
+      { icon: "👥", title: L("وزّع المهام على الفريق", "Fördela uppgifterna i teamet"), detail: L(`${pendingTasks.length} مهمة معلقة — التوزيع يرفع الكفاءة ويقلل الإجهاد`, `${pendingTasks.length} väntande uppgifter — fördelning höjer effektiviteten`), urgency: "medium" },
+    );
+    summary = L(`${pendingTasks.length} مهمة معلقة (${overdueTasks.length} متأخرة). معالجتها رفعت إنجاز المزرعة تاريخياً بـ 25-40%.`, `${pendingTasks.length} väntande (${overdueTasks.length} försenade). Åtgärder ökar gårdens prestanda.`);
+    timeframe = L("اليوم", "Idag");
+
+  } else if (cat === "goals") {
+    const activeGoals = data.goals.filter(g => !g.completed);
+    if (activeGoals.length > 0) relatedFacts.push(L(`الأهداف الجارية: ${activeGoals.slice(0,3).map(g => g.title).join("، ")}`, `Aktiva mål: ${activeGoals.slice(0,3).map(g => g.title).join(", ")}`));
+    steps.push(
+      { icon: "📊", title: L("راجع تقدم كل هدف نشط الآن", "Granska varje aktivt måls framsteg nu"), detail: L(`لديك ${activeGoals.length} هدف نشط — حدّث القيم الحالية لكل منهم`, `Du har ${activeGoals.length} aktiva mål — uppdatera aktuella värden`), urgency: "high" },
+      { icon: "🎯", title: L("اختر هدفاً واحداً وطوّر خطة أسبوعية له", "Välj ett mål och skapa en veckoplan"), detail: L("التركيز على هدف واحد في الأسبوع يرفع نسبة الإنجاز من 20% إلى 70%", "Fokus på ett mål per vecka ökar avslutningsgraden från 20% till 70%"), urgency: "high" },
+      { icon: "📅", title: L("اضبط تذكير أسبوعي للمراجعة", "Ställ in veckovis påminnelse"), detail: L("مراجعة دورية تمنع الانجراف وتبقيك على المسار", "Regelbunden granskning förhindrar avdrift"), urgency: "medium" },
+    );
+    summary = L(`${activeGoals.length} هدف نشط يحتاج متابعة منتظمة. المراجعة الأسبوعية تضاعف فرص تحقيقها.`, `${activeGoals.length} aktiva mål behöver regelbunden uppföljning.`);
+    timeframe = L("هذا الأسبوع", "Den här veckan");
+
+  } else {
+    steps.push(
+      { icon: "🔍", title: L("تحقق من البيانات المرتبطة بالمشكلة", "Kontrollera relaterad data"), detail: issue.description, urgency: "high" },
+      { icon: "📋", title: L("وثّق الحالة الحالية بدقة", "Dokumentera situationen noggrant"), detail: L("تسجيل التفاصيل يسهّل التشخيص والمتابعة لاحقاً", "Detaljerad dokumentation underlättar diagnos och uppföljning"), urgency: "medium" },
+      { icon: "🔄", title: L("راجع الوضع بعد 24 ساعة", "Granska läget efter 24 timmar"), detail: L("قارن الحالة قبل وبعد لقياس التحسن", "Jämför situationen för att mäta förbättringen"), urgency: "medium" },
+    );
+    summary = L("تحليل وتوثيق الحالة هي أولى خطوات الحل الفعلي.", "Att analysera och dokumentera situationen är första steget mot en lösning.");
+    timeframe = L("اليوم", "Idag");
+  }
+
+  return { steps, summary, timeframe, relatedFacts };
 }
 
 export function runFullAnalysis(data: RawFarmData, lang: EngineLang = "ar"): FullAnalysis {

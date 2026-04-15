@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
-  Menu, X, FileText, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
+  Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, CalendarClock,
 } from "lucide-react";
 import { useState } from "react";
@@ -22,7 +22,6 @@ const NAV_KEYS = [
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
   { href: "/ai", key: "nav.ai", icon: BrainCircuit, adminOnly: true },
   { href: "/daily-plan", key: "nav.dailyPlan", icon: CalendarClock, adminOnly: true },
-  { href: "/notes", key: "nav.notes", icon: FileText, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
   { href: "/settings", key: "nav.settings", icon: Settings, adminOnly: false },
 ];

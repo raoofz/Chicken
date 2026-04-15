@@ -10,7 +10,7 @@ import {
   Zap, Activity, TrendingUp, TrendingDown, Minus,
   Shield, Target, RefreshCw, ArrowUpRight, Clock, Flame,
   BarChart3, Database, ChevronRight, AlertCircle,
-  ExternalLink, ClipboardList, Star,
+  ExternalLink, ClipboardList, Star, X, Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,12 +42,12 @@ interface FarmAnalysis {
 
 const INSIGHT_NAV: Record<string, string> = {
   birds: "/flocks", hatching: "/hatching", hatchrate: "/hatching",
-  tasks: "/tasks", goals: "/goals", notes: "/notes",
+  tasks: "/tasks", goals: "/goals", completion: "/tasks",
 };
 
 const ALERT_CAT_NAV: Record<string, string> = {
   biological: "/flocks", environment: "/hatching", incubation: "/hatching",
-  operational: "/tasks", goals: "/goals", documentation: "/notes",
+  operational: "/tasks", goals: "/goals", documentation: "/logs",
 };
 
 export default function AiAnalysis() {
@@ -59,6 +59,12 @@ export default function AiAnalysis() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [tool, setTool] = useState<ToolMode>(null);
+  const [quickSolveIssue, setQuickSolveIssue] = useState<{ title: string; description: string; category?: string } | null>(null);
+  const [quickSolveResult, setQuickSolveResult] = useState<{
+    steps: { icon: string; title: string; detail: string; urgency: string }[];
+    summary: string; timeframe: string; relatedFacts: string[];
+  } | null>(null);
+  const [quickSolving, setQuickSolving] = useState(false);
 
   const isSv = lang === "sv";
 
@@ -115,6 +121,26 @@ export default function AiAnalysis() {
       setTool(null);
     } finally { setAnalyzing(false); }
   };
+
+  const openQuickSolve = async (issue: { title: string; description: string; category?: string }) => {
+    setQuickSolveIssue(issue);
+    setQuickSolveResult(null);
+    setQuickSolving(true);
+    try {
+      const res = await fetch("/api/ai/quick-solve", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...issue, lang }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "error"); }
+      const data = await res.json();
+      setQuickSolveResult(data.result);
+    } catch (err: any) {
+      toast({ title: isSv ? "Fel" : "خطأ", description: err.message, variant: "destructive" });
+    } finally { setQuickSolving(false); }
+  };
+
+  const closeQuickSolve = () => { setQuickSolveIssue(null); setQuickSolveResult(null); setQuickSolving(false); };
 
   /* ── Helpers ── */
   const getScoreColor = (s: number) => s >= 80 ? "text-emerald-600" : s >= 60 ? "text-amber-500" : "text-red-500";
@@ -399,16 +425,27 @@ export default function AiAnalysis() {
                     {activeAlerts.map((a, i) => {
                       const navPath = a.category ? ALERT_CAT_NAV[a.category] : null;
                       return (
-                        <div key={i} onClick={() => navPath && navigate(navPath)}
-                          className={cn("rounded-2xl border p-3.5 group", alertCardCls(a.type), navPath ? "cursor-pointer hover:shadow-sm active:scale-[0.99] transition-all" : "")}>
+                        <div key={i} className={cn("rounded-2xl border p-3.5 group", alertCardCls(a.type))}>
                           <div className="flex items-start gap-2">
                             <div className={cn("w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0", alertDotCls(a.type))} />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-1">
                                 <p className="text-sm font-semibold leading-tight">{a.title}</p>
-                                {navPath && <ExternalLink className="w-3 h-3 text-muted-foreground/40 group-hover:text-muted-foreground flex-shrink-0 transition-colors" />}
                               </div>
                               <p className="text-xs text-muted-foreground mt-1 leading-5">{a.description}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <button
+                                  onClick={() => openQuickSolve({ title: a.title, description: a.description, category: a.category })}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-violet-700 dark:text-violet-400 hover:text-violet-900 dark:hover:text-violet-300 transition-colors"
+                                >
+                                  <Lightbulb className="w-3 h-3" />{isSv ? "Lösning" : "حل سريع"}
+                                </button>
+                                {navPath && (
+                                  <button onClick={() => navigate(navPath)} className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+                                    <ExternalLink className="w-3 h-3" />{isSv ? "Öppna" : "فتح"}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -555,7 +592,7 @@ export default function AiAnalysis() {
                 </div>
                 <div className="grid gap-4 lg:grid-cols-3">
                   {analysis.sections.map((sec, si) => {
-                    const secNav = sec.category === "operational" ? "/tasks" : "/hatching";
+                    const secNav = sec.category === "operational" ? "/tasks" : sec.category === "biological" ? "/flocks" : "/hatching";
                     return (
                       <Card key={si} className="border-border/60 shadow-sm">
                         <CardContent className="p-4 space-y-3">
@@ -772,6 +809,90 @@ export default function AiAnalysis() {
         )}
 
       </div>
+
+      {/* ── Quick Solve Modal ── */}
+      {quickSolveIssue && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeQuickSolve} />
+          <div className="relative bg-background border border-border/60 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md mx-auto max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-3 p-5 border-b border-border/60 flex-shrink-0">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                <Lightbulb className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-0.5">{isSv ? "Snabblösning" : "الحل السريع"}</p>
+                <p className="text-sm font-semibold leading-tight line-clamp-1">{quickSolveIssue.title}</p>
+              </div>
+              <button onClick={closeQuickSolve} aria-label={isSv ? "Stäng" : "إغلاق"} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {quickSolving ? (
+                <div className="flex flex-col items-center py-10 gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-violet-600 animate-spin" />
+                  </div>
+                  <p className="text-sm text-muted-foreground font-medium">{isSv ? "Analyserar och genererar lösning..." : "تحليل البيانات وإنشاء الحل..."}</p>
+                </div>
+              ) : quickSolveResult ? (
+                <>
+                  {/* Summary */}
+                  <div className="rounded-2xl bg-violet-50 dark:bg-violet-950/20 border border-violet-200/60 dark:border-violet-800/40 p-4">
+                    <p className="text-sm leading-6 text-violet-900 dark:text-violet-200">{quickSolveResult.summary}</p>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <Clock className="w-3.5 h-3.5 text-violet-500" />
+                      <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-400">{isSv ? "Tidsram" : "الإطار الزمني"}: {quickSolveResult.timeframe}</span>
+                    </div>
+                  </div>
+
+                  {/* Related Facts */}
+                  {quickSolveResult.relatedFacts.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{isSv ? "Data från gården" : "بيانات المزرعة"}</p>
+                      {quickSolveResult.relatedFacts.map((f, i) => (
+                        <div key={i} className="flex items-center gap-2 rounded-xl bg-muted/20 px-3 py-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0" />
+                          <p className="text-xs text-muted-foreground">{f}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Steps */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{isSv ? "Åtgärdssteg" : "خطوات العمل"}</p>
+                    {quickSolveResult.steps.map((step, i) => {
+                      const urgencyCls = step.urgency === "critical"
+                        ? "border-red-200 bg-red-50/50 dark:bg-red-950/20 dark:border-red-800/40"
+                        : step.urgency === "high"
+                          ? "border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-800/40"
+                          : "border-border/60 bg-muted/10";
+                      const urgencyDot = step.urgency === "critical" ? "bg-red-500" : step.urgency === "high" ? "bg-orange-500" : "bg-blue-500";
+                      return (
+                        <div key={i} className={cn("rounded-2xl border p-3.5 flex gap-3", urgencyCls)}>
+                          <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                            <span className="text-xl leading-none">{step.icon}</span>
+                            <div className={cn("w-1.5 h-1.5 rounded-full", urgencyDot)} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold leading-tight">{step.title}</p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-5">{step.detail}</p>
+                          </div>
+                          <span className="text-[10px] font-bold text-muted-foreground flex-shrink-0 self-start">#{i + 1}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
