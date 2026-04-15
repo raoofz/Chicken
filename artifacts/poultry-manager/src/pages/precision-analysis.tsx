@@ -1,810 +1,634 @@
 /**
- * صفحة فحص المزرعة — فحص شامل لكل بيانات المزرعة
+ * صفحة نظام الذكاء الزراعي — 7 نقاط / Jordbruksintelligens — 7 punkter
+ * Context-aware, temporally intelligent, bilingual (AR/SV only).
  */
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useCallback, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import {
-  Bird, Egg, ClipboardList, BookOpen, Target,
-  AlertTriangle, CheckCircle2, XCircle, Clock,
-  Thermometer, Droplets, TrendingUp, TrendingDown, Minus,
-  Shield, RefreshCw, Loader2, ChevronDown, ChevronUp,
-  Zap, Activity, Star, Calendar, Users,
-  ArrowRight, Bell, Lock, Camera, BarChart3,
+  Brain, RefreshCw, Loader2, AlertTriangle, AlertCircle,
+  Info, CheckCircle2, ShieldAlert, ShieldCheck, Shield,
+  TrendingUp, TrendingDown, Minus, ArrowUp, ArrowDown,
+  Zap, Target, Clock, Activity, BarChart3, ChevronDown, ChevronUp,
+  MessageSquare, ThumbsUp, ThumbsDown, Calendar, Database,
+  Lightbulb, Hash,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface FarmScan {
-  scannedAt: string;
-  healthScore: number;
-  flocks: { total: number; list: FLock[] };
-  cycles: { total: number; active: number; completed: number; avgHatchRate: number | null; list: Cycle[] };
-  tasks: { total: number; overdue: number; today: number; completed: number; pending: number; list: Task[] };
-  notes: { total: number; streak: number; recent: Note[] };
-  goals: { total: number; completed: number; list: Goal[] };
-  alerts: Alert[];
-  precision: Precision | null;
+// ─── Types (mirrors backend) ──────────────────────────────────────────────────
+
+interface ReportSection {
+  titleAr: string; titleSv: string;
+  contentAr: string; contentSv: string;
 }
-interface FLock { id: number; name: string; breed: string | null; count: number; age: number | null; purpose: string | null; }
-interface Cycle {
-  id: number; name: string; status: string; statusLabel: string;
-  eggsSet: number; eggsHatched: number | null; hatchRate: number | null; hatchLabel: string | null;
-  startDate: string | null; daysRunning: number | null;
-  temperature: number | null; humidity: number | null;
-  tempStatus: "good" | "warn" | "bad" | null; humidStatus: "good" | "warn" | "bad" | null;
-  lockdownTemperature: number | null; lockdownHumidity: number | null;
-  lockdownTempStatus: "good" | "warn" | "bad" | null; lockdownHumidStatus: "good" | "warn" | "bad" | null;
-  isLockdownPhase: boolean;
-  breed: string | null;
+
+interface ChangeItem {
+  metricAr: string; metricSv: string;
+  current: string; previous: string;
+  change: number | null;
+  direction: "up" | "down" | "stable";
+  significance: "critical" | "warning" | "normal";
 }
-interface Task { id: number; title: string; completed: boolean; dueDate: string | null; priority: string; category: string | null; isOverdue: boolean; isToday: boolean; daysOverdue: number; statusLabel: string; statusType: "overdue" | "today" | "upcoming" | "done"; }
-interface Note { id: number; date: string; content: string; author: string | null; }
-interface Goal { id: number; title: string; completed: boolean; targetValue: number | null; currentValue: number | null; unit: string | null; progress: number | null; dueDate: string | null; }
-interface Alert { level: "critical" | "warning" | "info"; message: string; category: string; }
-interface Precision { riskLevel: string; riskScore: number; failureProbability: number; nextHatchRate: number | null; trend: string; confidence: number; primaryCause: string; dataQualityScore: number; }
 
-// ─── Scan steps ───────────────────────────────────────────────────────────────
-const SCAN_STEPS = [
-  { key: "flocks",  icon: Users,         labelKey: "scan.step.flocks", delay: 300  },
-  { key: "cycles",  icon: Egg,           labelKey: "scan.step.cycles", delay: 600  },
-  { key: "tasks",   icon: ClipboardList, labelKey: "scan.step.tasks",  delay: 900  },
-  { key: "notes",   icon: BookOpen,      labelKey: "scan.step.notes",  delay: 1200 },
-  { key: "goals",   icon: Target,        labelKey: "scan.step.goals",  delay: 1500 },
-  { key: "alerts",  icon: Bell,          labelKey: "scan.step.alerts", delay: 1800 },
-  { key: "ai",      icon: Zap,           labelKey: "scan.step.ai",     delay: 2100 },
-];
+interface RiskSection extends ReportSection {
+  riskLevel: "critical" | "high" | "medium" | "low";
+  riskScore: number;
+  factors: string[];
+}
 
-// ─── Mini helpers ─────────────────────────────────────────────────────────────
-const Ring = ({ score, size = 100 }: { score: number; size?: number }) => {
-  const { t } = useLanguage();
-  const r = (size - 12) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (score / 100) * circ;
-  const color = score >= 75 ? "#22c55e" : score >= 50 ? "#f59e0b" : "#ef4444";
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f3f4f6" strokeWidth="10" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
-          strokeLinecap="round" strokeDasharray={circ}
-          style={{ strokeDashoffset: offset, transition: "stroke-dashoffset 1.2s ease" }} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-black" style={{ color }}>{score}</span>
-        <span className="text-[10px] text-gray-400 font-medium">{t("scan.health.label")}</span>
-      </div>
-    </div>
-  );
-};
+interface ActionItem {
+  rank: 1 | 2 | 3;
+  immediacy: "now" | "today" | "this_week";
+  actionAr: string; actionSv: string;
+  whyAr: string; whySv: string;
+}
 
-const Bar = ({ value, max = 100, color = "#f59e0b" }: { value: number; max?: number; color?: string }) => (
-  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-    <div className="h-full rounded-full transition-all duration-700"
-      style={{ width: `${Math.min(100, (value / max) * 100)}%`, backgroundColor: color }} />
-  </div>
-);
+interface IntelligenceReport {
+  generatedAt: string;
+  lang: string;
+  overallRisk: "critical" | "warning" | "stable" | "good";
+  confidenceScore: number;
+  dataQuality: "excellent" | "good" | "limited" | "none";
+  point1_currentState: ReportSection;
+  point2_historicalComparison: ReportSection;
+  point3_quantifiedChanges: ChangeItem[];
+  point4_rootCause: ReportSection;
+  point5_riskEvaluation: RiskSection;
+  point6_immediateActions: ActionItem[];
+  point7_consequences: ReportSection;
+}
 
-function Section({ title, icon: Icon, color, children, defaultOpen = true }: {
-  title: string; icon: any; color: string; children: React.ReactNode; defaultOpen?: boolean;
+interface ContextAlert {
+  flag: string;
+  severity: "critical" | "warning" | "info";
+  titleAr: string; titleSv: string;
+  detailAr: string; detailSv: string;
+  pctChange?: number;
+}
+
+interface FarmContext {
+  generatedAt: string;
+  windowDays: number;
+  activeDays: number;
+  alerts: ContextAlert[];
+  today: { income: number; expense: number; profit: number; noteCount: number; tasksCompleted: number; tasksDue: number; taskCompletionRate: number } | null;
+  avg7Day: { income: number; expense: number; profit: number; taskCompletionRate: number };
+  farm: { totalChickens: number; totalFlocks: number; activeHatchingCycles: number; overallHatchRate: number };
+  financial: { totalIncome: number; totalExpense: number; profit: number; margin: number | null };
+  snapshots: any[];
+}
+
+interface IntelligenceResponse {
+  context: FarmContext;
+  report: IntelligenceReport;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+// ─── Sub-Components ───────────────────────────────────────────────────────────
+
+function SectionCard({
+  icon, titleAr, titleSv, children, defaultOpen = true, accent, lang,
+}: {
+  icon: React.ReactNode;
+  titleAr: string; titleSv: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  accent?: string;
+  lang: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const title = lang === "ar" ? titleAr : titleSv;
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors">
+    <div className={cn("rounded-2xl border border-border/60 overflow-hidden shadow-sm", accent)}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 bg-card hover:bg-muted/30 transition-colors"
+      >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: color + "20" }}>
-            <Icon className="h-4 w-4" style={{ color }} />
-          </div>
-          <span className="font-bold text-gray-800 text-sm">{title}</span>
+          {icon}
+          <span className="font-bold text-sm text-foreground">{title}</span>
         </div>
-        {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
       </button>
-      {open && <div className="px-5 pb-5">{children}</div>}
+      {open && <div className="px-5 pb-5 pt-1 bg-card">{children}</div>}
     </div>
   );
 }
 
-// ─── Phase chip helper ────────────────────────────────────────────────────────
-function PhaseRow({
-  label, temp, humidity, tempStatus, humidStatus, icon: PhaseIcon, phaseColor,
-}: {
-  label: string;
-  temp: number | null; humidity: number | null;
-  tempStatus: "good" | "warn" | "bad" | null;
-  humidStatus: "good" | "warn" | "bad" | null;
-  icon: any; phaseColor: string;
-}) {
-  if (temp == null && humidity == null) return null;
-  const statusColor = (s: "good" | "warn" | "bad" | null) =>
-    s === "good" ? { bg: "bg-green-50 border-green-200", text: "text-green-700", badge: "text-green-600" }
-    : s === "warn" ? { bg: "bg-yellow-50 border-yellow-200", text: "text-yellow-700", badge: "text-yellow-600" }
-    : { bg: "bg-red-50 border-red-200", text: "text-red-700", badge: "text-red-600" };
+function ContentText({ section, lang }: { section: ReportSection; lang: string }) {
+  const text = lang === "ar" ? section.contentAr : section.contentSv;
+  return (
+    <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-line font-mono-off">
+      {text.split("\n").map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-2" />;
+        return <p key={i} className="mb-1">{line}</p>;
+      })}
+    </div>
+  );
+}
 
-  const { t } = useLanguage();
-  const statusLabel = (s: "good" | "warn" | "bad" | null) =>
-    s === "good" ? t("scan.phase.excellent") : s === "warn" ? t("scan.phase.borderline") : t("scan.phase.outOfRange");
+function AlertBanner({ alert, lang }: { alert: ContextAlert; lang: string }) {
+  const cfg = {
+    critical: { bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800", icon: <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />, badge: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", label: lang === "ar" ? "حرج" : "Kritisk" },
+    warning:  { bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800", icon: <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />, badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", label: lang === "ar" ? "تحذير" : "Varning" },
+    info:     { bg: "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800", icon: <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />, badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300", label: lang === "ar" ? "معلومة" : "Info" },
+  };
+  const c = cfg[alert.severity];
+  return (
+    <div className={cn("rounded-xl border px-4 py-3 flex items-start gap-3", c.bg)}>
+      {c.icon}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-semibold text-sm text-foreground">{lang === "ar" ? alert.titleAr : alert.titleSv}</span>
+          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold", c.badge)}>{c.label}</span>
+          {alert.pctChange !== undefined && (
+            <span className="text-[10px] font-mono text-muted-foreground">{alert.pctChange > 0 ? "+" : ""}{alert.pctChange}%</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{lang === "ar" ? alert.detailAr : alert.detailSv}</p>
+      </div>
+    </div>
+  );
+}
+
+function ChangeRow({ item, lang }: { item: ChangeItem; lang: string }) {
+  const metric = lang === "ar" ? item.metricAr : item.metricSv;
+  const dirIcon = item.direction === "up"
+    ? <ArrowUp className="w-3.5 h-3.5 text-emerald-500" />
+    : item.direction === "down"
+    ? <ArrowDown className="w-3.5 h-3.5 text-red-500" />
+    : <Minus className="w-3.5 h-3.5 text-amber-500" />;
+
+  const sigColor = item.significance === "critical" ? "text-red-600 bg-red-50 dark:bg-red-950/20"
+    : item.significance === "warning" ? "text-amber-600 bg-amber-50 dark:bg-amber-950/20"
+    : "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20";
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50 p-2.5">
-      <div className="flex items-center gap-1.5 mb-2">
-        <div className="w-5 h-5 rounded-lg flex items-center justify-center" style={{ backgroundColor: phaseColor + "25" }}>
-          <PhaseIcon className="h-3 w-3" style={{ color: phaseColor }} />
+    <div className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0 gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-foreground truncate">{metric}</p>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+          <span>{lang === "ar" ? "الآن:" : "Nu:"} <span className="text-foreground font-semibold">{item.current}</span></span>
+          <span>|</span>
+          <span>{lang === "ar" ? "قبل:" : "Före:"} <span className="text-foreground/70">{item.previous}</span></span>
         </div>
-        <span className="text-xs font-bold text-gray-600">{label}</span>
       </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        {temp != null && (() => {
-          const c = statusColor(tempStatus);
-          return (
-            <div className={cn("flex items-center gap-1.5 rounded-lg p-2 border", c.bg)}>
-              <Thermometer className={cn("h-3.5 w-3.5 flex-shrink-0", c.text)} />
-              <div className="flex-1 min-w-0">
-                <div className={cn("font-black text-sm", c.text)}>{temp}°C</div>
-                <div className={cn("text-[9px]", c.badge)}>{statusLabel(tempStatus)}</div>
-              </div>
-            </div>
-          );
-        })()}
-        {humidity != null && (() => {
-          const c = statusColor(humidStatus);
-          return (
-            <div className={cn("flex items-center gap-1.5 rounded-lg p-2 border", c.bg)}>
-              <Droplets className={cn("h-3.5 w-3.5 flex-shrink-0", c.text)} />
-              <div className="flex-1 min-w-0">
-                <div className={cn("font-black text-sm", c.text)}>{humidity}%</div>
-                <div className={cn("text-[9px]", c.badge)}>{statusLabel(humidStatus)}</div>
-              </div>
-            </div>
-          );
-        })()}
+      <div className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold flex-shrink-0", sigColor)}>
+        {dirIcon}
+        {item.change !== null ? `${item.change > 0 ? "+" : ""}${item.change}%` : "—"}
       </div>
     </div>
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-export default function FarmScanPage() {
-  const { user } = useAuth();
-  const { t } = useLanguage();
+function ActionCard({ action, lang }: { action: ActionItem; lang: string }) {
+  const rankColors = ["bg-red-500", "bg-amber-500", "bg-blue-500"] as const;
+  const immediacyLabel = {
+    ar: { now: "الآن فوراً", today: "اليوم", this_week: "هذا الأسبوع" },
+    sv: { now: "Omedelbart nu", today: "Idag", this_week: "Denna vecka" },
+  };
+  const immediacyColor = { now: "text-red-600 bg-red-100 dark:bg-red-900/30", today: "text-amber-600 bg-amber-100 dark:bg-amber-900/30", this_week: "text-blue-600 bg-blue-100 dark:bg-blue-900/30" };
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-background p-4 flex gap-3 hover:shadow-sm transition-shadow">
+      <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0", rankColors[action.rank - 1])}>
+        {action.rank}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start gap-2 flex-wrap mb-1.5">
+          <span className="font-bold text-sm text-foreground">{lang === "ar" ? action.actionAr : action.actionSv}</span>
+          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold flex-shrink-0", immediacyColor[action.immediacy])}>
+            {immediacyLabel[lang === "ar" ? "ar" : "sv"][action.immediacy]}
+          </span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground">{lang === "ar" ? action.whyAr : action.whySv}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function PrecisionAnalysis() {
+  const { lang } = useLanguage();
   const { toast } = useToast();
-  const [scan, setScan] = useState<FarmScan | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanStep, setScanStep] = useState(-1);
-  const [lastAt, setLastAt] = useState<string | null>(null);
-  const fpRef = useRef<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [imageReport, setImageReport] = useState<any>(null);
+  const [data, setData] = useState<IntelligenceResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState<"accepted" | "rejected" | null>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [showFeedbackForm, setShowFeedbackForm] = useState<"accepted" | "rejected" | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const fetchImageReport = useCallback(async () => {
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await fetch(`/api/notes/images/report?period=weekly&date=${today}`, { credentials: "include" });
-      if (res.ok) setImageReport(await res.json());
-    } catch { /* silent */ }
-  }, []);
+  const fetchIntelligence = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    setLoading(true);
+    setData(null);
+    setFeedbackSent(null);
+    setFeedbackComment("");
+    setShowFeedbackForm(null);
 
-  const fetchScan = useCallback(async (silent = false) => {
-    if (!silent) { setScanning(true); setScanStep(0); setScan(null); }
     try {
-      if (!silent) {
-        for (let i = 0; i < SCAN_STEPS.length; i++) {
-          await new Promise(r => setTimeout(r, 320));
-          setScanStep(i);
-        }
-        await new Promise(r => setTimeout(r, 300));
+      const res = await fetch(`${BASE}/api/ai/intelligence?lang=${lang}&window=7`, {
+        credentials: "include",
+        signal: abortRef.current.signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "unknown" }));
+        throw new Error(err.error ?? `HTTP ${res.status}`);
       }
-      const res = await fetch("/api/ai/farm-scan", { credentials: "include" });
-      if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
-      const data: FarmScan = await res.json();
-      setScan(data);
-      setLastAt(new Date().toLocaleTimeString("ar-SA"));
-      if (silent) toast({ title: t("scan.autoRefresh"), description: t("scan.autoRefresh.desc") });
-    } catch (e: any) {
-      toast({ variant: "destructive", title: t("scan.error"), description: e.message });
-    } finally { setScanning(false); setScanStep(-1); }
-  }, [toast]);
+      const json = await res.json();
+      setData(json);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        toast({ title: lang === "ar" ? "خطأ" : "Fel", description: err.message ?? "unknown", variant: "destructive" });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [lang, toast]);
 
-  const checkFingerprint = useCallback(async () => {
+  const sendFeedback = useCallback(async (accepted: boolean) => {
+    setFeedbackLoading(true);
     try {
-      const res = await fetch("/api/ai/fingerprint", { credentials: "include" });
-      if (!res.ok) return;
-      const { fingerprint } = await res.json();
-      if (fpRef.current && fingerprint !== fpRef.current) {
-        fpRef.current = fingerprint;
-        await fetchScan(true);
-      } else if (!fpRef.current) { fpRef.current = fingerprint; }
-    } catch { /* silent */ }
-  }, [fetchScan]);
+      await fetch(`${BASE}/api/ai/intelligence/feedback`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accepted, comment: feedbackComment, reportDate: data?.report.generatedAt }),
+      });
+      setFeedbackSent(accepted ? "accepted" : "rejected");
+      setShowFeedbackForm(null);
+      toast({
+        title: lang === "ar" ? (accepted ? "شكراً — تم قبول التقرير" : "تم تسجيل الملاحظة") : (accepted ? "Tack — Rapport godkänd" : "Feedback registrerad"),
+        description: lang === "ar" ? "رأيك يحسّن التقارير القادمة" : "Din feedback förbättrar framtida rapporter",
+      });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }, [data, feedbackComment, lang, toast]);
 
-  useEffect(() => {
-    fetchScan(false);
-    fetchImageReport();
-    timerRef.current = setInterval(checkFingerprint, 30_000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const { report, context } = data ?? {};
+  const isRtl = lang === "ar";
 
-  if (!user || user.role !== "admin") {
+  const riskConfig = {
+    critical: { color: "#ef4444", label: lang === "ar" ? "حرج" : "Kritisk", bg: "bg-red-50 dark:bg-red-950/20 border-red-200", icon: <ShieldAlert className="w-5 h-5 text-red-500" /> },
+    warning:  { color: "#f59e0b", label: lang === "ar" ? "تحذير" : "Varning",  bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200", icon: <AlertCircle className="w-5 h-5 text-amber-500" /> },
+    stable:   { color: "#6366f1", label: lang === "ar" ? "مستقر" : "Stabil",   bg: "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200", icon: <Shield className="w-5 h-5 text-indigo-500" /> },
+    good:     { color: "#10b981", label: lang === "ar" ? "جيد" : "Bra",        bg: "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200", icon: <ShieldCheck className="w-5 h-5 text-emerald-500" /> },
+  };
+  const riskCfg = report ? riskConfig[report.overallRisk] : riskConfig.stable;
+
+  const dataQualityConfig = {
+    excellent: { label: lang === "ar" ? "ممتاز" : "Utmärkt", color: "text-emerald-600" },
+    good:      { label: lang === "ar" ? "جيد" : "Bra", color: "text-blue-600" },
+    limited:   { label: lang === "ar" ? "محدود" : "Begränsad", color: "text-amber-600" },
+    none:      { label: lang === "ar" ? "لا يوجد" : "Ingen", color: "text-red-600" },
+  };
+
+  // ── Idle state ──────────────────────────────────────────────────────────────
+  if (!data && !loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 gap-2" dir="rtl">
-        <Shield className="h-5 w-5" />{t("scan.adminOnly")}
+      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-6 px-4">
+        {/* Header */}
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Brain className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {lang === "ar" ? "نظام الذكاء الزراعي" : "Jordbruksintelligens"}
+          </h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {lang === "ar"
+              ? "تحليل سياقي متكامل — يقرأ بيانات 7 أيام، يقارن الأنماط الزمنية، يكتشف التغيرات، ويقدم 7 نقاط تحليلية دقيقة."
+              : "Fullständig kontextuell analys — läser 7 dagars data, jämför tidsmönster, upptäcker förändringar och presenterar 7 exakta analyspunkter."}
+          </p>
+        </div>
+
+        {/* Protocol points */}
+        <div className="w-full max-w-md grid grid-cols-2 gap-2">
+          {[
+            { n: "1", ar: "الحالة الراهنة", sv: "Aktuell status" },
+            { n: "2", ar: "مقارنة تاريخية", sv: "Historisk jämförelse" },
+            { n: "3", ar: "تغييرات مقيّسة %", sv: "Kvantifierade % ändringar" },
+            { n: "4", ar: "تحليل الأسباب", sv: "Grundorsaksanalys" },
+            { n: "5", ar: "تقييم المخاطر", sv: "Riskbedömning" },
+            { n: "6", ar: "إجراءات فورية", sv: "Omedelbara åtgärder" },
+            { n: "7", ar: "عواقب التقاعس", sv: "Konsekvenser av passivitet" },
+            { n: "⚡", ar: "تغذية راجعة", sv: "Återkoppling" },
+          ].map(p => (
+            <div key={p.n} className="flex items-center gap-2 bg-muted/30 rounded-xl px-3 py-2">
+              <span className="text-xs font-bold text-primary w-4 text-center">{p.n}</span>
+              <span className="text-xs text-foreground/80">{lang === "ar" ? p.ar : p.sv}</span>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={fetchIntelligence}
+          className="flex items-center gap-3 bg-primary text-primary-foreground px-8 py-3.5 rounded-2xl font-bold text-base hover:bg-primary/90 active:scale-95 transition-all shadow-lg"
+        >
+          <Brain className="w-5 h-5" />
+          {lang === "ar" ? "ابدأ التحليل الذكي" : "Starta intelligent analys"}
+        </button>
+
+        <p className="text-xs text-muted-foreground">
+          {lang === "ar" ? "⏱ يستغرق 2-4 ثوانٍ — يحلل 7 أيام من البيانات" : "⏱ Tar 2-4 sekunder — analyserar 7 dagars data"}
+        </p>
       </div>
     );
   }
 
-  // ── SCANNING SCREEN ──────────────────────────────────────────────────────────
-  if (scanning) {
+  // ── Loading ─────────────────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 flex flex-col items-center justify-center p-8" dir="rtl">
-        <div className="w-full max-w-sm">
-          <div className="flex flex-col items-center mb-10">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-xl shadow-amber-200 mb-4">
-              <Activity className="h-10 w-10 text-white" />
-            </div>
-            <h1 className="text-2xl font-black text-gray-900">{t("scan.title")}</h1>
-            <p className="text-gray-400 text-sm mt-1">{t("scan.checking")}</p>
-          </div>
-          <div className="space-y-3">
-            {SCAN_STEPS.map((step, i) => {
-              const Icon = step.icon;
-              const done = i < scanStep;
-              const active = i === scanStep;
-              return (
-                <div key={step.key}
-                  className={cn("flex items-center gap-3 px-5 py-3.5 rounded-2xl border transition-all duration-500",
-                    done ? "bg-green-50 border-green-200" :
-                    active ? "bg-amber-50 border-amber-300 shadow-sm" :
-                    "bg-white border-gray-100 opacity-50"
-                  )}>
-                  <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all",
-                    done ? "bg-green-500" : active ? "bg-amber-500" : "bg-gray-100")}>
-                    {done
-                      ? <CheckCircle2 className="h-5 w-5 text-white" />
-                      : active
-                        ? <Loader2 className="h-5 w-5 text-white animate-spin" />
-                        : <Icon className="h-4 w-4 text-gray-300" />
-                    }
-                  </div>
-                  <span className={cn("font-semibold text-sm",
-                    done ? "text-green-700" : active ? "text-amber-700" : "text-gray-300")}>
-                    {t(step.labelKey)}
-                  </span>
-                  {done && <span className="mr-auto text-xs text-green-500 font-medium">{t("scan.step.done")}</span>}
-                  {active && <span className="mr-auto text-xs text-amber-500 font-medium animate-pulse">{t("scan.step.running")}</span>}
-                </div>
-              );
-            })}
-          </div>
+      <div className="min-h-[70vh] flex flex-col items-center justify-center gap-4">
+        <div className="relative w-20 h-20">
+          <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <Brain className="absolute inset-0 m-auto w-8 h-8 text-primary" />
+        </div>
+        <p className="text-base font-semibold text-foreground">
+          {lang === "ar" ? "يحلل بيانات المزرعة..." : "Analyserar gårdsdata..."}
+        </p>
+        <div className="text-center text-sm text-muted-foreground space-y-1">
+          {(lang === "ar"
+            ? ["✓ قراءة بيانات 7 أيام", "✓ حساب المقارنات الزمنية", "✓ كشف التغيرات", "✓ بناء التقرير"]
+            : ["✓ Läser 7 dagars data", "✓ Beräknar tidsjämförelser", "✓ Detekterar förändringar", "✓ Bygger rapport"]
+          ).map((step, i) => (
+            <p key={i} className="animate-pulse" style={{ animationDelay: `${i * 0.4}s` }}>{step}</p>
+          ))}
         </div>
       </div>
     );
   }
 
-  // ── EMPTY STATE ────────────────────────────────────────────────────────────
-  if (!scan) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
-        <button onClick={() => fetchScan(false)}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-95">
-          <Activity className="h-5 w-5" />{t("scan.start")}
+  // ── Report View ─────────────────────────────────────────────────────────────
+  if (!report || !context) return null;
+
+  const criticalAlerts = context.alerts.filter(a => a.severity === "critical");
+  const warningAlerts  = context.alerts.filter(a => a.severity === "warning");
+  const dq = dataQualityConfig[report.dataQuality];
+
+  return (
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-3xl mx-auto">
+
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className={cn("flex items-start justify-between gap-3 flex-wrap", isRtl ? "flex-row-reverse" : "")}>
+        <div className={isRtl ? "text-right" : ""}>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <Brain className="w-6 h-6 text-primary" />
+            {lang === "ar" ? "تقرير الذكاء الزراعي" : "Jordbruksintelligensrapport"}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+            <Calendar className="w-3.5 h-3.5" />
+            {new Date(report.generatedAt).toLocaleString(lang === "ar" ? "ar-IQ" : "sv-SE")}
+          </p>
+        </div>
+        <button
+          onClick={fetchIntelligence}
+          className="flex items-center gap-2 text-sm bg-primary/10 text-primary hover:bg-primary/20 px-4 py-2 rounded-xl font-semibold transition-colors flex-shrink-0"
+        >
+          <RefreshCw className="w-4 h-4" />
+          {lang === "ar" ? "تحديث" : "Uppdatera"}
         </button>
       </div>
-    );
-  }
 
-  // ── MAIN DASHBOARD ────────────────────────────────────────────────────────
-  const { flocks, cycles, tasks, notes, goals, alerts, precision } = scan;
-  const criticalAlerts = alerts.filter(a => a.level === "critical");
-  const warningAlerts = alerts.filter(a => a.level === "warning");
-  const infoAlerts = alerts.filter(a => a.level === "info");
-
-  return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
-      {/* ── HEADER BAR ── */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      {/* ── Overall Risk Badge + Context Stats ─────────────────────────────── */}
+      <div className={cn("rounded-2xl border p-4 grid grid-cols-2 md:grid-cols-4 gap-4", riskCfg.bg)}>
+        <div className="col-span-2 md:col-span-1 flex items-center gap-3">
+          {riskCfg.icon}
           <div>
-            <h1 className="text-base font-black text-gray-900">{t("scan.title")}</h1>
-            {lastAt && <p className="text-xs text-gray-400">{t("scan.lastUpdated")} {lastAt} {t("scan.autoEvery")}</p>}
+            <p className="text-xs text-muted-foreground">{lang === "ar" ? "مستوى الخطر" : "Risknivå"}</p>
+            <p className="font-bold text-base" style={{ color: riskCfg.color }}>{riskCfg.label}</p>
           </div>
-          <button onClick={() => fetchScan(false)}
-            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm shadow-amber-200 transition-all">
-            <RefreshCw className="h-3.5 w-3.5" />{t("scan.now")}
-          </button>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">{lang === "ar" ? "ثقة التحليل" : "Analyskonfidensen"}</p>
+          <p className="font-bold text-base text-foreground">{report.confidenceScore}%</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">{lang === "ar" ? "جودة البيانات" : "Datakvalitet"}</p>
+          <p className={cn("font-bold text-base", dq.color)}>{dq.label}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">{lang === "ar" ? "النافذة الزمنية" : "Tidsfönster"}</p>
+          <p className="font-bold text-base text-foreground">
+            {context.activeDays}/{context.windowDays} {lang === "ar" ? "يوم" : "dagar"}
+          </p>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+      {/* ── Active Alerts ────────────────────────────────────────────────────── */}
+      {context.alerts.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {lang === "ar" ? `تنبيهات نشطة (${context.alerts.length})` : `Aktiva varningar (${context.alerts.length})`}
+          </p>
+          {context.alerts.map((a, i) => (
+            <AlertBanner key={i} alert={a} lang={lang} />
+          ))}
+        </div>
+      )}
 
-        {/* ── HEALTH SCORE + QUICK STATS ── */}
-        <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-3xl p-5 text-white shadow-xl shadow-amber-200">
-          <div className="flex items-center gap-5">
-            <div className="bg-white/20 rounded-2xl p-1">
-              <Ring score={scan.healthScore} size={90} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-lg font-black leading-tight mb-1">
-                {scan.healthScore >= 80 ? t("scan.health.excellent") :
-                 scan.healthScore >= 60 ? t("scan.health.attention") :
-                 scan.healthScore >= 40 ? t("scan.health.problems") :
-                 t("scan.health.critical")}
-              </div>
-              <p className="text-white/80 text-xs">
-                {new Date(scan.scannedAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })}
-              </p>
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                {[
-                  { n: tasks.overdue, label: t("scan.stat.overdueTasks"), warn: tasks.overdue > 0 },
-                  { n: cycles.active, label: t("scan.stat.activeCycle"), warn: false },
-                  { n: notes.streak, label: t("scan.stat.docStreak"), warn: notes.streak === 0 },
-                ].map((s, i) => (
-                  <div key={i} className={cn("rounded-xl px-2 py-2 text-center", s.warn ? "bg-red-500/30" : "bg-white/15")}>
-                    <div className="text-xl font-black">{s.n}</div>
-                    <div className="text-[10px] text-white/80 leading-tight">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      {/* ── POINT 1: Current State ───────────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<Activity className="w-5 h-5 text-blue-500" />}
+        titleAr="1. حالة المزرعة الراهنة"
+        titleSv="1. Aktuell gårdsstatus"
+        defaultOpen={true}
+      >
+        <ContentText section={report.point1_currentState} lang={lang} />
+      </SectionCard>
+
+      {/* ── POINT 2: Historical Comparison ──────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<BarChart3 className="w-5 h-5 text-indigo-500" />}
+        titleAr="2. مقارنة مع الأيام السابقة"
+        titleSv="2. Jämförelse med tidigare dagar"
+        defaultOpen={true}
+      >
+        <ContentText section={report.point2_historicalComparison} lang={lang} />
+      </SectionCard>
+
+      {/* ── POINT 3: Quantified Changes ─────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<TrendingUp className="w-5 h-5 text-purple-500" />}
+        titleAr="3. التغيرات الكمية (%)"
+        titleSv="3. Kvantifierade förändringar (%)"
+        defaultOpen={true}
+      >
+        {report.point3_quantifiedChanges.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">
+            {lang === "ar" ? "لا توجد بيانات كافية للمقارنة الزمنية" : "Inte tillräckliga uppgifter för tidsjämförelse"}
+          </p>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {report.point3_quantifiedChanges.map((item, i) => (
+              <ChangeRow key={i} item={item} lang={lang} />
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      {/* ── POINT 4: Root Cause ─────────────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<Lightbulb className="w-5 h-5 text-amber-500" />}
+        titleAr="4. تحليل الأسباب الجذرية"
+        titleSv="4. Grundorsaksanalys"
+        defaultOpen={true}
+      >
+        <ContentText section={report.point4_rootCause} lang={lang} />
+      </SectionCard>
+
+      {/* ── POINT 5: Risk Evaluation ─────────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<Shield className="w-5 h-5" style={{ color: riskCfg.color }} />}
+        titleAr="5. تقييم المخاطر"
+        titleSv="5. Riskbedömning"
+        defaultOpen={true}
+        accent={
+          report.point5_riskEvaluation.riskLevel === "critical" ? "border-l-4 border-l-red-500" :
+          report.point5_riskEvaluation.riskLevel === "high"     ? "border-l-4 border-l-orange-500" :
+          report.point5_riskEvaluation.riskLevel === "medium"   ? "border-l-4 border-l-amber-500" :
+          "border-l-4 border-l-emerald-500"
+        }
+      >
+        {/* Risk gauge bar */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">{lang === "ar" ? "نقاط الخطر" : "Riskpoäng"}</span>
+            <span className="font-bold text-sm" style={{ color: riskCfg.color }}>{report.point5_riskEvaluation.riskScore}/100</span>
+          </div>
+          <div className="h-2.5 bg-muted/30 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{ width: `${report.point5_riskEvaluation.riskScore}%`, background: riskCfg.color }}
+            />
           </div>
         </div>
+        <ContentText section={report.point5_riskEvaluation} lang={lang} />
+      </SectionCard>
 
-        {/* ── CRITICAL ALERTS ── */}
-        {criticalAlerts.length > 0 && (
-          <div className="rounded-2xl bg-red-50 border border-red-200 p-4 space-y-2">
-            <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-2">
-              <AlertTriangle className="h-4 w-4" />{t("scan.alerts.critical")} ({criticalAlerts.length})
-            </div>
-            {criticalAlerts.map((a, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-sm text-red-800 bg-white rounded-xl p-3 border border-red-100 shadow-sm">
-                <XCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
-                {a.message}
-              </div>
-            ))}
+      {/* ── POINT 6: Immediate Actions ───────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<Zap className="w-5 h-5 text-amber-500" />}
+        titleAr="6. إجراءات فورية — مرتّبة بالأولوية"
+        titleSv="6. Omedelbara åtgärder — prioriterade"
+        defaultOpen={true}
+      >
+        <div className="space-y-3">
+          {report.point6_immediateActions.map((action, i) => (
+            <ActionCard key={i} action={action} lang={lang} />
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* ── POINT 7: Consequences ────────────────────────────────────────────── */}
+      <SectionCard
+        lang={lang}
+        icon={<Clock className="w-5 h-5 text-red-500" />}
+        titleAr="7. عواقب عدم التصرف"
+        titleSv="7. Konsekvenser av utebliven åtgärd"
+        defaultOpen={true}
+        accent={
+          report.overallRisk === "critical" ? "border-l-4 border-l-red-500" :
+          report.overallRisk === "warning"  ? "border-l-4 border-l-amber-500" : ""
+        }
+      >
+        <ContentText section={report.point7_consequences} lang={lang} />
+      </SectionCard>
+
+      {/* ── Feedback Loop ────────────────────────────────────────────────────── */}
+      <div className="rounded-2xl border border-border/60 bg-card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <MessageSquare className="w-5 h-5 text-muted-foreground" />
+          <p className="font-semibold text-sm text-foreground">
+            {lang === "ar" ? "هل هذا التقرير دقيق؟" : "Är rapporten korrekt?"}
+          </p>
+          <span className="text-xs text-muted-foreground">
+            {lang === "ar" ? "(تغذيتك الراجعة تُحسّن التقارير القادمة)" : "(Din feedback förbättrar framtida rapporter)"}
+          </span>
+        </div>
+
+        {feedbackSent ? (
+          <div className={cn("flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold",
+            feedbackSent === "accepted" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30"
+          )}>
+            {feedbackSent === "accepted" ? <ThumbsUp className="w-4 h-4" /> : <ThumbsDown className="w-4 h-4" />}
+            {lang === "ar"
+              ? (feedbackSent === "accepted" ? "✅ شكراً — تم قبول التقرير وحفظ رأيك" : "📝 تم تسجيل ملاحظتك — شكراً")
+              : (feedbackSent === "accepted" ? "✅ Tack — Rapporten godkänd och sparad" : "📝 Din feedback registrerad — Tack")}
           </div>
-        )}
-        {warningAlerts.length > 0 && (
-          <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-2">
-            <div className="flex items-center gap-2 text-amber-700 font-bold text-sm mb-2">
-              <AlertTriangle className="h-4 w-4" />{t("scan.alerts.warning")} ({warningAlerts.length})
-            </div>
-            {warningAlerts.map((a, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-sm text-amber-800 bg-white rounded-xl p-3 border border-amber-100 shadow-sm">
-                <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                {a.message}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── TASKS ── */}
-        <Section title={`${t("scan.tasks.title")} — ${tasks.overdue > 0 ? `⚠️ ${tasks.overdue} ${t("scan.tasks.overdue")}` : `${tasks.pending} ${t("scan.tasks.upcoming")}`}`}
-          icon={ClipboardList} color="#f59e0b">
-          {/* Summary tiles — clickable */}
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            {[
-              { n: tasks.overdue,   label: t("scan.tasks.label.overdue"),  bg: "bg-red-100",   text: "text-red-700",   filter: "overdue"  },
-              { n: tasks.today,     label: t("scan.tasks.label.today"),    bg: "bg-amber-100", text: "text-amber-700", filter: "today"    },
-              { n: tasks.pending,   label: t("scan.tasks.label.upcoming"), bg: "bg-blue-100",  text: "text-blue-700",  filter: "upcoming" },
-              { n: tasks.completed, label: t("scan.tasks.label.done"),     bg: "bg-green-100", text: "text-green-700", filter: "done"     },
-            ].map((s, i) => (
-              <a key={i} href="/tasks"
-                className={cn("rounded-xl py-2 px-1 text-center cursor-pointer hover:opacity-80 active:scale-95 transition-all", s.bg)}>
-                <div className={cn("text-xl font-black", s.text)}>{s.n}</div>
-                <div className={cn("text-[10px] font-medium", s.text)}>{s.label}</div>
-              </a>
-            ))}
-          </div>
-
-          {/* Task list — clickable items */}
-          {tasks.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.tasks.none")}</div>
-          ) : (
-            <div className="space-y-2">
-              {tasks.list.map(t => (
-                <a key={t.id} href="/tasks"
-                  className={cn("flex items-center gap-3 rounded-xl px-3.5 py-3 border cursor-pointer hover:shadow-sm active:scale-[0.99] transition-all",
-                    t.statusType === "overdue" ? "bg-red-50 border-red-200 hover:bg-red-100" :
-                    t.statusType === "today" ? "bg-amber-50 border-amber-200 hover:bg-amber-100" :
-                    t.statusType === "done" ? "bg-gray-50 border-gray-100 hover:bg-gray-100" :
-                    "bg-white border-gray-100 hover:bg-blue-50"
-                  )}>
-                  <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
-                    t.statusType === "overdue" ? "bg-red-500" :
-                    t.statusType === "today" ? "bg-amber-500" :
-                    t.statusType === "done" ? "bg-green-500" : "bg-blue-400"
-                  )}>
-                    {t.statusType === "done" ? <CheckCircle2 className="h-4 w-4 text-white" /> :
-                     t.statusType === "overdue" ? <XCircle className="h-4 w-4 text-white" /> :
-                     t.statusType === "today" ? <Clock className="h-4 w-4 text-white" /> :
-                     <ArrowRight className="h-4 w-4 text-white" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={cn("text-sm font-semibold truncate", t.completed && "line-through text-gray-400")}>{t.title}</div>
-                    {t.dueDate && <div className="text-xs text-gray-400">{t.dueDate}</div>}
-                  </div>
-                  <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg flex-shrink-0",
-                    t.statusType === "overdue" ? "bg-red-100 text-red-700" :
-                    t.statusType === "today" ? "bg-amber-100 text-amber-700" :
-                    t.statusType === "done" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                  )}>
-                    {t.statusLabel}
-                  </span>
-                  <ArrowRight className="h-3.5 w-3.5 text-gray-300 flex-shrink-0" />
-                </a>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ── HATCHING CYCLES ── */}
-        <Section title={`${t("scan.cycles.title")} — ${cycles.active} ${t("scan.cycles.active")} · ${cycles.completed} ${t("scan.cycles.completed")}`}
-          icon={Egg} color="#8b5cf6">
-          {cycles.avgHatchRate != null && (
-            <div className="flex items-center gap-3 mb-4 bg-purple-50 rounded-xl p-3 border border-purple-100">
-              <Star className="h-5 w-5 text-purple-500" />
-              <div>
-                <div className="text-sm font-bold text-purple-800">{t("scan.cycles.avgHatch")} {cycles.avgHatchRate}%</div>
-                <div className="text-xs text-purple-500">
-                  {cycles.avgHatchRate >= 75 ? t("scan.cycles.perf.good") : cycles.avgHatchRate >= 65 ? t("scan.cycles.perf.ok") : t("scan.cycles.perf.poor")}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {cycles.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.cycles.none")}</div>
-          ) : (
-            <div className="space-y-3">
-              {cycles.list.map(c => (
-                <div key={c.id} className={cn("rounded-2xl border p-4",
-                  c.status === "completed" ? "bg-gray-50 border-gray-100" :
-                  c.status === "hatching" ? "bg-emerald-50 border-emerald-200" : "bg-purple-50 border-purple-200"
-                )}>
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="font-bold text-sm text-gray-900">{c.name}</div>
-                      {c.breed && <div className="text-xs text-gray-400">{c.breed}</div>}
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={cn("text-xs font-bold px-2.5 py-1 rounded-lg",
-                        c.status === "completed" ? "bg-gray-200 text-gray-600" :
-                        c.status === "hatching" ? "bg-emerald-500 text-white" : "bg-purple-500 text-white"
-                      )}>{c.statusLabel}</span>
-                      {c.daysRunning != null && c.status !== "completed" && (
-                        <span className="text-[10px] text-gray-400">{t("scan.cycles.day")} {c.daysRunning} / 21</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Eggs stats */}
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="bg-white rounded-xl p-2.5 border text-center">
-                      <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.eggs")}</div>
-                      <div className="text-lg font-black text-gray-800">{c.eggsSet}</div>
-                    </div>
-                    {c.hatchRate != null ? (
-                      <div className={cn("rounded-xl p-2.5 border text-center",
-                        c.hatchRate >= 75 ? "bg-green-50 border-green-200" :
-                        c.hatchRate >= 65 ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
-                      )}>
-                        <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.hatchRate")}</div>
-                        <div className={cn("text-lg font-black",
-                          c.hatchRate >= 75 ? "text-green-700" : c.hatchRate >= 65 ? "text-yellow-700" : "text-red-700"
-                        )}>{c.hatchRate}%</div>
-                      </div>
-                    ) : c.daysRunning != null ? (
-                      <div className="bg-white rounded-xl p-2.5 border text-center">
-                        <div className="text-xs text-gray-400 mb-0.5">{t("scan.cycles.daysSince")}</div>
-                        <div className="text-lg font-black text-gray-800">{c.daysRunning} / 21</div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Two-phase temperature & humidity display */}
-                  {c.status !== "completed" && (c.temperature != null || c.humidity != null || c.lockdownTemperature != null || c.lockdownHumidity != null) && (
-                    <div className="space-y-2">
-                      {/* Phase label */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-px bg-gray-200" />
-                        <span className="text-[10px] text-gray-400 font-bold">{t("scan.cycles.tempHumid")}</span>
-                        <div className="flex-1 h-px bg-gray-200" />
-                      </div>
-
-                      {/* Phase 1: Incubation (day 1-18) */}
-                      <PhaseRow
-                        label={t("scan.cycles.phase1")}
-                        temp={c.temperature}
-                        humidity={c.humidity}
-                        tempStatus={c.tempStatus}
-                        humidStatus={c.humidStatus}
-                        icon={Thermometer}
-                        phaseColor="#8b5cf6"
-                      />
-
-                      {/* Phase 2: Lockdown (day 18-21) */}
-                      <PhaseRow
-                        label={t("scan.cycles.phase2")}
-                        temp={c.lockdownTemperature}
-                        humidity={c.lockdownHumidity}
-                        tempStatus={c.lockdownTempStatus}
-                        humidStatus={c.lockdownHumidStatus}
-                        icon={Lock}
-                        phaseColor="#10b981"
-                      />
-
-                      {/* Current phase indicator */}
-                      {c.daysRunning != null && (
-                        <div className={cn("text-[10px] text-center rounded-lg py-1.5 px-2 font-semibold",
-                          c.isLockdownPhase
-                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                            : "bg-purple-100 text-purple-700 border border-purple-200"
-                        )}>
-                          {c.isLockdownPhase
-                            ? t("scan.cycles.lockdown")
-                            : `${t("scan.cycles.incubating")} ${c.daysRunning}`
-                          }
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ── FLOCKS ── */}
-        <Section title={`${t("scan.flocks.title")} — ${flocks.total} ${t("scan.flocks.flock")}`} icon={Users} color="#06b6d4" defaultOpen={flocks.total > 0}>
-          {flocks.list.length === 0 ? (
-            <div className="text-center py-4 text-gray-400 text-sm">{t("scan.flocks.none")}</div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {flocks.list.map(f => (
-                <div key={f.id} className="bg-cyan-50 border border-cyan-200 rounded-2xl p-3.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center">
-                      <Bird className="h-4 w-4 text-white" />
-                    </div>
-                    <div className="font-bold text-sm text-gray-800 truncate">{f.name}</div>
-                  </div>
-                  {f.breed && <div className="text-xs text-gray-500 mb-1">{t("scan.flocks.type")} {f.breed}</div>}
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded font-bold">{f.count} {t("scan.flocks.birds")}</span>
-                    {f.age && <span className="text-gray-400">{f.age} {t("scan.flocks.week")}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ── NOTES ── */}
-        <Section title={`${t("scan.notes.title")} — ${notes.total} ${t("scan.notes.note")} · ${t("scan.notes.streak")} ${notes.streak} ${t("scan.notes.days")}`}
-          icon={BookOpen} color="#10b981">
-          {notes.streak > 0 ? (
-            <div className="flex items-center gap-2 mb-4 bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              <div className="text-sm text-emerald-700">
-                <strong>{notes.streak} {t("scan.notes.days")}</strong> {t("scan.notes.streak.good")}
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 mb-4 bg-red-50 rounded-xl p-3 border border-red-100">
-              <AlertTriangle className="h-4 w-4 text-red-500" />
-              <div className="text-sm text-red-700">{t("scan.notes.streak.none")}</div>
-            </div>
-          )}
-          {notes.recent.length === 0 ? (
-            <div className="text-center py-3 text-gray-400 text-sm">{t("scan.notes.none")}</div>
-          ) : (
-            <div className="space-y-2">
-              {notes.recent.map(n => (
-                <div key={n.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{n.date}</span>
-                    {n.author && <span className="text-xs text-gray-400">{n.author}</span>}
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{n.content || "—"}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ── GOALS ── */}
-        {goals.total > 0 && (
-          <Section title={`${t("scan.goals.title")} — ${goals.completed} ${t("scan.goals.of")} ${goals.total} ${t("scan.goals.completed")}`}
-            icon={Target} color="#f97316">
-            <div className="space-y-3">
-              {goals.list.map(g => (
-                <a key={g.id} href="/goals"
-                  className={cn("block rounded-xl border p-3.5 cursor-pointer hover:shadow-sm active:scale-[0.99] transition-all",
-                    g.completed ? "bg-green-50 border-green-200 hover:bg-green-100" : "bg-white border-gray-100 hover:bg-orange-50"
-                  )}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-gray-800">{g.title}</span>
-                    {g.completed
-                      ? <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      : g.dueDate && <span className="text-xs text-gray-400">{g.dueDate}</span>}
-                  </div>
-                  {g.progress != null && !g.completed && (
-                    <div>
-                      <div className="flex justify-between text-xs text-gray-500 mb-1">
-                        <span>{g.currentValue} / {g.targetValue} {g.unit ?? ""}</span>
-                        <span>{g.progress}%</span>
-                      </div>
-                      <Bar value={g.progress} color={g.progress >= 75 ? "#22c55e" : g.progress >= 40 ? "#f59e0b" : "#ef4444"} />
-                    </div>
-                  )}
-                </a>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* ── AI PRECISION SUMMARY ── */}
-        {precision && (
-          <Section title={t("scan.ai.title")} icon={Zap} color="#6366f1">
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* Risk */}
-              <div className={cn("rounded-2xl p-4 text-center border",
-                precision.riskLevel === "critical" ? "bg-red-50 border-red-200" :
-                precision.riskLevel === "high" ? "bg-orange-50 border-orange-200" :
-                precision.riskLevel === "medium" ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"
-              )}>
-                <div className={cn("text-3xl font-black",
-                  precision.riskLevel === "critical" ? "text-red-600" :
-                  precision.riskLevel === "high" ? "text-orange-600" :
-                  precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
-                )}>{precision.riskScore}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{t("scan.ai.risk")}</div>
-                <div className={cn("text-xs font-bold mt-1",
-                  precision.riskLevel === "critical" ? "text-red-600" :
-                  precision.riskLevel === "high" ? "text-orange-600" :
-                  precision.riskLevel === "medium" ? "text-yellow-600" : "text-green-600"
-                )}>
-                  {precision.riskLevel === "critical" ? t("scan.ai.risk.critical") : precision.riskLevel === "high" ? t("scan.ai.risk.high") : precision.riskLevel === "medium" ? t("scan.ai.risk.medium") : t("scan.ai.risk.low")}
-                </div>
-              </div>
-
-              {/* Next hatch rate */}
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 text-center">
-                <div className="text-3xl font-black text-indigo-700">
-                  {precision.nextHatchRate?.toFixed(0) ?? "—"}%
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">{t("scan.ai.nextHatch")}</div>
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  {precision.trend === "improving" ? <TrendingUp className="h-3.5 w-3.5 text-green-500" /> :
-                   precision.trend === "declining" ? <TrendingDown className="h-3.5 w-3.5 text-red-500" /> :
-                   <Minus className="h-3.5 w-3.5 text-gray-400" />}
-                  <span className="text-xs text-gray-500">
-                    {precision.trend === "improving" ? t("scan.ai.trend.improving") : precision.trend === "declining" ? t("scan.ai.trend.declining") : t("scan.ai.trend.stable")}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Primary cause + confidence */}
-            <div className="space-y-2">
-              <div className="bg-white border border-gray-100 rounded-xl p-3 flex items-start gap-2">
-                <Activity className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <div className="text-xs text-gray-400">{t("scan.ai.cause")}</div>
-                  <div className="text-sm font-bold text-gray-800">{precision.primaryCause}</div>
-                </div>
-              </div>
-              <div className="bg-white border border-gray-100 rounded-xl p-3">
-                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                  <span>{t("scan.ai.confidence")}</span>
-                  <span className="font-bold text-indigo-600">{precision.confidence}%</span>
-                </div>
-                <Bar value={precision.confidence}
-                  color={precision.confidence >= 70 ? "#22c55e" : precision.confidence >= 40 ? "#f59e0b" : "#ef4444"} />
-              </div>
-            </div>
-          </Section>
-        )}
-
-        {/* ── IMAGE CV REPORT ── */}
-        {imageReport && (
-          <Section title={t("scan.imgReport.title")} icon={Camera} color="#8b5cf6" defaultOpen={false}>
-            {imageReport.analyzedCount === 0 ? (
-              <div className="text-center py-6 text-gray-400">
-                <Camera className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">{t("scan.imgReport.none")}</p>
-                <p className="text-xs mt-1">{t("scan.imgReport.hint")}</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Summary stats */}
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label: t("scan.imgReport.analyzed"), value: imageReport.analyzedCount, color: "text-indigo-700" },
-                    { label: t("scan.imgReport.avgRisk"), value: `${imageReport.summary.overallRisk}/100`,
-                      color: imageReport.summary.overallRisk >= 65 ? "text-red-700" : imageReport.summary.overallRisk >= 35 ? "text-amber-700" : "text-emerald-700" },
-                    { label: t("scan.imgReport.avgHealth"), value: `${imageReport.summary.avgHealthScore}%`, color: "text-emerald-700" },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-white border border-gray-100 rounded-xl p-3 text-center">
-                      <div className={cn("text-xl font-black", s.color)}>{s.value}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Trend indicators */}
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: t("scan.imgReport.activity"), value: imageReport.summary.avgActivityLevel, trend: imageReport.summary.activityTrend },
-                    { label: t("scan.imgReport.cleanliness"), value: imageReport.summary.avgFloorCleanliness, trend: "stable" },
-                    { label: t("scan.imgReport.crowding"), value: imageReport.summary.avgCrowdingScore, trend: imageReport.summary.riskTrend === "down" ? "down" : "up", invertGood: true },
-                    { label: t("scan.imgReport.lighting"), value: imageReport.summary.avgLightingScore, trend: "stable" },
-                  ].map((m, i) => {
-                    const good = m.invertGood ? m.value <= 35 : m.value >= 65;
-                    const warn = m.invertGood ? m.value <= 60 : m.value >= 40;
-                    const clr = good ? "text-emerald-600" : warn ? "text-amber-600" : "text-red-600";
-                    const bg = good ? "bg-emerald-50" : warn ? "bg-amber-50" : "bg-red-50";
-                    return (
-                      <div key={i} className={cn("rounded-xl p-2.5 border flex items-center justify-between", bg)}>
-                        <span className="text-[10px] text-gray-500">{m.label}</span>
-                        <div className="flex items-center gap-1">
-                          {m.trend === "up" ? <TrendingUp className="h-3 w-3 text-gray-400" /> : m.trend === "down" ? <TrendingDown className="h-3 w-3 text-gray-400" /> : <Minus className="h-3 w-3 text-gray-300" />}
-                          <span className={cn("text-sm font-bold", clr)}>{m.value}%</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Daily breakdown */}
-                {imageReport.dailyBreakdown && imageReport.dailyBreakdown.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-400 mb-2">{t("scan.imgReport.daily")}</p>
-                    <div className="space-y-1.5">
-                      {imageReport.dailyBreakdown.map((d: any, i: number) => (
-                        <div key={i} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-600">{d.date}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-gray-400">{d.imageCount} {t("scan.imgReport.photos")}</span>
-                            <span className={cn("text-xs font-bold", d.avgRisk >= 65 ? "text-red-600" : d.avgRisk >= 35 ? "text-amber-600" : "text-emerald-600")}>
-                              {t("scan.imgReport.risk")} {d.avgRisk}
-                            </span>
-                            <span className="text-[10px] text-gray-400">{t("scan.imgReport.health")} {d.avgHealth}%</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowFeedbackForm("accepted")}
+                className={cn("flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all",
+                  showFeedbackForm === "accepted"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300"
                 )}
-              </div>
-            )}
-            <div className="mt-3 text-center">
-              <button onClick={fetchImageReport} className="text-xs text-purple-500 hover:text-purple-700 flex items-center gap-1 mx-auto">
-                <RefreshCw className="h-3 w-3" />{t("scan.imgReport.refresh")}
+              >
+                <ThumbsUp className="w-4 h-4" />
+                {lang === "ar" ? "دقيق ✓" : "Korrekt ✓"}
+              </button>
+              <button
+                onClick={() => setShowFeedbackForm("rejected")}
+                className={cn("flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all",
+                  showFeedbackForm === "rejected"
+                    ? "bg-red-600 text-white"
+                    : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300"
+                )}
+              >
+                <ThumbsDown className="w-4 h-4" />
+                {lang === "ar" ? "غير دقيق ✗" : "Felaktigt ✗"}
               </button>
             </div>
-          </Section>
-        )}
 
-        {/* ── INFO ALERTS ── */}
-        {infoAlerts.length > 0 && (
-          <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4 space-y-2">
-            <div className="flex items-center gap-2 text-blue-600 font-bold text-xs mb-1">
-              <Bell className="h-3.5 w-3.5" />{t("scan.alerts.info")}
-            </div>
-            {infoAlerts.map((a, i) => (
-              <div key={i} className="text-xs text-blue-700 flex items-start gap-2">
-                <span className="text-blue-400 mt-0.5">•</span>{a.message}
+            {showFeedbackForm && (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                <textarea
+                  value={feedbackComment}
+                  onChange={e => setFeedbackComment(e.target.value)}
+                  placeholder={lang === "ar" ? "تعليق اختياري — ما الذي كان خاطئاً؟" : "Valfri kommentar — Vad var fel?"}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  dir={isRtl ? "rtl" : "ltr"}
+                />
+                <button
+                  disabled={feedbackLoading}
+                  onClick={() => sendFeedback(showFeedbackForm === "accepted")}
+                  className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+                >
+                  {feedbackLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {lang === "ar" ? "إرسال" : "Skicka"}
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
+      </div>
 
-        <div className="text-center text-xs text-gray-300 pb-4">
-          {new Date(scan.scannedAt).toLocaleString("ar-SA")} — {t("scan.footer")}
-        </div>
+      {/* Footer */}
+      <div className="text-center text-xs text-muted-foreground pb-4 space-y-1">
+        <p>{lang === "ar" ? "نظام قائم على القواعد المحددة — لا يستخدم ذكاء اصطناعي خارجي" : "Regelbaserat system — använder inte extern AI"}</p>
+        <p>{lang === "ar" ? `ثقة التحليل: ${report.confidenceScore}% | نافذة البيانات: ${context.windowDays} أيام` : `Analyskonfidensen: ${report.confidenceScore}% | Datafönster: ${context.windowDays} dagar`}</p>
       </div>
     </div>
   );

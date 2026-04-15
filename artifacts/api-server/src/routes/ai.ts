@@ -608,4 +608,46 @@ router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Intelligence Engine — Context-Aware 7-Point Analysis
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/ai/intelligence", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { buildFarmContext } = await import("../lib/context-engine.js");
+    const { buildIntelligenceReport } = await import("../lib/intelligence-engine.js");
+    const lang = (req.query.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
+    const window = parseInt(req.query.window as string) || 7;
+    const ctx = await buildFarmContext(window);
+    const report = buildIntelligenceReport(ctx, lang);
+    res.json({ context: ctx, report });
+  } catch (err: any) {
+    console.error("[intelligence]", err);
+    res.status(500).json({ error: err?.message ?? "فشل التحليل الذكي" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feedback endpoint for intelligence reports
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/ai/intelligence/feedback", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { accepted, comment, reportDate } = req.body ?? {};
+    // Store feedback as a note for traceability
+    const { db, dailyNotesTable } = await import("@workspace/db");
+    const content = `[تغذية راجعة للتقرير الذكي] ${accepted ? "✅ مقبول" : "❌ مرفوض"}${comment ? ` — ${comment}` : ""} (تاريخ التقرير: ${reportDate ?? "?"})`;
+    await db.insert(dailyNotesTable).values({
+      date: new Date().toISOString().split("T")[0],
+      content,
+      authorName: (req.session as any)?.username ?? "system",
+      category: "health",
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "فشل حفظ التغذية الراجعة" });
+  }
+});
+
 export default router;
+

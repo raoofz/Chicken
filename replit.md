@@ -27,6 +27,41 @@ Full-stack poultry farm management system with two web frontends sharing one API
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
+## Intelligence System — Context-Aware 7-Point Analysis (NEW)
+
+**Location**: `artifacts/api-server/src/lib/context-engine.ts` + `intelligence-engine.ts`
+**Frontend**: `artifacts/poultry-manager/src/pages/precision-analysis.tsx`
+**API Endpoint**: `GET /api/ai/intelligence?lang=ar|sv&window=7`
+**Feedback Endpoint**: `POST /api/ai/intelligence/feedback`
+
+### Context Engine (`context-engine.ts`)
+- `buildFarmContext(windowDays=7)` — aggregates 7 days of transactions, notes, tasks, flocks
+- Builds `DaySnapshot[]` with daily income/expense/profit/tasks/notes
+- Computes `avg7Day` averages and `temporal` % changes (today vs yesterday, vs 7-day avg)
+- Change detection: expense spike >40%, income drop >20%, task rate drop >15%, hatch rate critical/warn
+- Returns `FarmContextPayload` — deterministic, no external AI
+
+### Intelligence Engine (`intelligence-engine.ts`)
+- `buildIntelligenceReport(ctx, lang)` — 7-point analysis protocol
+- Point 1: Current state (financial status, flock, tasks, latest note)
+- Point 2: Historical comparison (7-day averages, yesterday breakdown, trend direction)
+- Point 3: Quantified % changes (income/expense/profit today vs yesterday + vs avg)
+- Point 4: Root cause hypothesis (loss driver, top expense category, note evidence)
+- Point 5: Risk evaluation (score 0-100, risk factors list, confidence %)
+- Point 6: Immediate actions (ranked 1-3, with immediacy: now/today/this_week)
+- Point 7: Consequences if no action (financial projections, timeline)
+- All output in Arabic/Swedish only, no external AI calls
+
+### Frontend Intelligence Hub (`precision-analysis.tsx`)
+- Idle screen with 8-point protocol preview → "ابدأ التحليل الذكي" button
+- Loading animation (4-step progressive messages)
+- Overall risk badge + context stats strip
+- Active alerts panel (critical/warning flags)
+- 7 collapsible sections, each with bilingual content
+- Risk gauge bar for Point 5
+- Ranked action cards with immediacy tags for Point 6
+- Feedback loop: ThumbsUp/Down + comment → stored as system note
+
 ## Computer Vision AI System (Industry-Level)
 
 Built at `artifacts/api-server/src/lib/visionEngine.ts`:

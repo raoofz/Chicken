@@ -1,0 +1,240 @@
+🚀 **Directive: Transform AI into Fully Context-Aware, Self-Adaptive Farm Intelligence System**
+
+This is a strict, non-negotiable engineering directive.
+
+The current AI behavior (generic/static responses) is unacceptable.
+
+You are required to redesign the AI interaction layer into a **data-driven, context-aware, temporally intelligent system** that evolves with daily farm data.
+
+---
+
+# 🧠 CORE OBJECTIVE
+
+Transform the system from:
+
+> Static AI responses
+> → into →
+> Dynamic, data-driven, continuously adapting intelligence
+
+The AI must **think in time, context, and change**, not in isolated prompts.
+
+---
+
+# ⚠️ CRITICAL REQUIREMENT
+
+AI must NEVER generate responses without:
+
+* Current day data
+* Historical data (last 3–7 days minimum)
+* Daily human observations
+
+Any response without this context = SYSTEM FAILURE
+
+---
+
+# 🔗 1. CONTEXT INJECTION ENGINE (MANDATORY)
+
+Before every AI call:
+
+Construct a structured context payload including:
+
+## Current Day:
+
+* Temperature
+* Humidity
+* Bird activity
+* Health indicators
+* Equipment status
+* Worker notes
+
+## Historical Window (3–7 days):
+
+* Same structured metrics
+* Time progression
+
+## Observational Data:
+
+* Text logs from workers
+* Issues recorded
+
+---
+
+## Implementation Requirement:
+
+Create a dedicated function:
+
+```ts
+buildFarmContext(farmId: string): ContextPayload
+```
+
+This must:
+
+* Aggregate
+* Normalize
+* Structure
+* Inject into every AI request
+
+NO EXCEPTIONS
+
+---
+
+# 🧠 2. MEMORY SYSTEM (STRUCTURED STORAGE)
+
+Implement persistent, queryable memory:
+
+Each day must store:
+
+* Timestamp
+* Cycle ID
+* All metrics (temperature, humidity, activity, etc.)
+* Text observations
+
+Format:
+
+* Structured database (PostgreSQL or equivalent)
+* Clean schema optimized for time-series queries
+
+---
+
+# 🔍 3. VECTOR MEMORY LAYER (ADVANCED INTELLIGENCE)
+
+Integrate a vector database:
+
+Recommended:
+
+* Pinecone / Weaviate
+
+Purpose:
+
+* Store all textual observations
+* Retrieve semantically similar past cases
+
+During AI call:
+
+* Perform similarity search
+* Inject relevant past events into context
+
+---
+
+# ⏱️ 4. TEMPORAL INTELLIGENCE ENGINE
+
+System must automatically:
+
+* Compare:
+
+  * Today vs Yesterday
+  * Today vs 7-day average
+
+* Compute:
+
+  * Percentage change
+  * Trend direction (increase / decrease / stable)
+
+---
+
+# 🔬 5. CHANGE DETECTION LOGIC
+
+Implement deterministic detection:
+
+Examples:
+
+IF activity_drop > 15%
+→ Flag: abnormal behavior
+
+IF temperature deviation > threshold
+→ Flag: environmental risk
+
+---
+
+# 🧠 6. AI RESPONSE PROTOCOL (STRICT FORMAT)
+
+Every AI output MUST include:
+
+1. Current state summary
+2. Comparison with previous days
+3. Quantified changes (%)
+4. Root cause hypothesis
+5. Risk evaluation
+6. Immediate actions (clear commands)
+7. What will happen if no action is taken
+
+---
+
+# 🔄 7. CONTINUOUS MONITORING SYSTEM
+
+Implement automated analysis loop:
+
+* Run every X hours (configurable)
+* Re-evaluate latest data
+* Detect anomalies
+* Generate alerts
+
+---
+
+# 🚨 8. REAL-TIME ALERT ENGINE
+
+Trigger alerts when:
+
+* Risk score increases
+* Activity drops
+* Environmental instability detected
+
+Alerts must be:
+
+* Immediate
+* Actionable
+
+---
+
+# 🔁 9. FEEDBACK LOOP (SELF-IMPROVEMENT)
+
+User must be able to:
+
+* Confirm AI output (correct)
+* Reject / correct it
+
+System must:
+
+* Store feedback
+* Use it for future refinement
+
+---
+
+# 🧠 10. SYSTEM BEHAVIOR REQUIREMENTS
+
+The AI must:
+
+* Adapt daily based on new data
+* Never repeat static responses
+* Always reflect real farm conditions
+* Operate as a decision-support system
+
+---
+
+# ❌ FORBIDDEN
+
+* Generic responses
+* Ignoring historical data
+* Stateless AI calls
+* Non-data-driven outputs
+
+---
+
+# 🎯 FINAL EXPECTATION
+
+The system must evolve into:
+
+> A continuously learning, context-aware, time-sensitive farm intelligence system
+
+Capable of:
+
+* Understanding change
+* Detecting early problems
+* Guiding operational decisions
+* Improving over time
+
+---
+
+Failure to meet these requirements = system rejection.
+
+---
