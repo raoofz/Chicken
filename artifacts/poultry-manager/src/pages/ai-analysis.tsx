@@ -157,10 +157,10 @@ export default function AiAnalysis() {
   const topAlerts = (analysis?.alerts ?? []).slice(0, 5);
   const topRecommendations = (analysis?.recommendations ?? []).slice(0, 5);
   const termHelp = [
-    { title: "البيئة", text: "تعني الحرارة والرطوبة والتهوية والنظافة داخل العنبر أو الفقاسة." },
-    { title: "الأحياء", text: "تعني صحة الدجاج والكتاكيت والأجنة وأي أعراض مرضية أو نفوق." },
-    { title: "العمليات", text: "تعني المهام اليومية مثل العلف والماء والتقليب والتحصين والمتابعة." },
-    { title: "جودة البيانات", text: "تعني هل السجل كامل وصحيح وحديث، أم فيه نقص أو تكرار أو تعارض." },
+    { title: "البيئة", text: "حرارة، رطوبة، تهوية، ونظافة." },
+    { title: "الأحياء", text: "صحة الطيور والكتاكيت والأجنة." },
+    { title: "العمليات", text: "العلف، الماء، التقليب، والتحصين." },
+    { title: "جودة البيانات", text: "هل المعلومات كاملة وحديثة وصحيحة." },
   ];
 
   const priorityColor = (p: string) => {
@@ -205,7 +205,7 @@ export default function AiAnalysis() {
       <div className="mb-4 rounded-2xl border border-border/60 bg-muted/20 p-4">
         <p className="text-sm font-semibold mb-1">شرح سريع</p>
         <p className="text-sm text-muted-foreground leading-7">
-          هذا التحليل يقرأ بيانات المزرعة ويحوّلها إلى مشاكل، وتوصيات، وخطر مستقبلي، ثم يشرح لك المصطلحات الأساسية تحتها مباشرة.
+          البيئة: حرارة ورطوبة وتهوية. الأحياء: صحة الطيور. العمليات: العلف والماء والعمل اليومي. جودة البيانات: دقة السجل وحداثته.
         </p>
       </div>
 
@@ -331,12 +331,6 @@ export default function AiAnalysis() {
               </CardContent>
             </Card>
 
-            <Card className="border-border/60 shadow-sm">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-center gap-2"><Info className="w-4 h-4 text-blue-600" /><h3 className="font-bold">شرح المصطلحات</h3></div>
-                <div className="grid gap-3 md:grid-cols-2">{termHelp.map((item) => (<div key={item.title} className="rounded-2xl border border-border/60 p-3"><p className="text-sm font-semibold">{item.title}</p><p className="text-xs text-muted-foreground mt-1 leading-6">{item.text}</p></div>))}</div>
-              </CardContent>
-            </Card>
           </div>
         )}
       </div>

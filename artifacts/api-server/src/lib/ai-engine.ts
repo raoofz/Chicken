@@ -308,8 +308,14 @@ function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
 
 function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] {
   const recentNotesCount = data.notes.length;
+  const excludedOverdueTitles = ["فحص درجة حرارة الحاضنة", "وضع علف كل يوم"];
   const overdueTasksCount = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed && !excludedOverdueTitles.includes(t.title.trim())).length;
   const activeCyclesCount = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching").length;
+  const morningTasks = data.tasks.filter(t => !t.completed && (
+    /7|07|صباح|morning/i.test(t.title) ||
+    /feed|علف|اطعام|إطعام/i.test(t.title) ||
+    /water|ماء|سقي|شرب/i.test(t.title)
+  )).slice(0, 4);
   return [
     {
       title: "مراقب التنبيهات الذكية",
@@ -328,6 +334,12 @@ function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] 
     {
       title: "محرك التعلم من المزرعة",
       description: `يتحسن من بيانات مزرعتك نفسها ويقوي قراراته مع كل دورة ونتيجة جديدة.`,
+    },
+    {
+      title: "الخطة اليومية الذكية",
+      description: morningTasks.length > 0
+        ? `يحوّل المهام الحالية إلى برنامج يومي واضح: ${morningTasks.map(t => t.title).join("، ")}.`
+        : "يبني برنامج اليوم من العلف والماء والمهام الحرجة بحسب بيانات المزرعة والملاحظات الأخيرة.",
     },
   ];
 }
