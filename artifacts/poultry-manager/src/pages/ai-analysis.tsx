@@ -101,6 +101,18 @@ interface FarmAnalysis {
     documentationFreq: TrendPoint[];
   };
   topPriority: string;
+  futureRisk: {
+    level: "critical" | "high" | "medium" | "low";
+    title: string;
+    summary: string;
+    horizon: string;
+    triggers: string[];
+    actions: string[];
+  };
+  aiCapabilities: {
+    title: string;
+    description: string;
+  }[];
   summary?: string;
   dataQuality?: { score: number; label: string; issues: string[] };
   duties?: { priority: string; title: string; description: string }[];
@@ -441,324 +453,126 @@ export default function AiAnalysis() {
           )}
 
           {analysis && !analyzing && (
-            <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <Card className="md:col-span-2">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      <ScoreRing score={analysis.score} size={80} />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className={cn("text-lg font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
-                            <p className="text-xs text-muted-foreground">تقييم شامل لصحة المزرعة</p>
-                          </div>
-                          <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5" /> إعادة
-                          </Button>
+            <div className="space-y-5">
+              <Card className="border-border/60 shadow-lg overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+                <CardContent className="p-5">
+                  <div className="flex flex-col md:flex-row md:items-center gap-5">
+                    <ScoreRing score={analysis.score} size={92} />
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className={cn("text-2xl font-bold", getScoreColor(analysis.score))}>{analysis.scoreLabel}</p>
+                          <p className="text-sm text-muted-foreground mt-1">تنبيه / السبب / التوقع / الحل</p>
                         </div>
-                        {analysis.scoreBreakdown && (
-                          <div className="mt-3 space-y-1.5">
-                            {analysis.scoreBreakdown.map((s, i) => (
-                              <div key={i} className="flex items-center gap-2 text-xs">
-                                <span className="w-16 text-muted-foreground truncate">{s.category}</span>
-                                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                                  <div className={cn("h-full rounded-full transition-all", s.score >= 80 ? "bg-emerald-500" : s.score >= 60 ? "bg-amber-500" : "bg-red-500")}
-                                    style={{ width: `${s.score}%` }} />
-                                </div>
-                                <span className="w-8 text-end font-medium">{s.score}</span>
-                                <span className="w-8 text-muted-foreground">({s.weight}%)</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <Button onClick={runAnalysis} variant="outline" size="sm" className="gap-1.5 rounded-full">
+                          <Sparkles className="w-3.5 h-3.5" /> تحديث
+                        </Button>
                       </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {analysis.scoreBreakdown?.map((s, i) => (
+                          <div key={i} className="rounded-2xl border border-border/60 bg-muted/25 p-3">
+                            <p className="text-[11px] text-muted-foreground">{s.category}</p>
+                            <p className="text-lg font-bold">{s.score}</p>
+                            <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div className={cn("h-full rounded-full", s.score >= 80 ? "bg-emerald-500" : s.score >= 60 ? "bg-amber-500" : "bg-red-500")} style={{ width: `${s.score}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-5 lg:grid-cols-3">
+                <Card className="lg:col-span-2 border-border/60 shadow-sm">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-emerald-600" />
+                        <h3 className="font-bold">أهم إجراء الآن</h3>
+                      </div>
+                      <span className="text-[11px] px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Action</span>
+                    </div>
+                    <p className="text-sm leading-7 text-foreground/90">{analysis.topPriority}</p>
+                    <div className="rounded-2xl bg-muted/20 border border-border/60 p-4">
+                      <p className="text-sm font-semibold mb-2">الملخص التنفيذي</p>
+                      <p className="text-sm leading-7 text-foreground/90">{analysis.summary}</p>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="border-emerald-500/20">
-                  <CardContent className="p-4 space-y-3">
-                    {analysis.dataQuality && (
-                      <div>
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <Database className="w-4 h-4 text-blue-500" />
-                          <span className="text-xs font-bold">جودة البيانات</span>
-                          <span className={cn("text-xs px-1.5 py-0.5 rounded-full", analysis.dataQuality.score >= 70 ? "bg-emerald-100 text-emerald-700" : analysis.dataQuality.score >= 40 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700")}>
-                            {analysis.dataQuality.label}
-                          </span>
-                        </div>
-                        {analysis.dataQuality.issues.length > 0 && (
-                          <div className="space-y-0.5">
-                            {analysis.dataQuality.issues.slice(0, 3).map((issue, i) => (
-                              <p key={i} className="text-[10px] text-muted-foreground flex items-start gap-1">
-                                <span className="text-amber-500 mt-0.5">•</span> {issue}
-                              </p>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {analysis.summary && (
-                      <p className="text-xs text-muted-foreground border-t pt-2">{analysis.summary}</p>
-                    )}
+                <Card className="border-border/60 shadow-sm">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <h3 className="font-bold">الخطر المستقبلي</h3>
+                    </div>
+                    <div className="rounded-2xl border border-border/60 p-3">
+                      <p className="text-sm font-semibold">{analysis.futureRisk.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{analysis.futureRisk.horizon}</p>
+                      <p className="text-sm mt-3 leading-7 text-foreground/90">{analysis.futureRisk.summary}</p>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {analysis.topPriority && (
-                <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-50/50 to-teal-50/50 dark:from-emerald-950/20 dark:to-teal-950/20">
-                  <CardContent className="p-3 flex items-start gap-3">
-                    <Zap className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">أهم إجراء الآن</p>
-                      <p className="text-sm font-medium mt-0.5">{analysis.topPriority}</p>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <Card className="border-border/60 shadow-sm">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-red-500" />
+                      <h3 className="font-bold">أهم 5 مشاكل</h3>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {analysis.futureRisk && (
-                <Card className={cn("border", analysis.futureRisk.level === "critical" ? "border-red-500/40" : analysis.futureRisk.level === "high" ? "border-amber-500/40" : "border-blue-500/30")}>
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className={cn("w-5 h-5", analysis.futureRisk.level === "critical" ? "text-red-500" : analysis.futureRisk.level === "high" ? "text-amber-500" : "text-blue-500")} />
-                        <div>
-                          <p className="text-sm font-bold">{analysis.futureRisk.title}</p>
-                          <p className="text-xs text-muted-foreground">أفق الخطر: {analysis.futureRisk.horizon}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full border">
-                        {analysis.futureRisk.level}
-                      </span>
-                    </div>
-                    <p className="text-sm">{analysis.futureRisk.summary}</p>
-                    <div className="grid md:grid-cols-2 gap-3 text-xs">
-                      <div className="space-y-1">
-                        <p className="font-semibold">المحفزات</p>
-                        <ul className="list-disc mr-4 space-y-1 text-muted-foreground">
-                          {analysis.futureRisk.triggers.map((t, i) => <li key={i}>{t}</li>)}
-                        </ul>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-semibold">الإجراءات الفورية</p>
-                        <ul className="list-disc mr-4 space-y-1 text-muted-foreground">
-                          {analysis.futureRisk.actions.map((a, i) => <li key={i}>{a}</li>)}
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {(analysis.anomalies?.length ?? 0) > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-red-500" />
-                    شذوذ مكتشف ({analysis.anomalies!.length})
-                  </h3>
-                  {analysis.anomalies!.map((a, i) => (
-                    <Card key={i} className={cn("border", severityColor(a.severity))}>
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2">
-                            {categoryIcon(a.category)}
-                            <div>
-                              <p className="text-sm font-semibold">{a.title}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
-                              <div className="flex gap-3 mt-1.5 text-[10px]">
-                                <span>القيمة: <strong>{a.currentValue}</strong></span>
-                                <span>المتوقع: <strong>{a.expectedRange}</strong></span>
-                              </div>
-                            </div>
-                          </div>
-                          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border", severityColor(a.severity))}>
-                            {severityLabel(a.severity)}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {analysis.alerts?.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> التنبيهات ({analysis.alerts.length})</h3>
-                  {analysis.alerts.map((a, i) => (
-                    <div key={i} className={cn("border rounded-xl p-3 flex items-start gap-2.5", alertBg(a.type))}>
-                      {alertIcon(a.type)}
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between">
+                    <div className="space-y-2">
+                      {topAlerts.map((a, i) => (
+                        <div key={i} className="rounded-2xl border border-border/60 p-3">
                           <p className="text-sm font-semibold">{a.title}</p>
-                          {a.category && <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{a.category === "environment" ? "بيئة" : a.category === "biological" ? "أحياء" : "عمليات"}</span>}
+                          <p className="text-xs text-muted-foreground mt-1 leading-6">{a.description}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </CardContent>
+                </Card>
 
-              {analysis.errors?.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2 text-red-600"><XCircle className="w-4 h-4" /> أخطاء مكتشفة ({analysis.errors.length})</h3>
-                  {analysis.errors.map((e, i) => (
-                    <Card key={i} className="border-red-200 dark:border-red-800">
-                      <CardContent className="p-3">
-                        <p className="text-sm font-semibold text-red-700 dark:text-red-400">{e.title}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{e.description}</p>
-                        <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 font-medium">الحل: {e.solution}</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {recs.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><Target className="w-4 h-4 text-blue-600" /> التوصيات ({recs.length})</h3>
-                  {recs.map((d, i) => (
-                    <Card key={i} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-2.5">
-                          <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 mt-0.5", priorityColor(d.priority))}>{priorityLabel(d.priority)}</span>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold">{d.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{d.description}</p>
-                            {(d.reason || d.impact) && (
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px]">
-                                {d.reason && <span className="text-blue-600">💡 {d.reason}</span>}
-                                {d.impact && <span className="text-emerald-600">📈 {d.impact}</span>}
-                                {d.confidence > 0 && <span className="text-purple-600">🎯 ثقة {d.confidence}%</span>}
-                              </div>
-                            )}
+                <Card className="border-border/60 shadow-sm">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Target className="w-4 h-4 text-primary" />
+                      <h3 className="font-bold">أهم 5 توصيات</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {topRecommendations.map((r, i) => (
+                        <div key={i} className="rounded-2xl border border-border/60 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-semibold">{r.title}</p>
+                            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold", priorityColor(r.priority))}>{priorityLabel(r.priority)}</span>
                           </div>
+                          <p className="text-xs text-muted-foreground mt-1 leading-6">{r.description}</p>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-              {analysis.sections?.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><ClipboardList className="w-4 h-4" /> التحليل التفصيلي</h3>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {analysis.sections.map((s, i) => (
-                      <Card key={i} className="hover:shadow-md transition-shadow">
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-bold flex items-center gap-1.5"><span>{s.icon}</span> {s.title}</p>
-                            {s.healthScore !== undefined && (
-                              <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
-                                s.healthScore >= 80 ? "bg-emerald-100 text-emerald-700" :
-                                s.healthScore >= 60 ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
-                              )}>{s.healthScore}/100</span>
-                            )}
-                          </div>
-                          <div className="space-y-1.5">
-                            {s.items?.map((item, j) => (
-                              <div key={j} className="flex items-center justify-between text-xs">
-                                <span className="flex items-center gap-1.5">
-                                  <span className={cn("w-2 h-2 rounded-full", statusDot(item.status))} />
-                                  {item.label}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <span className="font-medium">{item.value}</span>
-                                  {item.detail && <span className="text-[9px] text-muted-foreground">({item.detail})</span>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
+              <Card className="border-border/60 shadow-sm">
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-bold">4 قدرات ذكاء اصطناعي</h3>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {analysis.aiCapabilities?.map((cap, i) => (
+                      <div key={i} className="rounded-2xl border border-border/60 p-3 bg-muted/20">
+                        <p className="text-sm font-semibold">{cap.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1 leading-6">{cap.description}</p>
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {analysis.trends && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-600" /> الاتجاهات</h3>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {analysis.trends.hatchRates.length >= 2 && (
-                      <Card>
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold">معدل الفقس</p>
-                            <MiniTrendChart data={analysis.trends.hatchRates} color="emerald" />
-                          </div>
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {analysis.trends.hatchRates.map((p, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value}%</span>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                    {analysis.trends.documentationFreq.length >= 2 && (
-                      <Card>
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold">التوثيق الأسبوعي</p>
-                            <MiniTrendChart data={analysis.trends.documentationFreq} color="blue" />
-                          </div>
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {analysis.trends.documentationFreq.map((p, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value} أيام</span>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                    {analysis.trends.taskCompletion.length >= 2 && (
-                      <Card>
-                        <CardContent className="p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-bold">إنجاز المهام</p>
-                            <MiniTrendChart data={analysis.trends.taskCompletion} color="amber" />
-                          </div>
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {analysis.trends.taskCompletion.map((p, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-muted rounded">{p.label}: {p.value}%</span>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {analysis.predictions?.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-bold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-600" /> التوقعات ({analysis.predictions.length})</h3>
-                  {analysis.predictions.map((p, i) => (
-                    <Card key={i} className="border-purple-200/50 dark:border-purple-800/50 hover:shadow-md transition-shadow">
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold">{p.title}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{p.description}</p>
-                            {(p.timeframe || p.probability) && (
-                              <div className="flex gap-3 mt-1.5 text-[10px]">
-                                {p.timeframe && <span className="text-blue-600">⏱ {p.timeframe}</span>}
-                                {p.probability !== undefined && <span className="text-purple-600">📊 احتمال {p.probability}%</span>}
-                              </div>
-                            )}
-                          </div>
-                          <span className={cn("text-[10px] px-2 py-0.5 rounded-full shrink-0",
-                            p.confidence === "high" ? "bg-emerald-100 text-emerald-700" :
-                            p.confidence === "medium" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-700"
-                          )}>{p.confidence === "high" ? "ثقة عالية" : p.confidence === "medium" ? "ثقة متوسطة" : "تقدير"}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
+                </CardContent>
+              </Card>
             </div>
           )}
         </div>

@@ -143,6 +143,10 @@ interface FullAnalysis {
     triggers: string[];
     actions: string[];
   };
+  aiCapabilities: {
+    title: string;
+    description: string;
+  }[];
   summary: string;
   timestamp: string;
   dataQuality: { score: number; label: string; issues: string[] };
@@ -299,6 +303,30 @@ function futureRiskAnalysis(data: RawFarmData): FullAnalysis["futureRisk"] {
     triggers,
     actions,
   };
+}
+
+function buildAiCapabilities(data: RawFarmData): FullAnalysis["aiCapabilities"] {
+  const recentNotesCount = data.notes.length;
+  const overdueTasksCount = data.tasks.filter(t => t.dueDate && t.dueDate < today() && !t.completed).length;
+  const activeCyclesCount = data.hatchingCycles.filter(c => c.status === "incubating" || c.status === "hatching").length;
+  return [
+    {
+      title: "مراقب التنبيهات الذكية",
+      description: `يراقب الملاحظات والمهام والدورات ويحوّل التكرار إلى تنبيه فوري عندما يبدأ الخلل بالظهور.`,
+    },
+    {
+      title: "مؤشر الأداء التنبؤي",
+      description: `يتابع الاتجاهات عبر ${recentNotesCount} ملاحظة و${activeCyclesCount} دورة نشطة لتوقع الهبوط قبل وقوعه.`,
+    },
+    {
+      title: "مدقق العمل والتأخير",
+      description: `يرصد ${overdueTasksCount} مهمة متأخرة ويقترح إعادة توزيع العمل لتقليل الاختناق التشغيلي.`,
+    },
+    {
+      title: "محرك التعلم من المزرعة",
+      description: `يتحسن من بيانات مزرعتك نفسها ويقوي قراراته مع كل دورة ونتيجة جديدة.`,
+    },
+  ];
 }
 
 
@@ -947,6 +975,8 @@ export function runFullAnalysis(data: RawFarmData): FullAnalysis {
       documentationFreq: ops.docTrend,
     },
     topPriority,
+    futureRisk: futureRiskAnalysis(data),
+    aiCapabilities: buildAiCapabilities(data),
     summary: summaryParts.join(" | "),
     timestamp: new Date().toISOString(),
     dataQuality: dq,
