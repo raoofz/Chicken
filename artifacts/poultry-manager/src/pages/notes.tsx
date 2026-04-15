@@ -2,7 +2,7 @@
  * ملاحظات يومية — Daily Notes + Farm Photos
  * Combined page: text notes & photo uploads with AI vision analysis
  */
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, memo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import {
   Plus, Trash2, FileText, Camera, Upload, Image as ImageIcon, Brain,
   Tag, AlertTriangle, CheckCircle, Clock, X, RefreshCw, ZoomIn, Calendar,
   MessageSquare, Loader2, ChevronDown, ChevronUp, Activity, Thermometer,
-  Droplets, Zap, TrendingUp, TrendingDown, Minus, BarChart3, Shield, Star, Send
+  Droplets, Zap, TrendingUp, TrendingDown, Minus, BarChart3, Shield, Star, Send,
+  Sparkles, CheckCircle2, ChevronRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -747,6 +748,79 @@ function PhotoUploadZone({
   );
 }
 
+// ─── Smart Analysis Card ──────────────────────────────────────────────────────
+interface SmartAnalysisResult {
+  summary: string;
+  totalSaved: number;
+  totalExtracted: number;
+  saved: Array<{ type: string; id: number; description: string }>;
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  hatching_cycle: "🥚", hatching_result: "🐣", transaction: "💰", flock: "🐔", task: "📋",
+};
+const TYPE_LABELS_AR: Record<string, string> = {
+  hatching_cycle: "دورة تفقيس", hatching_result: "نتيجة تفقيس",
+  transaction: "معاملة مالية", flock: "قطيع جديد", task: "مهمة",
+};
+
+function SmartAnalysisCard({ loading, result, onDismiss }: {
+  loading: boolean; result: SmartAnalysisResult | null; onDismiss: () => void;
+}) {
+  const { t } = useLanguage();
+  if (!loading && !result) return null;
+
+  return (
+    <div className="animate-in slide-in-from-top-2 duration-300">
+      <Card className="border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-950/20 shadow-sm overflow-hidden">
+        <CardContent className="p-3">
+          {loading ? (
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-purple-500 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-white animate-pulse" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-purple-700 dark:text-purple-300">{t("smart.analyzing")}</p>
+                <p className="text-xs text-purple-500">{t("smart.analyzing.desc")}</p>
+              </div>
+              <Loader2 className="w-4 h-4 animate-spin text-purple-500 mr-auto" />
+            </div>
+          ) : result ? (
+            <>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-500 flex items-center justify-center shrink-0 mt-0.5">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                      {t("smart.done")} — {result.totalSaved} {t("smart.items.saved")}
+                    </p>
+                    <button onClick={onDismiss} className="text-purple-400 hover:text-purple-600 transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">{result.summary}</p>
+                  <div className="mt-2 space-y-1">
+                    {result.saved.map((item, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                        <span className="font-medium">{TYPE_ICONS[item.type]} {TYPE_LABELS_AR[item.type]}</span>
+                        <ChevronRight className="w-3 h-3 opacity-40" />
+                        <span className="text-purple-600 dark:text-purple-400 truncate">{item.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Notes() {
   const { isAdmin } = useAuth();
@@ -761,6 +835,9 @@ export default function Notes() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteImageId, setDeleteImageId] = useState<number | null>(null);
+  const [smartResult, setSmartResult] = useState<SmartAnalysisResult | null>(null);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const pendingNoteRef = useRef<{ content: string; date: string } | null>(null);
 
   // Text notes query
   const { data: notes = [], isLoading: notesLoading } = useQuery({ queryKey: ["notes"], queryFn: fetchNotes });
@@ -777,7 +854,37 @@ export default function Notes() {
 
   const addNote = useMutation({
     mutationFn: createNote,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notes"] }); toast({ title: t("notes.added.toast") }); setOpen(false); setContent(""); },
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ["notes"] });
+      toast({ title: t("notes.added.toast") });
+      setOpen(false);
+      const pending = pendingNoteRef.current;
+      setContent("");
+      pendingNoteRef.current = null;
+      // Trigger smart analysis
+      if (pending && pending.content.trim().length > 5) {
+        setSmartLoading(true);
+        setSmartResult(null);
+        try {
+          const r = await fetch("/api/ai/smart-analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text: pending.content, date: pending.date }),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.totalSaved > 0) {
+              setSmartResult(data);
+              qc.invalidateQueries({ queryKey: ["transactions"] });
+              qc.invalidateQueries({ queryKey: ["transactions-summary"] });
+              qc.invalidateQueries({ queryKey: ["noteImages"] });
+            }
+          }
+        } catch { /* silent */ }
+        finally { setSmartLoading(false); }
+      }
+    },
     onError: () => toast({ title: t("notes.add.error"), variant: "destructive" }),
   });
 
@@ -1000,17 +1107,30 @@ export default function Notes() {
                   />
                 </div>
                 <Button
-                  className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"
                   disabled={!content.trim() || addNote.isPending}
-                  onClick={() => addNote.mutate({ content, date: selectedDate, category })}
+                  onClick={() => {
+                    pendingNoteRef.current = { content, date: selectedDate };
+                    addNote.mutate({ content, date: selectedDate, category });
+                  }}
                 >
-                  {addNote.isPending ? t("notes.saving") : t("notes.save")}
+                  {addNote.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />{t("notes.saving")}</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4" />{t("notes.save")}</>
+                  )}
                 </Button>
               </div>
             </DialogContent>
           </Dialog>
 
           {/* Notes list */}
+          <SmartAnalysisCard
+            loading={smartLoading}
+            result={smartResult}
+            onDismiss={() => setSmartResult(null)}
+          />
+
           {notesLoading ? (
             <div className="space-y-3">
               {[1,2,3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}

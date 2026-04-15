@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, transactionsTable } from "@workspace/db";
+import { sql, eq, desc } from "drizzle-orm";
+import { parseNote } from "../lib/noteSmartParser";
 import { runFullAnalysis, buildQuickSolve } from "../lib/ai-engine";
 import {
   runPredictiveAnalysis,
@@ -484,6 +485,125 @@ router.post("/ai/resolve", requireAdmin, async (req: Request, res: Response) => 
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "فشل التحديث" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMART NOTE ANALYZER — parses Arabic notes and auto-creates structured records
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
+  try {
+    const { text, date } = req.body ?? {};
+    if (!text || typeof text !== "string" || text.trim().length < 5) {
+      res.status(400).json({ error: "النص مطلوب ويجب أن يكون 5 أحرف على الأقل" });
+      return;
+    }
+    const noteDate = date ?? new Date().toISOString().split("T")[0];
+    const authorId: number | undefined = req.session.userId as number | undefined;
+
+    // Get author name
+    let authorName: string | null = null;
+    if (authorId) {
+      const userRow = await db.execute(sql`SELECT username FROM users WHERE id = ${authorId} LIMIT 1`);
+      authorName = (userRow.rows[0] as any)?.username ?? null;
+    }
+
+    // Parse the note
+    const { actions, summary } = parseNote(text.trim(), noteDate);
+
+    // Save each extracted action
+    const saved: Array<{ type: string; id: number; description: string }> = [];
+
+    for (const action of actions) {
+      try {
+        if (action.type === "hatching_cycle") {
+          const d = action.data;
+          const [row] = await db.insert(hatchingCyclesTable).values({
+            batchName: d.batchName,
+            eggsSet: d.eggsSet,
+            startDate: d.startDate,
+            expectedHatchDate: d.expectedHatchDate,
+            lockdownDate: d.lockdownDate,
+            status: "incubating",
+            temperature: String(d.temperature ?? 37.5),
+            humidity: String(d.humidity ?? 55),
+            notes: d.notes ?? null,
+          }).returning();
+          saved.push({ type: "hatching_cycle", id: row.id, description: action.description });
+
+        } else if (action.type === "hatching_result") {
+          // Try to update the most recent active cycle
+          const activeCycles = await db.select()
+            .from(hatchingCyclesTable)
+            .where(eq(hatchingCyclesTable.status, "incubating"))
+            .orderBy(desc(hatchingCyclesTable.id))
+            .limit(1);
+
+          if (activeCycles.length > 0) {
+            const cycle = activeCycles[0];
+            await db.update(hatchingCyclesTable).set({
+              eggsHatched: action.data.eggsHatched,
+              actualHatchDate: action.data.actualHatchDate ?? noteDate,
+              status: "completed",
+            }).where(eq(hatchingCyclesTable.id, cycle.id));
+            saved.push({ type: "hatching_result", id: cycle.id, description: action.description });
+          }
+
+        } else if (action.type === "transaction") {
+          const d = action.data;
+          const [row] = await db.insert(transactionsTable).values({
+            date: d.date ?? noteDate,
+            type: d.type,
+            category: d.category,
+            description: d.description,
+            amount: String(d.amount),
+            quantity: d.quantity ? String(d.quantity) : null,
+            unit: d.unit ?? null,
+            notes: null,
+            authorId: authorId ?? null,
+            authorName,
+          }).returning();
+          saved.push({ type: "transaction", id: row.id, description: action.description });
+
+        } else if (action.type === "flock") {
+          const d = action.data;
+          const [row] = await db.insert(flocksTable).values({
+            name: d.name,
+            breed: d.breed ?? "محلي",
+            count: d.count,
+            ageDays: d.ageDays ?? 1,
+            purpose: d.purpose ?? "meat",
+            notes: d.notes ?? null,
+          }).returning();
+          saved.push({ type: "flock", id: row.id, description: action.description });
+
+        } else if (action.type === "task") {
+          const d = action.data;
+          const [row] = await db.insert(tasksTable).values({
+            title: d.title,
+            description: d.description ?? null,
+            category: d.category ?? "other",
+            priority: d.priority ?? "medium",
+            completed: false,
+            dueDate: d.dueDate ?? null,
+          }).returning();
+          saved.push({ type: "task", id: row.id, description: action.description });
+        }
+      } catch (actionErr: any) {
+        // Skip failed actions but log them
+        console.error("[smart-analyze] action failed:", action.type, actionErr?.message);
+      }
+    }
+
+    res.json({
+      summary,
+      actions,
+      saved,
+      totalExtracted: actions.length,
+      totalSaved: saved.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "فشل التحليل الذكي" });
   }
 });
 

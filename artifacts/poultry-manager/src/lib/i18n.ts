@@ -843,6 +843,19 @@ const translations: Record<string, Record<Lang, string>> = {
   "plan.complete.title": { ar: "أحسنت! أنهيت كل مهام اليوم",                   sv: "Bra jobbat! Du har slutfört alla dagens uppgifter" },
   "plan.complete.desc":  { ar: "لا تنسَ تسجيل ملاحظاتك اليومية قبل النوم.",   sv: "Glöm inte att registrera dina dagliga anteckningar före sänggåendet." },
   "plan.error":          { ar: "فشل",     sv: "Misslyckades" },
+
+  // ─── Smart Note Analyzer ──────────────────────────────────────────────────
+  "smart.analyzing":         { ar: "جارٍ تحليل الملاحظة...", sv: "Analyserar anteckning..." },
+  "smart.analyzing.desc":    { ar: "يبحث النظام عن بيانات منظمة في النص", sv: "Söker efter strukturerad data i texten" },
+  "smart.done":              { ar: "التحليل الذكي اكتمل", sv: "Smart analys slutförd" },
+  "smart.items.saved":       { ar: "عنصر تم حفظه", sv: "element sparades" },
+  "smart.nodata":            { ar: "لم يُكتشف بيانات منظمة — تم حفظ الملاحظة فقط", sv: "Inga strukturerade data hittades — anteckning sparad" },
+  "smart.hatching_cycle":    { ar: "دورة تفقيس", sv: "Kläckcykel" },
+  "smart.hatching_result":   { ar: "نتيجة تفقيس", sv: "Kläckresultat" },
+  "smart.transaction":       { ar: "معاملة مالية", sv: "Ekonomisk transaktion" },
+  "smart.flock":             { ar: "قطيع جديد", sv: "Ny flock" },
+  "smart.task":              { ar: "مهمة", sv: "Uppgift" },
+  "smart.dismiss":           { ar: "إخفاء", sv: "Stäng" },
 };
 
 export function t(key: string, lang: Lang): string {
