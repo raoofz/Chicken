@@ -13,7 +13,6 @@ import diagnosticsRouter from "./diagnostics";
 import storageRouter from "./storage";
 import noteImagesRouter from "./noteImages";
 import transactionsRouter from "./transactions";
-import intelligenceRouter from "./intelligence";
 
 const router: IRouter = Router();
 
@@ -41,6 +40,5 @@ router.use(diagnosticsRouter);
 router.use(storageRouter);
 router.use(noteImagesRouter);
 router.use(transactionsRouter);
-router.use(intelligenceRouter);
 
 export default router;

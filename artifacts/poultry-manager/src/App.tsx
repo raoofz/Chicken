@@ -18,7 +18,6 @@ import AiAnalysis from "@/pages/ai-analysis";
 import AdvancedAnalysis from "@/pages/advanced-analysis";
 import PrecisionAnalysis from "@/pages/precision-analysis";
 import Finance from "@/pages/finance";
-import Intelligence from "@/pages/intelligence";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -54,7 +53,6 @@ function AppRoutes() {
         <Route path="/ai/advanced" component={AdvancedAnalysis} />
         <Route path="/ai/precision" component={PrecisionAnalysis} />
         <Route path="/finance" component={Finance} />
-        <Route path="/intelligence" component={Intelligence} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>

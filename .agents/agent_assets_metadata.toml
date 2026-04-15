@@ -12,9 +12,3 @@ id = "1rHQL-CUq-axpQHkp1pub"
 uri = "file://downloads/poultry-farm-project.tar.gz"
 type = "unspecified"
 title = "كود التطبيق فقط"
-
-[[outputs]]
-id = "rjrw6jXSZoVUfxMIGMtzi"
-uri = "file://downloads/poultry_full_backup_20260415.tar.gz"
-type = "unspecified"
-title = "نسخة كاملة — مدير المزرعة (كود + قاعدة بيانات)"

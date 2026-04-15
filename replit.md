@@ -163,39 +163,6 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - **Swedish app**: LTR, `dir="ltr"`, font Inter
 - **Shared**: Same color palette, same component library (shadcn/ui), same API backend
 
-## Farm Intelligence Platform
-
-Built at `artifacts/api-server/src/lib/farmIntelligence.ts` + `artifacts/api-server/src/routes/intelligence.ts`:
-
-### Intelligence Engine (Rule-Based, Zero AI Dependency)
-- **Rule Engine**: Detects inefficiencies (mortality >5% critical, >2% warning, production drops, feed waste, temperature stress, humidity alerts, hatch rate issues, financial losses)
-- **Prediction Engine**: Moving average forecasting (3-day and 7-day) for egg production and feed consumption
-- **Anomaly Detection**: Z-score based statistical anomaly detection across production, feed, mortality, temperature
-- **Recommendation Engine**: Prioritized actionable suggestions (high/medium/low) with reasons
-- **Farm Health Score**: 0-100 composite score deducting for alerts, anomalies, poor metrics
-
-### Intelligence Data Tables
-- `production_logs` — daily egg collection (eggs_collected, eggs_broken, eggs_weight)
-- `feed_logs` — feed tracking (feed_type, quantity_kg, cost_per_kg, total_cost)
-- `water_logs` — water consumption (quantity_liters, water_temp, supplements)
-- `environment_logs` — barn conditions (temperature_c, humidity_pct, ventilation, light_hours, ammonia)
-- `mortality_logs` — death tracking (count, cause, symptoms, action_taken)
-
-### Intelligence API
-- `GET /api/intelligence/report?lang=ar|sv` — full intelligence report (KPIs, alerts, recommendations, predictions, anomalies, trends)
-- `GET/POST/DELETE /api/production` — egg production CRUD
-- `GET/POST/DELETE /api/feed` — feed consumption CRUD
-- `GET/POST/DELETE /api/environment` — environment readings CRUD
-- `GET/POST/DELETE /api/water` — water consumption CRUD
-- `GET/POST/DELETE /api/mortality` — mortality events CRUD
-
-### Intelligence Dashboard (Frontend)
-- Page: `/intelligence` — 3 tabs: Overview, Data Entry, Trends
-- Overview: Farm score gauge, 6 KPI cards, alerts, smart recommendations, predictions with confidence bars, anomaly list
-- Data Entry: 5 forms (production/feed/environment/water/mortality) for daily recording
-- Trends: Area charts for production, feed, mortality, temperature (recharts)
-- ALL fully bilingual AR/SV
-
 ## DB Schema
 
 Tables:
@@ -206,11 +173,6 @@ Tables:
 - `users` — auth users (serial id, username, passwordHash, name, role)
 - `daily_notes` — daily journal (date, content, authorName, category)
 - `activity_logs` — activity history
-- `production_logs` — egg production data
-- `feed_logs` — feed consumption data
-- `water_logs` — water consumption data
-- `environment_logs` — barn environment readings
-- `mortality_logs` — mortality events
 
 Indexes on: created_at, due_date, status, completed, date, author_id, username
 
