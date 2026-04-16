@@ -117,7 +117,8 @@ router.get("/validate/integrity", async (_req, res) => {
 
     // ── 3. Transactions with null amount ─────────────────────────────────
     const nullAmountResult = await db.execute(sql`
-      SELECT COUNT(*) as cnt FROM transactions WHERE amount IS NULL OR amount = ''
+      SELECT COUNT(*) as cnt FROM transactions
+      WHERE amount IS NULL OR char_length(COALESCE(amount, '')) = 0
     `);
     const nullAmountCount = Number((nullAmountResult.rows[0] as any).cnt ?? 0);
     if (nullAmountCount > 0) {
@@ -203,9 +204,14 @@ router.get("/validate/integrity", async (_req, res) => {
   }
 });
 
-// ─── Dev-only Stress Test Seed ────────────────────────────────────────────────
-// Inserts N synthetic transactions across all domains to stress-test the system.
+// ─── Dev-only Stress Test (DRY-RUN — always auto-rollback) ───────────────────
+// ⚠️  SANDBOX MODE: The transaction is ALWAYS rolled back at the end.
+//     No data is ever persisted to the database, even on "success".
+//     This measures real DB performance (wire + index overhead) without
+//     polluting production data.
 // Guarded by NODE_ENV !== "production" — never available in production.
+const STRESS_ROLLBACK = Symbol("STRESS_TEST_DRY_RUN_ROLLBACK");
+
 router.post("/dev/seed-transactions", async (req, res) => {
   if (process.env.NODE_ENV === "production") {
     res.status(403).json({ error: "Not available in production" });
@@ -213,28 +219,26 @@ router.post("/dev/seed-transactions", async (req, res) => {
   }
 
   const count = Math.min(Number(req.body?.count ?? 200), 2000);
-  const startMs = Date.now();
-
   const expenseCategories = Object.values(EXPENSE_CATEGORIES);
   const incomeCategories  = Object.values(INCOME_CATEGORIES);
-
-  // Build synthetic rows in batches of 100 for performance
   const BATCH_SIZE = 100;
-  let inserted = 0;
+
+  let simulated = 0;
   const domainCounts: Record<string, number> = {};
+
+  const startMs = Date.now();
 
   try {
     await db.transaction(async (tx) => {
       const rows: Array<typeof transactionsTable.$inferInsert> = [];
 
       for (let i = 0; i < count; i++) {
-        const isExpense = i % 3 !== 0; // 2/3 expense, 1/3 income
+        const isExpense = i % 3 !== 0;
         const category = isExpense
           ? expenseCategories[i % expenseCategories.length]
           : incomeCategories[i % incomeCategories.length];
         const domain = categoryToDomain(category);
         const amount = (50 + (i % 500)).toFixed(2);
-        // Spread over last 90 days
         const daysAgo = i % 90;
         const d = new Date();
         d.setDate(d.getDate() - daysAgo);
@@ -245,50 +249,59 @@ router.post("/dev/seed-transactions", async (req, res) => {
           type:        isExpense ? "expense" : "income",
           category,
           domain,
-          description: `[SEED] Synthetic transaction #${i + 1} — ${category}`,
+          description: `[DRY-RUN] Stress transaction #${i + 1} — ${category}`,
           amount,
-          notes:       "stress-test seed data",
+          notes:       "stress-test-dry-run",
         });
 
         domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
 
-        // Flush batch
         if (rows.length >= BATCH_SIZE) {
           await tx.insert(transactionsTable).values([...rows]);
-          inserted += rows.length;
+          simulated += rows.length;
           rows.length = 0;
         }
       }
 
-      // Flush remainder
       if (rows.length > 0) {
         await tx.insert(transactionsTable).values([...rows]);
-        inserted += rows.length;
+        simulated += rows.length;
       }
+
+      // ── ALWAYS ROLLBACK — this is a sandbox / dry-run ──
+      // Throwing here forces Drizzle to issue ROLLBACK, so no rows are committed.
+      throw STRESS_ROLLBACK;
     });
-
-    const durationMs = Date.now() - startMs;
-    const throughput = Math.round(inserted / (durationMs / 1000));
-
-    logger.info(
-      { inserted, durationMs, throughput },
-      "[dev/seed] stress-test seed complete",
-    );
-
-    res.status(201).json({
-      inserted,
-      durationMs,
-      throughputPerSec: throughput,
-      domainBreakdown:  domainCounts,
-      note: "All rows were inserted inside a single DB transaction. Delete them via DELETE /api/dev/seed-transactions.",
-    });
-  } catch (e: any) {
-    logger.error({ err: e }, "[dev/seed] seed failed — full rollback applied");
-    res.status(500).json({ error: e.message });
+  } catch (e) {
+    if (e !== STRESS_ROLLBACK) {
+      // A real error occurred — report it
+      logger.error({ err: e }, "[dev/seed] stress-test error");
+      res.status(500).json({ error: (e as any)?.message ?? "stress test failed" });
+      return;
+    }
+    // STRESS_ROLLBACK is expected — swallow it, all rows were rolled back
   }
+
+  const durationMs = Date.now() - startMs;
+  const throughput  = Math.round(simulated / Math.max(durationMs / 1000, 0.001));
+
+  logger.info(
+    { simulated, durationMs, throughput, rolledBack: true },
+    "[dev/seed] dry-run stress test complete — 0 rows persisted (auto-rollback)",
+  );
+
+  res.json({
+    simulated,
+    persisted:       0,           // always zero — sandbox mode
+    durationMs,
+    throughputPerSec: throughput,
+    domainBreakdown:  domainCounts,
+    mode: "dry-run",
+    note: "SANDBOX MODE — transaction was auto-rolled back. Zero rows written to DB. Performance metrics are real.",
+  });
 });
 
-// DELETE seed data
+// Purge any legacy seed data written before the dry-run mode was introduced
 router.delete("/dev/seed-transactions", async (_req, res) => {
   if (process.env.NODE_ENV === "production") {
     res.status(403).json({ error: "Not available in production" });
@@ -296,11 +309,12 @@ router.delete("/dev/seed-transactions", async (_req, res) => {
   }
   try {
     const result = await db.execute(sql`
-      DELETE FROM transactions WHERE notes = 'stress-test seed data'
+      DELETE FROM transactions
+      WHERE notes = 'stress-test seed data' OR notes = 'stress-test-dry-run'
     `);
     const deleted = (result as any).rowCount ?? 0;
-    logger.info({ deleted }, "[dev/seed] stress-test data purged");
-    res.json({ deleted });
+    logger.info({ deleted }, "[dev/seed] legacy stress-test data purged");
+    res.json({ deleted, message: deleted === 0 ? "No seed data found — database is already clean" : `Deleted ${deleted} seed rows` });
   } catch (e: any) {
     logger.error({ err: e }, "[dev/seed] purge failed");
     res.status(500).json({ error: e.message });

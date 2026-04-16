@@ -21,7 +21,6 @@ const NAV_KEYS = [
   { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },
-  { href: "/tasks",       key: "nav.tasks",        descKey: "nav.tasks.desc",       icon: CheckSquare,     adminOnly: false },
   { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: false },
   { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: false },
   { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: false },
