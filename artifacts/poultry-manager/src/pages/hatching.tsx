@@ -13,10 +13,125 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight, Info } from "lucide-react";
+import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight, Info, TrendingUp, TrendingDown, Minus, Target, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+function HatchingAnalysis({ cycles }: { cycles: any[] }) {
+  const [expanded, setExpanded] = useState(true);
+  const completed = cycles.filter(c => c.status === "completed" && c.eggsHatched != null);
+  if (completed.length < 2) return null;
+
+  const rates = completed.map(c => ({ name: c.batchName, rate: Math.round((c.eggsHatched / c.eggsSet) * 100), eggs: c.eggsSet, hatched: c.eggsHatched }));
+  const TARGET = 75;
+  const best = Math.max(...rates.map(r => r.rate));
+  const latest = rates[rates.length - 1];
+  const prev = rates[rates.length - 2];
+  const delta = latest.rate - prev.rate;
+  const totalEggs = rates.reduce((s, r) => s + r.eggs, 0);
+  const totalHatched = rates.reduce((s, r) => s + r.hatched, 0);
+  const overallRate = Math.round((totalHatched / totalEggs) * 100);
+
+  const trend = delta > 3 ? "up" : delta < -3 ? "down" : "stable";
+  const gapToTarget = TARGET - latest.rate;
+
+  const PALETTE = ["#ef4444","#f59e0b","#3b82f6","#10b981","#8b5cf6","#f97316"];
+  const maxRate = Math.max(TARGET, best) + 5;
+
+  const TrendIcon = trend === "up" ? TrendingUp : trend === "down" ? TrendingDown : Minus;
+  const trendColor = trend === "up" ? "text-emerald-600" : trend === "down" ? "text-red-500" : "text-amber-500";
+
+  const recommendations: { icon: "warn" | "ok"; text: string }[] = [];
+  if (latest.rate < 30) recommendations.push({ icon: "warn", text: "نسبة الفقس أقل من 30٪ — تحقق من جودة البيض ودرجة الحرارة والرطوبة بشكل فوري" });
+  if (latest.rate >= 30 && latest.rate < TARGET) recommendations.push({ icon: "warn", text: `الهدف ${TARGET}٪ — الفجوة ${gapToTarget} نقطة. ركز على استقرار الرطوبة (55-65٪ إدخال، 70-75٪ هاتشر) والتقليب المنتظم` });
+  if (latest.rate >= TARGET) recommendations.push({ icon: "ok", text: `أنت فوق الهدف (${TARGET}٪). للوصول إلى 80-85٪: تأكد من صحة المولدات، وسلامة البيض قبل الإدخال` });
+  if (trend === "down" && delta < -5) recommendations.push({ icon: "warn", text: `انخفضت النسبة ${Math.abs(delta)} نقطة مقارنة بالدفعة السابقة — راجع جودة بيض التفريخ والتهوية` });
+  if (trend === "up") recommendations.push({ icon: "ok", text: "مسار تحسن مستمر — استمر بنفس الإجراءات مع توثيق الإعدادات التفصيلية" });
+  recommendations.push({ icon: "ok", text: "إدخال البيض مساءً (8–10م) يوفر فقساً في ساعات الصباح الأفضل للمراقبة" });
+
+  return (
+    <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-purple-50/50">
+      <CardHeader className="pb-0 pt-4 px-5">
+        <button
+          className="flex items-center justify-between w-full"
+          onClick={() => setExpanded(e => !e)}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Target className="w-4 h-4 text-white" />
+            </div>
+            <div className="text-right">
+              <CardTitle className="text-base font-bold text-indigo-900">تحليل مسار الفقس</CardTitle>
+              <p className="text-xs text-indigo-500 font-normal mt-0.5">{completed.length} دفعات مكتملة · {totalEggs} بيضة · {totalHatched} فرخ</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-1 text-sm font-bold ${trendColor}`}>
+              <TrendIcon className="w-4 h-4" />
+              {trend === "up" ? "تحسن" : trend === "down" ? "تراجع" : "مستقر"}
+            </div>
+            {expanded ? <ChevronUp className="w-4 h-4 text-indigo-400" /> : <ChevronDown className="w-4 h-4 text-indigo-400" />}
+          </div>
+        </button>
+      </CardHeader>
+
+      {expanded && (
+        <CardContent className="pt-4 px-5 pb-5 space-y-5">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-indigo-100 p-3 text-center">
+              <div className="text-2xl font-bold text-indigo-700">{latest.rate}%</div>
+              <div className="text-xs text-muted-foreground mt-0.5">آخر دفعة</div>
+            </div>
+            <div className="bg-white rounded-xl border border-indigo-100 p-3 text-center">
+              <div className="text-2xl font-bold text-emerald-600">{best}%</div>
+              <div className="text-xs text-muted-foreground mt-0.5">أفضل نسبة</div>
+            </div>
+            <div className="bg-white rounded-xl border border-indigo-100 p-3 text-center">
+              <div className="text-2xl font-bold text-slate-700">{overallRate}%</div>
+              <div className="text-xs text-muted-foreground mt-0.5">المجموع الكلي</div>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-600">تطور نسبة الفقس</span>
+              <span className="text-xs text-muted-foreground">الهدف: {TARGET}%</span>
+            </div>
+            {rates.map((r, i) => (
+              <div key={i} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-slate-700 truncate max-w-[55%]">{r.name}</span>
+                  <span className={`font-bold ${r.rate >= TARGET ? "text-emerald-600" : r.rate >= 40 ? "text-amber-600" : "text-red-500"}`}>{r.rate}% <span className="font-normal text-muted-foreground">({r.hatched}/{r.eggs})</span></span>
+                </div>
+                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden relative">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${(r.rate / maxRate) * 100}%`, backgroundColor: PALETTE[i % PALETTE.length] }}
+                  />
+                  <div
+                    className="absolute top-0 h-full border-r-2 border-dashed border-slate-400/60"
+                    style={{ left: `${(TARGET / maxRate) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-slate-600 mb-1">توصيات الذكاء الزراعي</div>
+            {recommendations.map((rec, i) => (
+              <div key={i} className={`flex items-start gap-2 text-xs px-3 py-2 rounded-lg ${rec.icon === "warn" ? "bg-amber-50 border border-amber-200 text-amber-800" : "bg-emerald-50 border border-emerald-200 text-emerald-800"}`}>
+                {rec.icon === "warn" ? <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                <span>{rec.text}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 function CycleForm({ initial, onSubmit, onClose }: { initial?: any; onSubmit: (d: any) => void; onClose: () => void }) {
   const { t } = useLanguage();
@@ -259,6 +374,8 @@ export default function Hatching() {
         </div>
       </div>
 
+      {!isLoading && cycles && cycles.length > 0 && <HatchingAnalysis cycles={cycles} />}
+
       {isLoading ? (
         <div className="space-y-3">{[1, 2, 3].map(i => <Card key={i}><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>)}</div>
       ) : cycles?.length === 0 ? (
@@ -288,6 +405,17 @@ export default function Hatching() {
                           {cycle.eggsSet} {t("hatching.egg")} {cycle.eggsHatched != null && `← ${cycle.eggsHatched} ${t("hatching.hatched")} (${hatchRate}%)`}
                         </span>
                       </div>
+                      {cycle.status === "completed" && hatchRate != null && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${hatchRate >= 75 ? "bg-emerald-500" : hatchRate >= 40 ? "bg-amber-400" : "bg-red-400"}`}
+                              style={{ width: `${Math.min(hatchRate, 100)}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-bold w-10 text-left ${hatchRate >= 75 ? "text-emerald-600" : hatchRate >= 40 ? "text-amber-600" : "text-red-500"}`}>{hatchRate}%</span>
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap gap-3 bg-blue-50/60 rounded-lg px-3 py-2 border border-blue-100">
                         <span className="text-xs font-medium text-blue-700">{t("hatching.phase1.label")}</span>

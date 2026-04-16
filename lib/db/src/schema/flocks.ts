@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,6 +8,7 @@ export const flocksTable = pgTable("flocks", {
   breed: text("breed").notNull(),
   count: integer("count").notNull(),
   ageDays: integer("age_days").notNull(),
+  birthDate: date("birth_date"),
   purpose: text("purpose").notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
