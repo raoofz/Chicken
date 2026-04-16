@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronUp, Eye, AlertCircle, Info, BarChart3, Calendar,
   FileText, Wind, Thermometer, CloudRain, Cpu,
 } from "lucide-react";
+import { ExplainTip } from "@/components/ExplainTip";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
@@ -110,9 +111,12 @@ function ScoreRing({ score, size = 80 }: { score: number; size?: number }) {
 // ─── Section card ─────────────────────────────────────────────────────────────
 function Section({
   icon: Icon, title, badge, color, children, defaultOpen = true,
+  explainTitleAr, explainTitleSv, explainAr, explainSv,
 }: {
   icon: typeof Brain; title: string; badge?: string; color: string;
   children: React.ReactNode; defaultOpen?: boolean;
+  explainTitleAr?: string; explainTitleSv?: string;
+  explainAr?: string; explainSv?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -124,7 +128,16 @@ function Section({
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${color}`}>
           <Icon className="w-4 h-4 text-white" />
         </div>
-        <span className="flex-1 text-sm font-bold text-foreground text-start">{title}</span>
+        <div className="flex-1 text-start flex items-center gap-1.5">
+          <span className="text-sm font-bold text-foreground">{title}</span>
+          {explainAr && explainTitleAr && (
+            <ExplainTip
+              titleAr={explainTitleAr} titleSv={explainTitleSv!}
+              textAr={explainAr} textSv={explainSv!}
+              size="xs"
+            />
+          )}
+        </div>
         {badge && (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">{badge}</span>
         )}
@@ -371,7 +384,15 @@ export default function BrainPage() {
           </div>
           <div className="flex flex-col items-end gap-1">
             <ScoreRing score={health.score ?? 60} />
-            <span className={cn("text-xs font-bold", healthColor)}>{healthLabel}</span>
+            <div className="flex items-center gap-1">
+              <span className={cn("text-xs font-bold", healthColor)}>{healthLabel}</span>
+              <ExplainTip
+                titleAr="درجة صحة المزرعة" titleSv="Gårdens hälsopoäng"
+                textAr="رقم من 0 إلى 100 يلخص حالة مزرعتك: فوق 80 = ممتاز 🌟، 60-80 = جيد ✅، 40-60 = مقبول ⚠️، أقل من 40 = يحتاج تدخل فوري ❌. يحسب من الأداء المالي والإنتاج والمهام والأهداف."
+                textSv="En siffra 0–100 som sammanfattar gårdens tillstånd: över 80 = utmärkt, 60–80 = bra, 40–60 = acceptabelt, under 40 = kräver omedelbar åtgärd."
+                className="bg-white/20 text-white hover:bg-white/30"
+              />
+            </div>
           </div>
         </div>
 
@@ -410,13 +431,41 @@ export default function BrainPage() {
         {/* 4 Quick KPIs */}
         <div className="grid grid-cols-4 gap-2 mt-4">
           {[
-            { label: ar?"الدخل":"Inkomst",  value: money(totalIncome,  lang), color:"text-emerald-400" },
-            { label: ar?"المصاريف":"Kost.",  value: money(totalExpense, lang), color:"text-red-400" },
-            { label: ar?"الربح":"Vinst",     value: money(netProfit,    lang), color: netProfit >= 0 ? "text-emerald-400" : "text-red-400" },
-            { label: ar?"الطيور":"Fåglar",   value: String(totalBirds),        color:"text-blue-400" },
+            {
+              label: ar?"الدخل":"Inkomst", value: money(totalIncome, lang), color:"text-emerald-400",
+              titleAr:"إجمالي الدخل", titleSv:"Total inkomst",
+              textAr:"مجموع كل الأموال الداخلة للمزرعة من بيع الكتاكيت والبيض والدجاج منذ بداية التسجيل.",
+              textSv:"Summan av alla intäkter sedan starten."
+            },
+            {
+              label: ar?"المصاريف":"Kost.", value: money(totalExpense, lang), color:"text-red-400",
+              titleAr:"إجمالي المصاريف", titleSv:"Totala kostnader",
+              textAr:"مجموع كل ما صُرف على المزرعة (علف، أدوية، كهرباء، عمالة) منذ بداية التسجيل.",
+              textSv:"Summan av alla utgifter sedan starten."
+            },
+            {
+              label: ar?"الربح":"Vinst", value: money(netProfit, lang), color: netProfit >= 0 ? "text-emerald-400" : "text-red-400",
+              titleAr:"صافي الربح الإجمالي", titleSv:"Total nettovinst",
+              textAr:"الفرق بين الدخل والمصاريف الإجمالي. موجب = ربح 💚، سالب = خسارة 🔴. هذا هو المؤشر الأهم لصحة المزرعة.",
+              textSv:"Skillnaden mellan total inkomst och kostnader. Positiv = vinst, Negativ = förlust."
+            },
+            {
+              label: ar?"الطيور":"Fåglar", value: String(totalBirds), color:"text-blue-400",
+              titleAr:"إجمالي الطيور", titleSv:"Totalt antal fåglar",
+              textAr:"عدد الطيور الحية المسجلة في المزرعة الآن من جميع القطعان.",
+              textSv:"Totalt antal levande fåglar i alla flockar just nu."
+            },
           ].map((k, i) => (
-            <div key={i} className="bg-white/8 rounded-xl p-2.5 text-center">
-              <p className="text-[9px] text-white/50 font-medium">{k.label}</p>
+            <div key={i} className="bg-white/8 rounded-xl p-2.5 text-center relative">
+              <div className="flex items-center justify-center gap-0.5">
+                <p className="text-[9px] text-white/50 font-medium">{k.label}</p>
+                <ExplainTip
+                  titleAr={k.titleAr} titleSv={k.titleSv}
+                  textAr={k.textAr} textSv={k.textSv}
+                  className="bg-white/10 text-white/50 hover:bg-white/20 w-3 h-3"
+                  size="xs"
+                />
+              </div>
               <p className={cn("text-[11px] font-black mt-0.5 leading-tight", k.color)}>{k.value}</p>
             </div>
           ))}
@@ -442,9 +491,17 @@ export default function BrainPage() {
                 : <ShieldAlert className="w-5 h-5 text-amber-500 flex-shrink-0" />
             }
             <div className="flex-1 text-start">
-              <p className="text-sm font-bold text-foreground">
-                {ar ? "تقرير التدقيق الشامل" : "Fullständig granskningsrapport"}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-bold text-foreground">
+                  {ar ? "تقرير التدقيق الشامل" : "Fullständig granskningsrapport"}
+                </p>
+                <ExplainTip
+                  titleAr="تقرير التدقيق الشامل" titleSv="Fullständig granskningsrapport"
+                  textAr="مراجعة تلقائية لجميع بيانات المزرعة مرة واحدة في الساعة. يكشف: أيام ناقصة في السجل، أخطاء في البيانات، أو مشاكل تحتاج تصحيح. الدرجة من 100 تعكس جودة بياناتك."
+                  textSv="Automatisk granskning av all gårdsdata en gång per timme. Hittar saknade dagar, datafel och problem som behöver åtgärd. Poäng av 100 = datakvalitet."
+                  size="xs"
+                />
+              </div>
               <p className="text-[10px] text-muted-foreground">
                 {ar
                   ? totalIssues === 0 ? "لا توجد مشاكل — البيانات نظيفة ✓" : `${totalIssues} مشكلة · نقاط ${audit.score}/100`
@@ -649,7 +706,10 @@ export default function BrainPage() {
 
       {/* ── Financial Memory ─────────────────────────────────────────────── */}
       <Section icon={DollarSign} title={ar?"الذاكرة المالية":"Ekonomiminne"}
-               color="bg-emerald-500" badge={`${fin.all_time_count ?? 0} ${ar?"معاملة":"transakt."}`}>
+               color="bg-emerald-500" badge={`${fin.all_time_count ?? 0} ${ar?"معاملة":"transakt."}`}
+               explainTitleAr="الذاكرة المالية" explainTitleSv="Ekonomiminne"
+               explainAr="سجل تاريخي كامل لكل الدخل والمصاريف والأرباح منذ بداية المزرعة. يشمل: الإجماليات الكلية، أرقام هذا الشهر، أرقام اليوم، وتوزيع المصاريف على الفئات."
+               explainSv="Fullständig historik över alla intäkter, kostnader och vinster sedan starten. Inkluderar totaler, månadssiffror, dagens siffror och kostnadskategorier.">
         <div className="grid grid-cols-3 gap-2 mb-2">
           <Tile label={ar?"إجمالي الدخل":"Total inkomst"} value={money(totalIncome, lang)} color="text-emerald-600" small />
           <Tile label={ar?"إجمالي المصاريف":"Total kostnad"} value={money(totalExpense, lang)} color="text-red-500" small />
@@ -750,6 +810,9 @@ export default function BrainPage() {
 
       {/* ── Feed Intelligence ────────────────────────────────────────────── */}
       <Section icon={Wheat} title={ar?"ذاكرة العلف":"Foderminne"}
+               explainTitleAr="ذاكرة العلف" explainTitleSv="Foderminne"
+               explainAr="يتتبع جميع مشتريات العلف: الكميات بالكيلو، التكلفة الإجمالية، ومتوسط سعر الكيلو. العلف هو أكبر مصروف في معظم المزارع لذا متابعته مهمة جداً."
+               explainSv="Spårar alla foderinköp: mängd i kg, totalkostnad och genomsnittspris per kg. Foder är vanligtvis den största utgiftsposten."
                color="bg-amber-500" badge={`${feed.entry_count ?? 0} ${ar?"إدخال":"poster"}`}>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Tile label={ar?"إجمالي التكلفة":"Total kostnad"} value={money(feedCost, lang)} color="text-amber-600" small />
@@ -788,6 +851,9 @@ export default function BrainPage() {
 
       {/* ── Flock Memory ─────────────────────────────────────────────────── */}
       <Section icon={Bird} title={ar?"ذاكرة القطعان":"Flockminne"}
+               explainTitleAr="ذاكرة القطعان" explainTitleSv="Flockminne"
+               explainAr="سجل جميع قطعان الطيور في المزرعة مع عدد الأفراد، السلالة، العمر، والغرض (لحم / بيض / تفقيس). يساعدك على معرفة كل تفصيل عن طيورك."
+               explainSv="Register över alla flockar med antal, ras, ålder och syfte (kött/ägg/kläckning)."
                color="bg-blue-500" badge={`${flocks.count ?? 0} ${ar?"قطيع":"flockar"} · ${totalBirds} ${ar?"طير":"fåglar"}`}>
         {flocksAll.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-3">
@@ -827,6 +893,9 @@ export default function BrainPage() {
 
       {/* ── Hatching Memory ──────────────────────────────────────────────── */}
       <Section icon={Egg} title={ar?"ذاكرة التفقيس":"Kläckminne"}
+               explainTitleAr="ذاكرة التفقيس" explainTitleSv="Kläckminne"
+               explainAr="سجل كل دورات الفقاسة: عدد البيض الموضوع، تاريخ الوضع، تاريخ الفقس، وعدد الكتاكيت الناجحة. نسبة التفقيس = (كتاكيت ناجحة ÷ بيض موضوع) × 100."
+               explainSv="Register över alla kläckningscykler: lagda ägg, datum, kläckta kycklingar. Kläckningsgrad = (kläckta ÷ lagda) × 100."
                color="bg-purple-500"
                badge={`${hatching.active_count ?? 0} ${ar?"نشط":"aktiva"} · ${hatching.total_cycles ?? 0} ${ar?"إجمالي":"totalt"}`}>
         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -888,6 +957,9 @@ export default function BrainPage() {
 
       {/* ── Task Memory ──────────────────────────────────────────────────── */}
       <Section icon={CheckSquare} title={ar?"ذاكرة المهام":"Uppgiftsminne"}
+               explainTitleAr="ذاكرة المهام" explainTitleSv="Uppgiftsminne"
+               explainAr="يعرض المهام المتأخرة والمهام المجدولة لليوم والمهام القادمة. المهام المتأخرة هي الأكثر أهمية وتحتاج إنجازاً فورياً."
+               explainSv="Visar försenade, dagens och kommande uppgifter. Försenade uppgifter kräver omedelbar uppmärksamhet."
                color="bg-rose-500"
                badge={`${overdueTask.length} ${ar?"متأخرة":"sena"} · ${todayTask.length} ${ar?"اليوم":"idag"}`}>
         <div className="grid grid-cols-4 gap-1.5 mb-3">
@@ -943,6 +1015,9 @@ export default function BrainPage() {
 
       {/* ── Goals Memory ─────────────────────────────────────────────────── */}
       <Section icon={Target} title={ar?"ذاكرة الأهداف":"Målminne"}
+               explainTitleAr="ذاكرة الأهداف" explainTitleSv="Målminne"
+               explainAr="يتتبع أهداف المزرعة ومدى التقدم نحو تحقيقها. يعرض الأهداف الجارية ونسبة الإنجاز لكل هدف، والأهداف المحققة."
+               explainSv="Spårar gårdens mål och framsteg. Visar aktiva mål med procent uppnått och avslutade mål."
                color="bg-indigo-500"
                badge={`${activeGoals.length} ${ar?"نشط":"aktiva"} · ${doneGoals.length} ${ar?"مكتمل":"klara"}`}>
         {activeGoals.length === 0 && doneGoals.length === 0 ? (
@@ -982,6 +1057,9 @@ export default function BrainPage() {
 
       {/* ── Notes Memory ─────────────────────────────────────────────────── */}
       <Section icon={FileText} title={ar?"ذاكرة الملاحظات":"Anteckningsminne"}
+               explainTitleAr="ذاكرة الملاحظات" explainTitleSv="Anteckningsminne"
+               explainAr="يعرض آخر الملاحظات اليومية المسجلة من قبل المشرفين والعمال. الملاحظات مهمة لتوثيق الأحداث غير العادية في المزرعة."
+               explainSv="Visar de senaste dagliga anteckningarna från personal. Viktigt för att dokumentera ovanliga händelser."
                color="bg-teal-500"
                badge={`${notes.length} ${ar?"آخر ملاحظة":"senaste"}`}
                defaultOpen={false}>
@@ -1013,7 +1091,10 @@ export default function BrainPage() {
       {/* ── Monthly trend ─────────────────────────────────────────────────── */}
       {(fin.monthly as any[])?.length > 0 && (
         <Section icon={BarChart3} title={ar?"الاتجاه الشهري":"Månatlig trend"}
-                 color="bg-cyan-500" defaultOpen={false}>
+                 color="bg-cyan-500" defaultOpen={false}
+                 explainTitleAr="الاتجاه الشهري" explainTitleSv="Månatlig trend"
+                 explainAr="مقارنة الدخل والمصاريف والربح شهراً بشهر لآخر 6 أشهر. يساعدك على رؤية هل مزرعتك تتحسن أم تتراجع مع الوقت."
+                 explainSv="Jämförelse av inkomster, kostnader och vinst månad för månad de senaste 6 månaderna.">
           <div className="space-y-1.5">
             {((fin.monthly as any[]) ?? []).slice(0, 6).map((m: any, i: number) => {
               const inc = Number(m.income);

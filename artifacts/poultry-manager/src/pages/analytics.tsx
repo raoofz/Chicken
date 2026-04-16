@@ -23,6 +23,7 @@ import {
   Factory, ChevronDown, ChevronUp, X, Save, Loader2,
   ShieldPlus, ArrowLeft, ArrowRight,
 } from "lucide-react";
+import { ExplainTip } from "@/components/ExplainTip";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -167,14 +168,20 @@ function LivePulse({ lastUpdate, ar }: { lastUpdate: string; ar: boolean }) {
 }
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, trend, icon: Icon, color, lang }: {
+function KpiCard({ label, value, sub, trend, icon: Icon, color, lang, titleAr, titleSv, textAr, textSv }: {
   label: string; value: number; sub?: string; trend?: number;
   icon: React.ElementType; color: string; lang: "ar"|"sv";
+  titleAr?: string; titleSv?: string; textAr?: string; textSv?: string;
 }) {
   return (
     <div className={cn("rounded-2xl border p-4 flex flex-col gap-1 bg-card shadow-sm", color)}>
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground font-medium">{label}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-xs text-muted-foreground font-medium">{label}</p>
+          {textAr && titleAr && (
+            <ExplainTip titleAr={titleAr} titleSv={titleSv!} textAr={textAr} textSv={textSv!} />
+          )}
+        </div>
         <Icon className="w-4 h-4 text-muted-foreground/60" />
       </div>
       <AnimatedNum value={value} lang={lang} className="text-xl font-black tracking-tight" />
@@ -454,6 +461,9 @@ export default function Analytics() {
           trend={incTrend}
           icon={ArrowUpCircle} color="border-emerald-200/50 dark:border-emerald-800/30"
           lang={lang as any}
+          titleAr="إجمالي الدخل" titleSv="Total inkomst"
+          textAr="مجموع كل الأموال التي دخلت للمزرعة من بيع الكتاكيت والبيض والدجاج وأي مصدر دخل آخر. كلما كان هذا الرقم أعلى كان أفضل."
+          textSv="Summan av alla intäkter till gården från försäljning av kycklingar, ägg och höns. Ju högre desto bättre."
         />
         <KpiCard
           label={ar ? "إجمالي المصاريف" : "Totala kostnader"}
@@ -462,6 +472,9 @@ export default function Analytics() {
           trend={expTrend}
           icon={ArrowDownCircle} color="border-red-200/50 dark:border-red-800/30"
           lang={lang as any}
+          titleAr="إجمالي المصاريف" titleSv="Totala kostnader"
+          textAr="مجموع كل ما صُرف على المزرعة مثل العلف والأدوية والكهرباء والعمالة والصيانة وغيرها. حاول إبقاء هذا الرقم أقل من الدخل."
+          textSv="Summan av alla utgifter för gården som foder, medicin, el, arbetskraft och underhåll. Håll detta lägre än inkomsten."
         />
         <KpiCard
           label={ar ? "صافي الربح" : "Nettovinst"}
@@ -471,14 +484,20 @@ export default function Analytics() {
           icon={profit >= 0 ? TrendingUp : TrendingDown}
           color={profit >= 0 ? "border-blue-200/50 dark:border-blue-800/30" : "border-red-200/50 dark:border-red-800/30"}
           lang={lang as any}
+          titleAr="صافي الربح" titleSv="Nettovinst"
+          textAr="الفرق بين الدخل والمصاريف. إذا كان موجباً (+) أنت رابح. إذا كان سالباً (-) أنت في خسارة وتحتاج لمراجعة مصاريفك أو زيادة مبيعاتك."
+          textSv="Skillnaden mellan inkomst och kostnader. Om positiv (+) går du med vinst. Om negativ (-) har du förlust."
         />
         <KpiCard
-          label={ar ? "اليوم" : "Idag"}
+          label={ar ? "صافي اليوم" : "Netto idag"}
           value={tod.inc - tod.exp}
           sub={`${ar?"دخل":"Inc"}: ${fmtMoney(tod.inc, lang as any)}`}
           icon={Clock}
           color="border-violet-200/50 dark:border-violet-800/30"
           lang={lang as any}
+          titleAr="صافي اليوم" titleSv="Netto idag"
+          textAr="الفرق بين ما دخل وما صُرف اليوم فقط. يساعدك على معرفة هل اليوم كان مربحاً أم لا بشكل فوري."
+          textSv="Skillnaden mellan dagens inkomster och utgifter. Visar om dagen var lönsam eller inte."
         />
       </div>
 
@@ -490,7 +509,14 @@ export default function Analytics() {
 
           {/* Period Overview */}
           <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <p className="text-xs font-bold text-muted-foreground mb-3">{ar ? "مقارنة الفترات" : "Periodjämförelse"}</p>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-bold text-muted-foreground">{ar ? "مقارنة الفترات" : "Periodjämförelse"}</p>
+              <ExplainTip
+                titleAr="مقارنة الفترات" titleSv="Periodjämförelse"
+                textAr="مقارنة الدخل والمصاريف والصافي لثلاث فترات: اليوم فقط، هذا الأسبوع، وهذا الشهر. تساعدك على معرفة الأداء في كل فترة بشكل منفصل."
+                textSv="Jämförelse av inkomster, kostnader och netto för tre perioder: idag, denna vecka, och denna månad."
+              />
+            </div>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { label: ar?"اليوم":"Idag",         inc: tod.inc,   exp: tod.exp   },
@@ -524,7 +550,14 @@ export default function Analytics() {
 
           {/* 7-Day Chart */}
           <div className="rounded-2xl border bg-card p-4 shadow-sm">
-            <p className="text-xs font-bold text-muted-foreground mb-3">{ar ? "آخر 7 أيام" : "Senaste 7 dagarna"}</p>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-bold text-muted-foreground">{ar ? "آخر 7 أيام" : "Senaste 7 dagarna"}</p>
+              <ExplainTip
+                titleAr="رسم بياني آخر 7 أيام" titleSv="Diagram senaste 7 dagarna"
+                textAr="أعمدة خضراء = الدخل، أعمدة حمراء = المصاريف لكل يوم من آخر 7 أيام. اضغط على أي عمود لترى المبلغ الدقيق. يساعدك على رصد الأيام النشطة."
+                textSv="Gröna staplar = inkomst, röda = kostnader per dag de senaste 7 dagarna. Tryck på en stapel för exakt belopp."
+              />
+            </div>
             <ResponsiveContainer width="100%" height={130}>
               <BarChart data={weekData} barSize={8} margin={{ left: -20, right: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -737,7 +770,14 @@ export default function Analytics() {
             margin >= 0  ? "bg-amber-50  dark:bg-amber-950/20  border-amber-200/50"   :
                            "bg-red-50    dark:bg-red-950/20    border-red-200/50"
           )}>
-            <p className="text-xs font-bold text-muted-foreground">{ar ? "الصحة المالية" : "Finansiell hälsa"}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-muted-foreground">{ar ? "الصحة المالية" : "Finansiell hälsa"}</p>
+              <ExplainTip
+                titleAr="الصحة المالية" titleSv="Finansiell hälsa"
+                textAr="تقييم سريع لوضع مزرعتك المالي بناءً على هامش الربح: ممتاز (>20%) ✅، جيد (5-20%)، مقبول (0-5%)، يحتاج مراجعة (خسارة ❌). هامش الربح هو النسبة المئوية للربح من الدخل."
+                textSv="Snabb bedömning av gårdens ekonomiska hälsa baserat på vinstmarginal: Utmärkt (>20%), Bra (5–20%), Acceptabelt (0–5%), Behöver åtgärd (förlust)."
+              />
+            </div>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-black">
                 {margin >= 20 ? "🌟" : margin >= 5 ? "✅" : margin >= 0 ? "⚠️" : "❌"}
@@ -787,10 +827,17 @@ export default function Analytics() {
 
           {/* Alert System */}
           <div className="rounded-2xl border bg-card p-4 shadow-sm space-y-2">
-            <p className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-              {ar ? "تنبيهات ذكية" : "Smarta varningar"}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                {ar ? "تنبيهات ذكية" : "Smarta varningar"}
+              </p>
+              <ExplainTip
+                titleAr="التنبيهات الذكية" titleSv="Smarta varningar"
+                textAr="تحذيرات تلقائية يولّدها النظام عند رصد مشكلة في البيانات مثل: نسبة علف عالية، خسارة مالية، أو غياب المبيعات. الألوان: 🔴 خطر يحتاج تدخل، 🟡 تحذير للمتابعة، 🟢 وضع جيد."
+                textSv="Automatiska varningar när systemet ser ett problem: hög foderandel, ekonomisk förlust eller uteblivna intäkter. Röd = åtgärd krävs, Gul = bevaka, Grön = bra läge."
+              />
+            </div>
             {[
               { cond: feedRatio > 70,  msg: ar?"نسبة العلف عالية جداً (>70%)":"Foderandel > 70%",          color:"red"    },
               { cond: margin < 0,      msg: ar?"مزرعتك في خسارة الآن":"Gården är i förlust",                color:"red"    },

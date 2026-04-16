@@ -18,6 +18,7 @@ import {
   Thermometer, Droplets, Wind, BookOpen, Wrench,
   BarChart3, ArrowUpRight, Clock, Star, Users, Zap,
 } from "lucide-react";
+import { ExplainTip } from "@/components/ExplainTip";
 import { cn } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -419,12 +420,30 @@ function getDimensions(data: FarmScores, summary: DashboardSummary, lang: string
   const ar = lang === "ar";
   const hatchScore = summary.overallHatchRate >= 80 ? 85 : summary.overallHatchRate >= 65 ? 65 : summary.overallHatchRate > 0 ? 45 : 50;
   return [
-    { label: ar ? "الصحة المالية" : "Finansiell hälsa", score: data.financialScore, color: "text-emerald-600", bg: "bg-emerald-500", icon: DollarSign },
-    { label: ar ? "الإنتاج" : "Produktion", score: data.productionScore, color: "text-blue-600", bg: "bg-blue-500", icon: Bird },
-    { label: ar ? "العمليات" : "Operationer", score: data.operationsScore, color: "text-purple-600", bg: "bg-purple-500", icon: CheckSquare },
-    { label: ar ? "الأهداف" : "Mål", score: data.goalsScore, color: "text-amber-600", bg: "bg-amber-500", icon: Target },
-    { label: ar ? "معدل التفقيس" : "Kläckningsgrad", score: hatchScore, color: "text-rose-600", bg: "bg-rose-500", icon: Egg },
-    { label: ar ? "إجمالي الأداء" : "Total prestanda", score: data.score, color: "text-indigo-600", bg: "bg-indigo-500", icon: Activity },
+    { label: ar ? "الصحة المالية" : "Finansiell hälsa", score: data.financialScore, color: "text-emerald-600", bg: "bg-emerald-500", icon: DollarSign,
+      explainTitleAr: "الصحة المالية", explainTitleSv: "Finansiell hälsa",
+      explainAr: "تقيس مدى ربحية المزرعة. تحسب من: هامش الربح، حجم الدخل مقارنة بالمصاريف، واستمرارية الربح. 80+ يعني المزرعة مربحة جداً.",
+      explainSv: "Mäter gårdens lönsamhet. Beräknas från: vinstmarginal, inkomst vs kostnader, och vinstens kontinuitet. 80+ innebär mycket lönsam gård." },
+    { label: ar ? "الإنتاج" : "Produktion", score: data.productionScore, color: "text-blue-600", bg: "bg-blue-500", icon: Bird,
+      explainTitleAr: "درجة الإنتاج", explainTitleSv: "Produktionspoäng",
+      explainAr: "تقيس حجم الإنتاج: عدد القطعان، إجمالي الطيور، ودورات التفقيس النشطة. كلما زاد الإنتاج وكان منتظماً ارتفعت الدرجة.",
+      explainSv: "Mäter produktionsvolym: antal flockar, totalt fåglar och aktiva kläckningscykler. Högre och regelbunden produktion ger högre poäng." },
+    { label: ar ? "العمليات" : "Operationer", score: data.operationsScore, color: "text-purple-600", bg: "bg-purple-500", icon: CheckSquare,
+      explainTitleAr: "درجة العمليات", explainTitleSv: "Driftspoäng",
+      explainAr: "تقيس مدى انتظام تشغيل المزرعة: إنجاز المهام في موعدها، السجلات اليومية المكتملة، وغياب مهام متأخرة. مزرعة منظمة = درجة عالية.",
+      explainSv: "Mäter hur regelbunden driften är: uppgifter i tid, dagliga anteckningar och inga försenade uppgifter. Organiserad gård = högt betyg." },
+    { label: ar ? "الأهداف" : "Mål", score: data.goalsScore, color: "text-amber-600", bg: "bg-amber-500", icon: Target,
+      explainTitleAr: "درجة الأهداف", explainTitleSv: "Målpoäng",
+      explainAr: "تقيس مدى تقدمك نحو أهداف المزرعة. وجود أهداف محددة وإنجازها يرفع الدرجة. غياب الأهداف يُخفّض الدرجة.",
+      explainSv: "Mäter framsteg mot gårdens mål. Att ha tydliga mål och uppnå dem höjer poängen. Avsaknad av mål sänker poängen." },
+    { label: ar ? "معدل التفقيس" : "Kläckningsgrad", score: hatchScore, color: "text-rose-600", bg: "bg-rose-500", icon: Egg,
+      explainTitleAr: "معدل التفقيس", explainTitleSv: "Kläckningsgrad",
+      explainAr: "تقيس نسبة نجاح التفقيس = (كتاكيت ناجحة ÷ بيض موضوع) × 100. 80%+ ممتاز، 65-79% جيد، أقل من 65% يحتاج مراجعة درجة الحرارة والرطوبة.",
+      explainSv: "Mäter kläckningsframgång = (kläckta kycklingar ÷ lagda ägg) × 100. 80%+ utmärkt, 65-79% bra, under 65% kräver granskning av temperatur och luftfuktighet." },
+    { label: ar ? "إجمالي الأداء" : "Total prestanda", score: data.score, color: "text-indigo-600", bg: "bg-indigo-500", icon: Activity,
+      explainTitleAr: "إجمالي الأداء", explainTitleSv: "Total prestanda",
+      explainAr: "الدرجة الإجمالية المحسوبة من متوسط مرجح لجميع الأبعاد الخمسة. تعكس الصورة الكاملة لصحة مزرعتك.",
+      explainSv: "Sammanlagd poäng beräknad från viktat genomsnitt av alla fem dimensioner. Återspeglar hela bilden av gårdens hälsa." },
   ];
 }
 
@@ -597,7 +616,17 @@ export default function FarmLab() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-lg font-black">{gradeLabel}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-lg font-black">{gradeLabel}</p>
+                        <ExplainTip
+                          titleAr="درجة المزرعة الإجمالية"
+                          titleSv="Övergripande gårdspoäng"
+                          textAr="درجة من 100 تقيس صحة مزرعتك الكاملة. تحسب من 6 أبعاد: المالية، الإنتاج، العمليات، الأهداف، التفقيس. 80+ ممتاز، 60-79 جيد، 40-59 متوسط، أقل من 40 يحتاج تدخل."
+                          textSv="Poäng 0-100 som mäter hela gårdens hälsa. Beräknas från 6 dimensioner: Ekonomi, Produktion, Drift, Mål, Kläckning. 80+ Utmärkt, 60-79 Bra, 40-59 Medel, under 40 kräver åtgärd."
+                          size="xs"
+                          className="mt-0.5"
+                        />
+                      </div>
                       <p className="text-xs text-muted-foreground">{lang === "ar" ? "الدرجة الإجمالية للمزرعة" : "Övergripande gårdspoäng"}</p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <Badge className={cn("text-[10px]",
@@ -606,10 +635,24 @@ export default function FarmLab() {
                           {lang === "ar" ? { low: "خطر منخفض", medium: "خطر متوسط", high: "خطر مرتفع" }[scores.riskLevel] :
                            { low: "Låg risk", medium: "Medelrisk", high: "Hög risk" }[scores.riskLevel]}
                         </Badge>
+                        <ExplainTip
+                          titleAr="مستوى الخطر"
+                          titleSv="Risknivå"
+                          textAr="مستوى الخطر الإجمالي للمزرعة. منخفض = المزرعة مستقرة ومربحة. متوسط = هناك تحديات يمكن إدارتها. مرتفع = تحتاج إلى تدخل عاجل لتفادي خسائر."
+                          textSv="Övergripande risknivå för gården. Låg = stabil och lönsam. Medel = hanterbara utmaningar. Hög = kräver omedelbar åtgärd för att undvika förluster."
+                          size="xs"
+                        />
                         <Badge variant="outline" className="text-[10px]">
                           {lang === "ar" ? { up: "اتجاه تصاعدي 📈", down: "اتجاه تنازلي 📉", stable: "مستقر ↔️" }[scores.trend] :
                            { up: "Uppåt 📈", down: "Nedåt 📉", stable: "Stabil ↔️" }[scores.trend]}
                         </Badge>
+                        <ExplainTip
+                          titleAr="الاتجاه المالي"
+                          titleSv="Finansiell trend"
+                          textAr="يقيس الاتجاه الأخير للأرباح. تصاعدي = تحسن. تنازلي = تراجع. مستقر = لا تغيير كبير. يُحسب من مقارنة آخر 3 أشهر بالثلاثة الأشهر قبلها."
+                          textSv="Mäter den senaste vinstutvecklingen. Uppåt = förbättring. Nedåt = försämring. Stabil = ingen stor förändring. Beräknat från de senaste 3 månaderna jämfört med föregående 3."
+                          size="xs"
+                        />
                       </div>
                     </div>
                   </div>
@@ -624,6 +667,13 @@ export default function FarmLab() {
                             <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                               <Icon className={cn("w-3.5 h-3.5", d.color)} />
                               {d.label}
+                              <ExplainTip
+                                titleAr={d.explainTitleAr}
+                                titleSv={d.explainTitleSv}
+                                textAr={d.explainAr}
+                                textSv={d.explainSv}
+                                size="xs"
+                              />
                             </span>
                             <span className={cn("text-xs font-bold", d.color)}>{d.score}</span>
                           </div>
@@ -662,7 +712,16 @@ export default function FarmLab() {
                   </div>
                   {ctx.margin !== null && (
                     <div className="mt-3 bg-muted/30 rounded-xl p-2.5 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">{lang === "ar" ? "هامش الربح الصافي" : "Nettovinstmarginal"}</span>
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        {lang === "ar" ? "هامش الربح الصافي" : "Nettovinstmarginal"}
+                        <ExplainTip
+                          titleAr="هامش الربح الصافي"
+                          titleSv="Nettovinstmarginal"
+                          textAr="نسبة الربح من إجمالي الدخل. مثال: دخل 1,000,000 وربح 200,000 = هامش 20%. المستهدف: أعلى من 20% ممتاز، 10-20% مقبول، أقل من 10% يحتاج تحسين."
+                          textSv="Andel vinst av total inkomst. Ex: inkomst 1 000 000 och vinst 200 000 = marginal 20%. Mål: över 20% utmärkt, 10-20% godkänt, under 10% kräver förbättring."
+                          size="xs"
+                        />
+                      </span>
                       <span className={cn("font-black text-sm", ctx.margin >= 20 ? "text-emerald-600" : ctx.margin >= 0 ? "text-amber-600" : "text-red-600")}>
                         {ctx.margin.toFixed(1)}%
                       </span>

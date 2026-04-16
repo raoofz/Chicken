@@ -16,20 +16,20 @@ import { useToast } from "@/hooks/use-toast";
 const WHATSAPP_GROUP_URL = "https://wa.me";
 
 const NAV_KEYS = [
-  { href: "/", key: "nav.dashboard", icon: LayoutDashboard, adminOnly: false },
-  { href: "/flocks", key: "nav.flocks", icon: Bird, adminOnly: false },
-  { href: "/hatching", key: "nav.hatching", icon: Egg, adminOnly: false },
-  { href: "/tasks", key: "nav.tasks", icon: CheckSquare, adminOnly: false },
-  { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
-  { href: "/notes", key: "nav.notes", icon: NotebookPen, adminOnly: false },
-  { href: "/finance",    key: "nav.finance",    icon: Wallet,     adminOnly: false },
-  { href: "/analytics",  key: "nav.analytics",  icon: Activity,   adminOnly: false },
-  { href: "/brain",      key: "nav.brain",      icon: Database,   adminOnly: false },
-  { href: "/farm-lab",   key: "nav.farmLab",    icon: Microscope, adminOnly: false },
-  { href: "/ai/advanced", key: "nav.aiAdvanced", icon: FlaskConical, adminOnly: true },
-  { href: "/ai/precision", key: "nav.aiPrecision", icon: BrainCircuit, adminOnly: true },
-  { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
-  { href: "/settings", key: "nav.settings", icon: Settings, adminOnly: false },
+  { href: "/",            key: "nav.dashboard",   descKey: "nav.dashboard.desc",   icon: LayoutDashboard, adminOnly: false },
+  { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
+  { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
+  { href: "/tasks",       key: "nav.tasks",        descKey: "nav.tasks.desc",       icon: CheckSquare,     adminOnly: false },
+  { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: false },
+  { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: false },
+  { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: false },
+  { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: false },
+  { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: false },
+  { href: "/farm-lab",    key: "nav.farmLab",      descKey: "nav.farmLab.desc",     icon: Microscope,      adminOnly: false },
+  { href: "/ai/advanced", key: "nav.aiAdvanced",   descKey: "nav.aiAdvanced.desc",  icon: FlaskConical,    adminOnly: true  },
+  { href: "/ai/precision",key: "nav.aiPrecision",  descKey: "nav.aiPrecision.desc", icon: BrainCircuit,    adminOnly: true  },
+  { href: "/logs",        key: "nav.logs",         descKey: "nav.logs.desc",        icon: BookOpen,        adminOnly: false },
+  { href: "/settings",    key: "nav.settings",     descKey: "nav.settings.desc",    icon: Settings,        adminOnly: false },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -94,7 +94,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {visibleNav.map(({ href, key, icon: Icon, adminOnly }) => {
+          {visibleNav.map(({ href, key, descKey, icon: Icon, adminOnly }) => {
             const active = location === href;
             return (
               <Link
@@ -107,18 +107,26 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   }
                 }}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                  "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
                   active
                     ? "bg-primary text-white shadow-lg shadow-primary/25"
                     : "text-white/65 hover:bg-white/8 hover:text-white",
                   adminOnly && "border border-amber-500/20"
                 )}
               >
-                <Icon className={cn("w-4 h-4 shrink-0", active ? "text-white" : "text-white/50")} />
-                <span>{t(key)}</span>
-                {adminOnly && (
-                  <span className={cn("text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded", isRtl ? "mr-auto" : "ml-auto")}>{t("role.admin.badge")}</span>
-                )}
+                <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", active ? "text-white" : "text-white/50")} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold leading-tight">{t(key)}</span>
+                    {adminOnly && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded shrink-0">{t("role.admin.badge")}</span>
+                    )}
+                  </div>
+                  <p className={cn(
+                    "text-[10px] leading-tight mt-0.5 truncate",
+                    active ? "text-white/70" : "text-white/35"
+                  )}>{t(descKey)}</p>
+                </div>
               </Link>
             );
           })}

@@ -79,6 +79,12 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 
 ## Recent Updates (April 2026 — Latest)
 
+- **ExplainTip Component (`src/components/ExplainTip.tsx`):** Reusable "?" icon that opens a bottom drawer with bilingual (AR/SV) explanation. Props: `titleAr`, `titleSv`, `textAr`, `textSv`, `size` (xs/sm/md), `className`. Uses `<span role="button">` to avoid nested button issues. Escape-closable.
+- **ExplainTip on Analytics page (`/analytics`):** Added to Income/Expenses/Net Profit/Today KPIs, Health Score, Smart Alerts, Period Comparison, 7-Day Chart.
+- **ExplainTip on Brain page (`/brain`):** Added to Health Score Ring, 4 Quick KPIs (Income/Expenses/Profit/Birds), Audit Panel header, and ALL 8 memory sections (Financial, Feed, Flock, Hatching, Tasks, Goals, Notes, Monthly Trend). `Section` component extended with `explainTitleAr/Sv` and `explainAr/Sv` props.
+- **ExplainTip on Farm-Lab page (`/farm-lab`):** Added to Overall Score ring title, Risk Level badge, Financial Trend badge, Profit Margin, and all 6 dimension score bars (Financial, Production, Operations, Goals, Hatching, Total). `getDimensions()` returns explain props per dimension.
+- **Navigation renamed for clarity:** `nav.aiAdvanced` → "مستشار المخاطر/Riskrådgivare", `nav.aiPrecision` → "تقرير الأداء/Prestationsrapport". Added `nav.*.desc` subtitle keys for all 14 nav items.
+- **Layout.tsx:** 2-line nav items showing name + description subtitle for all navigation entries.
 - **Live Decision Engine UI (Brain page):** Added "محرك القرار الحي / Live Beslutmotor" section to `/brain` page. Renders after audit panel. Features: gradient header card (red/amber/green based on `overallStatus`), collapsible body with weather strip (emoji + temp + humidity + wind), Arabic/Swedish summary text, danger/warning factor cards with urgency badges (فوري/راقب/منخفض), good-factors summary, decision score + live weather attribution footer. Polls `GET /api/ai/decision` every 30 seconds via `DECISION_INTERVAL` interval.
 - **Humidity constants corrected everywhere:** `ai-engine.ts`, `advanced-ai-engine.ts`, `ai.ts`, `intelligence-engine.ts`, `decision-logic.ts`, and Swedish `hatching.tsx` — incubation phase 50–55% (opt 52), lockdown phase 70–75% (opt 72).
 - **Brain page SQL fixes:** All 9 broken queries in `routes/brain.ts` repaired (FROM/WHERE clauses, UNION aliases, streak query simplified).
