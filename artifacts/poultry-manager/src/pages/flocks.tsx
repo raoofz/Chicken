@@ -16,7 +16,7 @@ import {
   Bird, Plus, Pencil, Trash2, Heart, Egg, AlertTriangle, TrendingUp,
   TrendingDown, Minus, ChevronRight, Activity, Flame, Search, Filter,
   X, CheckCircle2, Clock, Star, BarChart3, Droplets, SlidersHorizontal,
-  Calendar, ArrowUpDown, Stethoscope, Wheat,
+  Calendar, ArrowUpDown, Stethoscope, Wheat, DollarSign, Scale,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
@@ -71,6 +71,52 @@ interface Analytics {
   avgDailyAllFlocks: number;
   topProducerName: string | null;
   topProducerAvgDaily: number;
+}
+
+// Feed intelligence types (mirrored from engine)
+interface FlockFeedAnalysis {
+  flockId: number;
+  flockName: string;
+  breed: string;
+  count: number;
+  ageDays: number;
+  ageWeeks: number;
+  growthStage: string;
+  purpose: string;
+  feedData: {
+    totalCostAllocated: number;
+    totalKgAllocated: number | null;
+    costPerBird: number;
+    dailyCostPerBird: number;
+    dailyFeedKgPerBird: number | null;
+  };
+  benchmark: {
+    expectedDailyFeedGrams: number;
+    expectedFCR: number;
+    actualFCR: number | null;
+    fcrRating: { efficiency: string; deviation: number; label: string } | null;
+    expectedProductionPct: number;
+    actualProductionPct: number;
+    productionRating: { rating: string; gap: number };
+  };
+  costPerEgg: number | null;
+  costPerDozen: number | null;
+  efficiencyScore: number;
+  insights: Array<{
+    severity: string;
+    observation: string;
+    why: string;
+    action: string;
+    evidence: string;
+    expectedOutcome: string;
+  }>;
+}
+
+interface FeedSummaryResponse {
+  flockAnalyses: FlockFeedAnalysis[];
+  farmEfficiencyScore: number;
+  totalFeedSpend: number;
+  feedCostPctOfExpenses: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -308,15 +354,16 @@ function HealthLogForm({ flockName, onSubmit, onClose, loading }: {
 
 // ══ DETAIL MODAL ══════════════════════════════════════════════════════════════
 
-function FlockDetailModal({ flock, onClose, onRefresh, isAdmin }: {
+function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: {
   flock: Flock; onClose: () => void; onRefresh: () => void; isAdmin: boolean;
+  feedAnalysis?: FlockFeedAnalysis;
 }) {
   const { lang } = useLanguage();
   const ar = lang === "ar";
   const { toast } = useToast();
   const [prodLogs, setProdLogs]     = useState<ProductionLog[]>([]);
   const [healthLogs, setHealthLogs] = useState<HealthLog[]>([]);
-  const [tab, setTab]               = useState<"overview" | "production" | "health">("overview");
+  const [tab, setTab]               = useState<"overview" | "production" | "health" | "feed">("overview");
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [addProdOpen, setAddProdOpen]     = useState(false);
   const [addHealthOpen, setAddHealthOpen] = useState(false);
@@ -414,6 +461,7 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin }: {
               { key: "overview",    labelAr: "نظرة عامة",  labelSv: "Översikt" },
               { key: "production",  labelAr: "الإنتاج",    labelSv: "Produktion" },
               { key: "health",      labelAr: "الصحة",      labelSv: "Hälsa" },
+              { key: "feed",        labelAr: "العلف",       labelSv: "Foder" },
             ].map(t => (
               <button
                 key={t.key}
@@ -573,6 +621,162 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin }: {
               )}
             </div>
           )}
+
+          {/* ── Feed Tab ──────────────────────────────────────────── */}
+          {tab === "feed" && (
+            <div className="space-y-4">
+              {feedAnalysis ? (
+                <>
+                  {/* Score header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-sm">{ar ? "استخبارات العلف" : "Foderintelligens"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {ar ? "تحليل كفاءة العلف والتكلفة بناءً على سلالة القطيع وعمره" : "Analyserar fodereffektivitet och kostnad baserat på flockens ras och ålder"}
+                      </p>
+                    </div>
+                    <div className="text-center shrink-0">
+                      <div className="text-4xl font-black leading-none"
+                        style={{ color: feedAnalysis.efficiencyScore >= 70 ? "#10b981" : feedAnalysis.efficiencyScore >= 45 ? "#f59e0b" : "#ef4444" }}>
+                        {feedAnalysis.efficiencyScore}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">/100</div>
+                    </div>
+                  </div>
+
+                  {/* 4-metric grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-muted/50 rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                        <Wheat className="w-3 h-3 text-amber-500" />
+                        {ar ? "علف متوقع / طائر / يوم" : "Förväntat foder/fågel/dag"}
+                      </div>
+                      <div className="text-xl font-bold">{feedAnalysis.benchmark.expectedDailyFeedGrams}g</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {ar
+                          ? `إجمالي القطيع: ${(feedAnalysis.benchmark.expectedDailyFeedGrams * feedAnalysis.count / 1000).toFixed(1)} كجم/يوم`
+                          : `Totalt: ${(feedAnalysis.benchmark.expectedDailyFeedGrams * feedAnalysis.count / 1000).toFixed(1)} kg/dag`}
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                        <DollarSign className="w-3 h-3 text-blue-500" />
+                        {ar ? "تكلفة العلف / طائر / يوم" : "Foderkostnad/fågel/dag"}
+                      </div>
+                      <div className="text-xl font-bold">
+                        {feedAnalysis.feedData.dailyCostPerBird > 0 ? feedAnalysis.feedData.dailyCostPerBird.toFixed(2) : "—"}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {feedAnalysis.feedData.costPerBird > 0
+                          ? (ar ? `إجمالي 30 يوم / طائر: ${feedAnalysis.feedData.costPerBird.toFixed(1)}` : `30-dagars totalt: ${feedAnalysis.feedData.costPerBird.toFixed(1)}`)
+                          : (ar ? "لا تتوفر بيانات تكلفة" : "Ingen kostnadsdata")}
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/50 rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                        <Scale className="w-3 h-3 text-purple-500" />
+                        {ar ? "FCR المتوقع (معيار السلالة)" : "Förväntat FCR (ras)"}
+                      </div>
+                      <div className="text-xl font-bold font-mono">{feedAnalysis.benchmark.expectedFCR}</div>
+                      <div className={`text-[10px] mt-0.5 font-medium ${feedAnalysis.benchmark.fcrRating?.efficiency === "excellent" ? "text-emerald-600" : feedAnalysis.benchmark.fcrRating?.efficiency === "good" ? "text-blue-600" : "text-muted-foreground"}`}>
+                        {feedAnalysis.benchmark.actualFCR != null
+                          ? (ar ? `فعلي: ${feedAnalysis.benchmark.actualFCR}` : `Faktiskt: ${feedAnalysis.benchmark.actualFCR}`)
+                          : (ar ? "يحتاج بيانات كجم علف" : "Behöver kg-data")}
+                      </div>
+                    </div>
+
+                    {feedAnalysis.purpose !== "meat" && (
+                      <div className="bg-muted/50 rounded-xl p-3">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                          <Egg className="w-3 h-3 text-yellow-500" />
+                          {ar ? "إنتاج متوقع" : "Förväntad produktion"}
+                        </div>
+                        <div className="text-xl font-bold">{feedAnalysis.benchmark.expectedProductionPct.toFixed(1)}%</div>
+                        <div className={`text-[10px] mt-0.5 font-medium ${feedAnalysis.benchmark.actualProductionPct > 0 ? (feedAnalysis.benchmark.productionRating.rating === "on-target" ? "text-emerald-600" : "text-orange-600") : "text-muted-foreground"}`}>
+                          {feedAnalysis.benchmark.actualProductionPct > 0
+                            ? (ar ? `فعلي: ${feedAnalysis.benchmark.actualProductionPct.toFixed(1)}%` : `Faktiskt: ${feedAnalysis.benchmark.actualProductionPct.toFixed(1)}%`)
+                            : (ar ? "لا توجد سجلات إنتاج" : "Inga produktionsloggar")}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stage + breed info */}
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{ar ? "مرحلة النمو:" : "Tillväxtfas:"}</span>
+                      <span className="font-medium capitalize">{feedAnalysis.growthStage}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">{ar ? "السلالة:" : "Ras:"}</span>
+                      <span className="font-medium">{feedAnalysis.breed}</span>
+                    </div>
+                    {feedAnalysis.feedData.totalKgAllocated != null && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{ar ? "علف مسجّل (30 يوم):" : "Registrerat foder (30 dgr):"}</span>
+                        <span className="font-medium font-mono">{feedAnalysis.feedData.totalKgAllocated.toFixed(1)} كجم</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cost per output */}
+                  {(feedAnalysis.costPerEgg != null || feedAnalysis.costPerDozen != null) && (
+                    <div className="flex gap-3">
+                      {feedAnalysis.costPerEgg != null && (
+                        <div className="flex-1 bg-yellow-50/50 dark:bg-yellow-900/10 rounded-xl p-3 text-center">
+                          <Egg className="h-4 w-4 mx-auto text-yellow-500 mb-1" />
+                          <div className="text-lg font-bold">{feedAnalysis.costPerEgg.toFixed(2)}</div>
+                          <div className="text-[10px] text-muted-foreground">{ar ? "تكلفة علف / بيضة" : "Foderkostnad/ägg"}</div>
+                        </div>
+                      )}
+                      {feedAnalysis.costPerDozen != null && (
+                        <div className="flex-1 bg-amber-50/50 dark:bg-amber-900/10 rounded-xl p-3 text-center">
+                          <Star className="h-4 w-4 mx-auto text-amber-500 mb-1" />
+                          <div className="text-lg font-bold">{feedAnalysis.costPerDozen.toFixed(2)}</div>
+                          <div className="text-[10px] text-muted-foreground">{ar ? "تكلفة علف / كرتونة" : "Foderkostnad/dussin"}</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Insights */}
+                  {feedAnalysis.insights.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">{ar ? "توصيات للقطيع:" : "Rekommendationer för flocken:"}</p>
+                      {feedAnalysis.insights.map((ins, i) => (
+                        <div key={i} className={`rounded-lg border p-2.5 text-xs ${
+                          ins.severity === "critical" ? "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400" :
+                          ins.severity === "high" ? "bg-orange-500/10 border-orange-500/30 text-orange-700 dark:text-orange-400" :
+                          ins.severity === "positive" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400" :
+                          "bg-yellow-500/10 border-yellow-500/30 text-yellow-700 dark:text-yellow-400"
+                        }`}>
+                          <div className="font-medium mb-1">{ins.observation}</div>
+                          <div className="text-muted-foreground">{ins.action}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No cost data hint */}
+                  {feedAnalysis.feedData.totalCostAllocated === 0 && (
+                    <div className="bg-muted/30 rounded-lg p-3 text-xs text-muted-foreground text-center">
+                      <Wheat className="w-5 h-5 mx-auto mb-1 opacity-40" />
+                      {ar
+                        ? "سجّل مشتريات العلف من صفحة استخبارات العلف لرؤية التكاليف الفعلية"
+                        : "Registrera foderköp i Foderintelligens för att se faktiska kostnader"}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Wheat className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">{ar ? "لا تتوفر بيانات علف لهذا القطيع" : "Ingen foderdata tillgänglig för denna flock"}</p>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -595,11 +799,65 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin }: {
   );
 }
 
+// ══ FEED MINI STRIP ══════════════════════════════════════════════════════════
+
+function FeedMiniStrip({ fa, ar }: { fa: FlockFeedAnalysis; ar: boolean }) {
+  const score = fa.efficiencyScore;
+  const scoreColor = score >= 70 ? "#10b981" : score >= 45 ? "#f59e0b" : "#ef4444";
+  const statusLabel = ar
+    ? (score >= 70 ? "طبيعي" : score >= 45 ? "يُراقَب" : "حرج")
+    : (score >= 70 ? "Normal" : score >= 45 ? "Bevaka" : "Kritisk");
+  const borderCls = score >= 70
+    ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20"
+    : score >= 45
+    ? "border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20"
+    : "border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20";
+
+  const expectedGrams = fa.benchmark.expectedDailyFeedGrams;
+  const totalDailyKg  = (expectedGrams * fa.count / 1000);
+
+  return (
+    <div className={`rounded-lg border px-2.5 py-2 mt-1 ${borderCls}`}>
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1" style={{ color: scoreColor }}>
+          <Wheat className="w-2.5 h-2.5" />
+          <span className="text-[9px] font-semibold">{ar ? "استخبارات العلف" : "Foderintelligens"}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold font-mono" style={{ color: scoreColor }}>{score}/100</span>
+          <span className="text-[8px] px-1 rounded-sm font-medium" style={{ background: scoreColor + "22", color: scoreColor }}>
+            {statusLabel}
+          </span>
+        </div>
+      </div>
+      {/* 3-col metrics */}
+      <div className="grid grid-cols-3 gap-1 text-center">
+        <div className="bg-background/60 rounded px-1 py-1">
+          <div className="text-[11px] font-bold text-foreground leading-none">{expectedGrams}g</div>
+          <div className="text-[8px] text-muted-foreground mt-0.5">{ar ? "علف/طائر/يوم" : "g/fågel/dag"}</div>
+        </div>
+        <div className="bg-background/60 rounded px-1 py-1">
+          <div className="text-[11px] font-bold text-foreground leading-none">{totalDailyKg.toFixed(1)}kg</div>
+          <div className="text-[8px] text-muted-foreground mt-0.5">{ar ? "إجمالي يومي" : "Dagstotalt"}</div>
+        </div>
+        <div className="bg-background/60 rounded px-1 py-1">
+          <div className="text-[11px] font-bold text-foreground leading-none">
+            {fa.feedData.dailyCostPerBird > 0 ? fa.feedData.dailyCostPerBird.toFixed(2) : "—"}
+          </div>
+          <div className="text-[8px] text-muted-foreground mt-0.5">{ar ? "ريال/طائر/يوم" : "kr/fågel/dag"}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══ FLOCK CARD ════════════════════════════════════════════════════════════════
 
-function FlockCard({ flock, onEdit, onDelete, onDetail, onAddProd, onAddHealth, isAdmin, maxEggs }: {
+function FlockCard({ flock, onEdit, onDelete, onDetail, onAddProd, onAddHealth, isAdmin, maxEggs, feedAnalysis }: {
   flock: Flock; onEdit: () => void; onDelete: () => void; onDetail: () => void;
   onAddProd: () => void; onAddHealth: () => void; isAdmin: boolean; maxEggs: number;
+  feedAnalysis?: FlockFeedAnalysis;
 }) {
   const { lang } = useLanguage();
   const ar      = lang === "ar";
@@ -679,19 +937,23 @@ function FlockCard({ flock, onEdit, onDelete, onDetail, onAddProd, onAddHealth, 
           </div>
         )}
 
-        {/* Row 4: Feed + 7d total */}
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
-          <span className="flex items-center gap-1">
-            <Wheat className="w-3 h-3" />
-            {flock.feedConsumptionKg != null ? `${flock.feedConsumptionKg} ${ar ? "كجم" : "kg"}` : (ar ? "علف غير محدد" : "Foder ej angivet")}
-          </span>
-          {flock.totalEggs7d > 0 && (
+        {/* Row 4: Feed Intelligence Strip (or fallback) */}
+        {feedAnalysis ? (
+          <FeedMiniStrip fa={feedAnalysis} ar={ar} />
+        ) : (
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5 border-t border-border/30">
             <span className="flex items-center gap-1">
-              <Egg className="w-3 h-3 text-amber-500" />
-              {flock.totalEggs7d} {ar ? "هذا الأسبوع" : "denna vecka"}
+              <Wheat className="w-3 h-3" />
+              {flock.feedConsumptionKg != null ? `${flock.feedConsumptionKg} ${ar ? "كجم/يوم" : "kg/dag"}` : (ar ? "علف غير محدد" : "Foder ej angivet")}
             </span>
-          )}
-        </div>
+            {flock.totalEggs7d > 0 && (
+              <span className="flex items-center gap-1">
+                <Egg className="w-3 h-3 text-amber-500" />
+                {flock.totalEggs7d} {ar ? "هذا الأسبوع" : "denna vecka"}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Row 5: Under-performing alert */}
         {isUnderPerforming && (
@@ -739,6 +1001,7 @@ export default function Flocks() {
 
   const [flocks,    setFlocks]    = useState<Flock[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [feedMap,   setFeedMap]   = useState<Map<number, FlockFeedAnalysis>>(new Map());
   const [loading,   setLoading]   = useState(true);
   const [saving,    setSaving]    = useState(false);
 
@@ -758,12 +1021,19 @@ export default function Flocks() {
 
   const load = useCallback(async () => {
     try {
-      const [f, a] = await Promise.all([
+      const [f, a, feedSummary] = await Promise.all([
         apiFetch<Flock[]>("flocks"),
         apiFetch<Analytics>("flocks/analytics/summary"),
+        apiFetch<FeedSummaryResponse>("feed-intelligence/summary?days=30").catch(() => null),
       ]);
       setFlocks(f);
       setAnalytics(a);
+      // Build flockId → feed analysis map
+      if (feedSummary?.flockAnalyses) {
+        const m = new Map<number, FlockFeedAnalysis>();
+        for (const fa of feedSummary.flockAnalyses) m.set(fa.flockId, fa);
+        setFeedMap(m);
+      }
     } catch (err: any) {
       toast({ title: ar ? "خطأ في التحميل" : "Laddningsfel", description: err.message, variant: "destructive" });
     }
@@ -970,6 +1240,26 @@ export default function Flocks() {
         </div>
       )}
 
+      {/* ── Feed Intelligence Banner ─────────────────────────────────────── */}
+      {feedMap.size > 0 && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+            <Wheat className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              {ar ? "استخبارات العلف مفعّلة" : "Foderintelligens aktiv"}
+            </p>
+            <p className="text-[11px] text-amber-700/70 dark:text-amber-400/70 mt-0.5">
+              {ar
+                ? "كل بطاقة قطيع تعرض توقع العلف اليومي والتكلفة بناءً على عمر السلالة. اضغط \"العلف\" في تفاصيل القطيع للتحليل الكامل."
+                : "Varje flockskort visar daglig foderestimering och kostnad baserat på rasens ålder. Klicka \"Foder\" i detaljerna för fullständig analys."}
+            </p>
+          </div>
+          <DollarSign className="w-4 h-4 text-amber-500 shrink-0" />
+        </div>
+      )}
+
       {/* ── Filter Bar ───────────────────────────────────────────────────── */}
       <Card className="border-border/50">
         <CardContent className="pt-4 pb-4">
@@ -1078,6 +1368,7 @@ export default function Flocks() {
               flock={flock}
               isAdmin={isAdmin}
               maxEggs={maxEggs}
+              feedAnalysis={feedMap.get(flock.id)}
               onDetail={() => setDetailFlock(flock)}
               onEdit={() => setEditFlock(flock)}
               onDelete={() => setDeleteId(flock.id)}
@@ -1113,6 +1404,7 @@ export default function Flocks() {
           onClose={() => setDetailFlock(null)}
           onRefresh={load}
           isAdmin={isAdmin}
+          feedAnalysis={feedMap.get(detailFlock.id)}
         />
       )}
 
