@@ -68,7 +68,7 @@ function CycleForm({ initial, onSubmit, onClose }: { initial?: any; onSubmit: (d
           <div className="space-y-1.5"><Label>Temperatur (°C)</Label><Input type="number" step="0.1" value={form.lockdownTemperature} onChange={e => setForm(f => ({ ...f, lockdownTemperature: e.target.value }))} placeholder="37.2" /></div>
           <div className="space-y-1.5"><Label>Luftfuktighet (%)</Label><Input type="number" step="0.1" value={form.lockdownHumidity} onChange={e => setForm(f => ({ ...f, lockdownHumidity: e.target.value }))} placeholder="70" /></div>
         </div>
-        <p className="text-xs text-amber-600/70"><Info className="w-3 h-3 inline mr-1" />Rekommenderat: 37.0–37.5°C, fuktighet 65–75%</p>
+        <p className="text-xs text-amber-600/70"><Info className="w-3 h-3 inline mr-1" />Rekommenderat: 37.0–37.5°C, fuktighet 70–75%</p>
       </div>
 
       <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
@@ -124,8 +124,8 @@ export default function Hatching() {
       </div>
 
       <div className="flex flex-wrap gap-3 text-xs">
-        <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200"><Thermometer className="w-3.5 h-3.5" />Dag 1–18: Ruvning — 37.5–38°C / fuktighet 50–60%</div>
-        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200"><ArrowLeftRight className="w-3.5 h-3.5" />Dag 18–21: Kläckning — 37.0–37.5°C / fuktighet 65–75%</div>
+        <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200"><Thermometer className="w-3.5 h-3.5" />Dag 1–18: Ruvning — 37.5–38°C / fuktighet 50–55%</div>
+        <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200"><ArrowLeftRight className="w-3.5 h-3.5" />Dag 18–21: Kläckning — 37.0–37.5°C / fuktighet 70–75%</div>
       </div>
 
       {isLoading ? (

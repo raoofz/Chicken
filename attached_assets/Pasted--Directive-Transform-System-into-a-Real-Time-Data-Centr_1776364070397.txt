@@ -1,0 +1,130 @@
+🚀 **Directive: Transform System into a Real-Time, Data-Centric Intelligent Decision Engine**
+
+This directive mandates upgrading the current system into a:
+
+> **Real-Time, Context-Aware, Data-Driven AI Intelligence Platform**
+
+The system must operate strictly on actual farm data, not generic assumptions.
+
+---
+
+# 🧠 1. Data-First Architecture (Non-Negotiable)
+
+All system operations must follow a strict **Data-First execution model**:
+
+* Every feature, tool, or AI interaction MUST:
+
+  * Retrieve and process complete farm data first
+  * Including:
+
+    * Worker inputs
+    * Management logs
+    * Temperature
+    * Humidity
+    * Production metrics
+    * Observational notes
+
+❌ Any response without full data context is considered invalid
+
+---
+
+# 🔗 2. Unified Context Engine
+
+Before any AI execution:
+
+The system must construct a **comprehensive context payload**, including:
+
+* Current real-time data (Live State)
+* Historical data (minimum last 7 days)
+* Operational logs and notes
+
+This context must be injected into every AI request.
+
+---
+
+# 🌡️ 3. Advanced Incubation Intelligence Module
+
+The system must continuously analyze:
+
+* Internal temperature
+* Internal humidity
+* External weather conditions
+* Historical hatch performance
+
+And dynamically determine **optimal operating parameters** based on:
+
+* Scientific standards
+* Actual farm performance data
+
+---
+
+# 💦 4. Adaptive Humidity Logic (Critical Update)
+
+Humidity control must be updated as follows:
+
+* Days 1–18:
+  → Target: 50–55%
+
+* Days 18–21:
+  → Target: 70–75% (Updated from 65%)
+
+The system must treat this as a dynamic target, not a static value.
+
+---
+
+# ⚡ 5. Real-Time Decision Engine
+
+The system must operate as a **live decision engine**:
+
+* Continuous data monitoring
+* Instant analysis
+* Immediate actionable outputs
+
+No batch or delayed logic is acceptable.
+
+---
+
+# 🧠 6. Intelligent System Behavior
+
+Every component in the application must:
+
+1. Load full farm context
+2. Analyze data relationships and trends
+3. Generate:
+
+   * Structured analysis
+   * Risk assessment
+   * Actionable recommendations
+
+❌ Stateless or isolated operations are not allowed
+
+---
+
+# 🎯 7. Final Objective
+
+Transform the application from:
+
+❌ Disconnected tools and static outputs
+
+Into:
+
+✅ A unified intelligent system that:
+
+* Fully understands farm operations
+* Continuously adapts to real data
+* Produces precise, dynamic, and operational decisions
+
+---
+
+# ⚠️ Compliance Requirements
+
+* Strict adherence to data-driven execution
+* Modular and scalable architecture
+* No generic AI responses
+* Full dependency on real-time and historical data
+
+---
+
+> The system must behave as a **live operational intelligence layer**, not a passive interface.
+
+---

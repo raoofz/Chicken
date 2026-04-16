@@ -5,7 +5,7 @@ import {
   Minus, RefreshCw, ShieldCheck, ShieldAlert, ShieldX, Zap, Flame,
   Package, Droplets, Wrench, Home, Truck, Award, Syringe, Layers,
   ChevronDown, ChevronUp, Eye, AlertCircle, Info, BarChart3, Calendar,
-  FileText,
+  FileText, Wind, Thermometer, CloudRain, Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -13,8 +13,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BASE = import.meta.env.BASE_URL;
-const REFRESH_INTERVAL = 5_000;
-const AUDIT_INTERVAL   = 3_600_000; // 1 hour
+const REFRESH_INTERVAL   = 5_000;
+const AUDIT_INTERVAL     = 3_600_000; // 1 hour
+const DECISION_INTERVAL  = 30_000;   // 30 seconds — weather + incubation live check
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function money(n: number, lang: string) {
@@ -207,16 +208,20 @@ export default function BrainPage() {
   const { toast } = useToast();
   const ar = lang === "ar";
 
-  const [state, setState] = useState<any>(null);
-  const [audit, setAudit] = useState<any>(null);
-  const [loadingState, setLoadingState] = useState(true);
-  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [state, setState]       = useState<any>(null);
+  const [audit, setAudit]       = useState<any>(null);
+  const [decision, setDecision] = useState<any>(null);
+  const [loadingState, setLoadingState]     = useState(true);
+  const [loadingAudit, setLoadingAudit]     = useState(false);
+  const [loadingDecision, setLoadingDecision] = useState(false);
   const [lastFetch, setLastFetch] = useState(0);
   const [tick, setTick]   = useState(0);
-  const [auditExpanded, setAuditExpanded] = useState(true);
-  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const auditRef  = useRef<ReturnType<typeof setInterval> | null>(null);
-  const tickRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [auditExpanded, setAuditExpanded]       = useState(true);
+  const [decisionExpanded, setDecisionExpanded] = useState(true);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const auditRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const decisionRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Fetch state ────────────────────────────────────────────────────────────
   const fetchState = useCallback(async (silent = false) => {
@@ -242,21 +247,34 @@ export default function BrainPage() {
     setLoadingAudit(false);
   }, [ar, toast]);
 
+  // ── Fetch decision engine (weather + incubation intelligence) ──────────────
+  const fetchDecision = useCallback(async () => {
+    setLoadingDecision(true);
+    try {
+      const data = await apiFetch("api/ai/decision");
+      setDecision(data);
+    } catch {}
+    setLoadingDecision(false);
+  }, []);
+
   // ── Start intervals ────────────────────────────────────────────────────────
   useEffect(() => {
     fetchState();
     fetchAudit();
+    fetchDecision();
 
-    timerRef.current = setInterval(() => fetchState(true), REFRESH_INTERVAL);
-    auditRef.current = setInterval(() => fetchAudit(), AUDIT_INTERVAL);
-    tickRef.current  = setInterval(() => setTick(t => t + 1), 1_000);
+    timerRef.current    = setInterval(() => fetchState(true), REFRESH_INTERVAL);
+    auditRef.current    = setInterval(() => fetchAudit(), AUDIT_INTERVAL);
+    decisionRef.current = setInterval(() => fetchDecision(), DECISION_INTERVAL);
+    tickRef.current     = setInterval(() => setTick(t => t + 1), 1_000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (auditRef.current) clearInterval(auditRef.current);
-      if (tickRef.current)  clearInterval(tickRef.current);
+      if (timerRef.current)    clearInterval(timerRef.current);
+      if (auditRef.current)    clearInterval(auditRef.current);
+      if (decisionRef.current) clearInterval(decisionRef.current);
+      if (tickRef.current)     clearInterval(tickRef.current);
     };
-  }, [fetchState, fetchAudit]);
+  }, [fetchState, fetchAudit, fetchDecision]);
 
   const secsSince = Math.floor((Date.now() - lastFetch) / 1000);
 
@@ -497,6 +515,137 @@ export default function BrainPage() {
           )}
         </div>
       )}
+
+      {/* ── Live Decision Engine ─────────────────────────────────────────── */}
+      {(() => {
+        if (!decision) return null;
+        const w = decision.weather ?? {};
+        const factors: any[] = decision.factors ?? [];
+        const dangerFactors  = factors.filter((f: any) => f.status === "danger");
+        const warnFactors    = factors.filter((f: any) => f.status === "warning");
+        const os = decision.overallStatus as string;
+        const hdrBg =
+          os === "danger"  ? "from-red-950 to-red-900 border-red-800" :
+          os === "warning" ? "from-amber-950 to-amber-900 border-amber-800" :
+                             "from-emerald-950 to-emerald-900 border-emerald-800";
+        const statusLabel = ar
+          ? (os === "danger" ? "⚠️ خطر" : os === "warning" ? "🟡 تحذير" : "✅ جيد")
+          : (os === "danger" ? "⚠️ Fara" : os === "warning" ? "🟡 Varning" : "✅ Bra");
+        const summary = ar ? decision.summaryAr : decision.summarySv;
+        return (
+          <div className={cn("rounded-2xl border bg-gradient-to-br text-white shadow-xl", hdrBg)}>
+            {/* Header */}
+            <button
+              className="w-full flex items-center gap-3 p-4"
+              onClick={() => setDecisionExpanded(e => !e)}
+            >
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                <Cpu className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 text-start">
+                <p className="text-sm font-black leading-tight">
+                  {ar ? "محرك القرار الحي" : "Live Beslutmotor"}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  {ar ? "طقس · فقاسة · بيئة · يتجدد كل 30 ث" : "Väder · Kläckning · Miljö · uppdateras var 30s"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  "text-[11px] px-2 py-1 rounded-lg font-bold",
+                  os === "danger"  ? "bg-red-500/30" :
+                  os === "warning" ? "bg-amber-500/30" : "bg-emerald-500/30"
+                )}>{statusLabel}</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={e => { e.stopPropagation(); fetchDecision(); }}
+                  onKeyDown={e => e.key === "Enter" && (e.stopPropagation(), fetchDecision())}
+                  className="bg-white/10 hover:bg-white/20 rounded-lg p-1.5 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={cn("w-3 h-3", loadingDecision && "animate-spin")} />
+                </span>
+                {decisionExpanded ? <ChevronUp className="w-4 h-4 text-white/60" /> : <ChevronDown className="w-4 h-4 text-white/60" />}
+              </div>
+            </button>
+
+            {decisionExpanded && (
+              <div className="px-4 pb-4 space-y-3">
+                {/* Weather strip */}
+                <div className="bg-white/8 rounded-xl p-3 grid grid-cols-4 gap-2">
+                  <div className="text-center">
+                    <p className="text-2xl leading-tight">{w.weatherIcon ?? "🌤️"}</p>
+                    <p className="text-[9px] text-white/60 mt-0.5">{ar ? (w.weatherLabelAr ?? "") : (w.weatherLabelSv ?? "")}</p>
+                  </div>
+                  {[
+                    { Icon: Thermometer, val: `${w.temperature ?? "--"}°C`, lbl: ar ? "الحرارة" : "Temp" },
+                    { Icon: Droplets,    val: `${w.humidity ?? "--"}%`,     lbl: ar ? "الرطوبة" : "Fukt" },
+                    { Icon: Wind,        val: `${w.windSpeed ?? "--"} م/ث`, lbl: ar ? "الرياح" : "Vind" },
+                  ].map(({ Icon, val, lbl }, i) => (
+                    <div key={i} className="text-center">
+                      <Icon className="w-3.5 h-3.5 text-white/50 mx-auto" />
+                      <p className="text-sm font-bold text-white mt-0.5">{val}</p>
+                      <p className="text-[9px] text-white/50">{lbl}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Summary */}
+                <p className="text-xs text-white/80 leading-relaxed">{summary}</p>
+
+                {/* Danger / Warning factors */}
+                {[...dangerFactors, ...warnFactors].slice(0, 5).map((f: any, i: number) => (
+                  <div key={i} className={cn(
+                    "rounded-xl p-3 space-y-1.5",
+                    f.status === "danger" ? "bg-red-500/20 border border-red-500/30"
+                                         : "bg-amber-500/15 border border-amber-500/25"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      {f.status === "danger"
+                        ? <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                        : <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
+                      <span className="text-xs font-bold text-white">{ar ? f.titleAr : f.titleSv}</span>
+                      <span className={cn(
+                        "ms-auto text-[9px] px-1.5 py-0.5 rounded-full font-bold",
+                        f.urgency === "immediate" ? "bg-red-500/40 text-red-200"
+                        : f.urgency === "monitor" ? "bg-amber-500/30 text-amber-200"
+                        : "bg-white/10 text-white/60"
+                      )}>
+                        {ar
+                          ? f.urgency === "immediate" ? "فوري" : f.urgency === "monitor" ? "راقب" : "منخفض"
+                          : f.urgency === "immediate" ? "Omedelbar" : f.urgency === "monitor" ? "Övervaka" : "Låg"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-white/70 leading-relaxed">{ar ? f.adviceAr : f.adviceSv}</p>
+                  </div>
+                ))}
+
+                {/* Good factors summary */}
+                {decision.goodCount > 0 && dangerFactors.length === 0 && warnFactors.length === 0 && (
+                  <div className="bg-emerald-500/15 border border-emerald-500/25 rounded-xl p-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <p className="text-xs text-emerald-200">
+                      {ar
+                        ? `${decision.goodCount} عامل بيئي ضمن النطاق الطبيعي — استمر بالعمل`
+                        : `${decision.goodCount} miljöfaktorer inom normalt intervall — fortsätt arbeta`}
+                    </p>
+                  </div>
+                )}
+
+                {/* Score + timestamp */}
+                <div className="flex items-center justify-between text-[10px] text-white/40 border-t border-white/10 pt-2">
+                  <span>
+                    {ar ? `نقاط القرار: ${decision.overallScore}/100` : `Beslutpoäng: ${decision.overallScore}/100`}
+                  </span>
+                  <span>
+                    {ar ? "موصول بالطقس المباشر — الموصل" : "Anslutet till live-väder — Mosul"}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Financial Memory ─────────────────────────────────────────────── */}
       <Section icon={DollarSign} title={ar?"الذاكرة المالية":"Ekonomiminne"}

@@ -77,6 +77,12 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
     - **Google Cloud Storage:** Accessed via Replit sidecar proxy for storing farm photos under `/objects/uploads/`.
 - **Weather API:** Open-Meteo (used in Decision Logic Layer for live weather data).
 
+## Recent Updates (April 2026 — Latest)
+
+- **Live Decision Engine UI (Brain page):** Added "محرك القرار الحي / Live Beslutmotor" section to `/brain` page. Renders after audit panel. Features: gradient header card (red/amber/green based on `overallStatus`), collapsible body with weather strip (emoji + temp + humidity + wind), Arabic/Swedish summary text, danger/warning factor cards with urgency badges (فوري/راقب/منخفض), good-factors summary, decision score + live weather attribution footer. Polls `GET /api/ai/decision` every 30 seconds via `DECISION_INTERVAL` interval.
+- **Humidity constants corrected everywhere:** `ai-engine.ts`, `advanced-ai-engine.ts`, `ai.ts`, `intelligence-engine.ts`, `decision-logic.ts`, and Swedish `hatching.tsx` — incubation phase 50–55% (opt 52), lockdown phase 70–75% (opt 72).
+- **Brain page SQL fixes:** All 9 broken queries in `routes/brain.ts` repaired (FROM/WHERE clauses, UNION aliases, streak query simplified).
+
 ## Recent Updates (April 2026)
 
 - **Real-Time Analytics Page (`/analytics`):** New dashboard with 5-second live polling. Features AnimatedNum counters, LivePulse indicator, 4 KPI cards, period comparison (today/week/month), 7-day bar chart, monthly area chart, expense pie chart, category progress bars, QuickAddForm (collapsible, category grid, feed qty/unit), feed analysis panel, health score, smart alerts, and recent transactions with delete.

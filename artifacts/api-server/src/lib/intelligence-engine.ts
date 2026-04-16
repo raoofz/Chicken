@@ -457,8 +457,8 @@ export function buildIntelligenceReport(ctx: FarmContextPayload, lang: Lang): In
       rank: 2, immediacy: "today",
       actionAr: "فحص فوري لإعدادات الفقاسة",
       actionSv: "Omedelbar kontroll av kläckarinställningar",
-      whyAr: `معدل التفقيس ${farm.overallHatchRate}% — الهدف 80%. افحص: حرارة 37.5°–38°، رطوبة 55–65%، تقليب البيض`,
-      whySv: `Kläckningsgrad ${farm.overallHatchRate}% — mål 80%. Kontrollera: temp 37.5°–38°, luftfuktighet 55–65%, äggvändning`,
+      whyAr: `معدل التفقيس ${farm.overallHatchRate}% — الهدف 80%. افحص: حرارة 37.5°–38°، رطوبة 50–55% (تحضين) / 70–75% (إقفال)، تقليب البيض`,
+      whySv: `Kläckningsgrad ${farm.overallHatchRate}% — mål 80%. Kontrollera: temp 37.5°–38°, luftfuktighet 50–55% (inkubation) / 70–75% (lockdown), äggvändning`,
     });
   } else if (warningAlerts.length > 0) {
     const w = warningAlerts[0];

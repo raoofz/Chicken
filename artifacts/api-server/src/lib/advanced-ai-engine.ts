@@ -207,7 +207,7 @@ function parseNum(v: unknown): number | null {
 
 const PS = {
   temp: { optimal: { min: 37.5, max: 37.8 }, danger: { min: 36.5, max: 38.5 } },
-  hum:  { incubation: { min: 50, max: 60, opt: 55 }, lockdown: { min: 65, max: 75, opt: 70 } },
+  hum:  { incubation: { min: 50, max: 55, opt: 52 }, lockdown: { min: 70, max: 75, opt: 72 } },
   hatch: { excellent: 85, good: 75, acceptable: 65, poor: 50 },
   // Empirical effect sizes (per unit deviation from optimal)
   effects: {

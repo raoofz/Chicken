@@ -221,9 +221,9 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
       let lockdownTempStatus: "good" | "warn" | "bad" | null = null;
       let lockdownHumidStatus: "good" | "warn" | "bad" | null = null;
       if (temp != null) { tempStatus = temp >= 37.5 && temp <= 37.8 ? "good" : Math.abs(temp - 37.65) < 0.5 ? "warn" : "bad"; }
-      if (humidity != null) { humidStatus = humidity >= 50 && humidity <= 60 ? "good" : humidity >= 45 && humidity <= 70 ? "warn" : "bad"; }
+      if (humidity != null) { humidStatus = humidity >= 50 && humidity <= 55 ? "good" : humidity >= 45 && humidity <= 65 ? "warn" : "bad"; }
       if (lockdownTemp != null) { lockdownTempStatus = lockdownTemp >= 36.8 && lockdownTemp <= 37.2 ? "good" : Math.abs(lockdownTemp - 37.0) < 0.5 ? "warn" : "bad"; }
-      if (lockdownHumidity != null) { lockdownHumidStatus = lockdownHumidity >= 65 && lockdownHumidity <= 75 ? "good" : lockdownHumidity >= 60 && lockdownHumidity <= 80 ? "warn" : "bad"; }
+      if (lockdownHumidity != null) { lockdownHumidStatus = lockdownHumidity >= 70 && lockdownHumidity <= 75 ? "good" : lockdownHumidity >= 65 && lockdownHumidity <= 80 ? "warn" : "bad"; }
       const isLockdownPhase = daysRunning != null && daysRunning >= 18;
       return {
         id: c.id, name: c.batchName ?? c.name ?? `دورة #${c.id}`, status: c.status, statusLabel,
@@ -294,10 +294,10 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
     for (const c of cycleDetails) {
       if (c.tempStatus === "bad" && c.temperature != null) alerts.push({ level: "critical", message: `${c.name}: درجة حرارة خارج النطاق (${c.temperature}°C) — مثالي 37.5–37.8°C`, category: "environment" });
       else if (c.tempStatus === "warn" && c.temperature != null) alerts.push({ level: "warning", message: `${c.name}: درجة حرارة على حدود النطاق (${c.temperature}°C)`, category: "environment" });
-      if (c.humidStatus === "bad" && c.humidity != null) alerts.push({ level: "warning", message: `${c.name}: رطوبة الحضانة خارج النطاق (${c.humidity}%) — المثالي 50–60%`, category: "environment" });
+      if (c.humidStatus === "bad" && c.humidity != null) alerts.push({ level: "warning", message: `${c.name}: رطوبة الحضانة خارج النطاق (${c.humidity}%) — المثالي 50–55%`, category: "environment" });
       if (c.lockdownTempStatus === "bad" && c.lockdownTemperature != null) alerts.push({ level: "critical", message: `${c.name}: حرارة مرحلة الفقس خارج النطاق (${c.lockdownTemperature}°C) — المثالي 36.8–37.2°C`, category: "environment" });
-      if (c.lockdownHumidStatus === "bad" && c.lockdownHumidity != null) alerts.push({ level: "critical", message: `${c.name}: رطوبة مرحلة الفقس خارج النطاق (${c.lockdownHumidity}%) — المثالي 65–75%`, category: "environment" });
-      if (c.status === "incubating" && c.daysRunning != null && c.daysRunning >= 17 && c.daysRunning <= 19) alerts.push({ level: "warning", message: `${c.name}: اليوم ${c.daysRunning} — حان وقت تحويل البيض لمرحلة الفقس (رفع الرطوبة لـ 65-75%)`, category: "cycles" });
+      if (c.lockdownHumidStatus === "bad" && c.lockdownHumidity != null) alerts.push({ level: "critical", message: `${c.name}: رطوبة مرحلة الفقس خارج النطاق (${c.lockdownHumidity}%) — المثالي 70–75%`, category: "environment" });
+      if (c.status === "incubating" && c.daysRunning != null && c.daysRunning >= 17 && c.daysRunning <= 19) alerts.push({ level: "warning", message: `${c.name}: اليوم ${c.daysRunning} — حان وقت تحويل البيض لمرحلة الفقس (رفع الرطوبة لـ 70-75%)`, category: "cycles" });
       else if (c.status === "incubating" && c.daysRunning != null && c.daysRunning > 21) alerts.push({ level: "warning", message: `${c.name}: مرّ ${c.daysRunning} يوم على بداية الحضانة — تحقق من الفقس`, category: "cycles" });
     }
     if (flockList.length === 0) alerts.push({ level: "info", message: "لا يوجد قطعان مسجّلة في النظام", category: "flocks" });
