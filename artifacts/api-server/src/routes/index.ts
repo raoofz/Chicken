@@ -14,6 +14,7 @@ import storageRouter from "./storage";
 import noteImagesRouter from "./noteImages";
 import transactionsRouter from "./transactions";
 import analyticsRouter from "./analytics";
+import brainRouter from "./brain";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(storageRouter);
 router.use(noteImagesRouter);
 router.use(transactionsRouter);
 router.use(analyticsRouter);
+router.use(brainRouter);
 
 export default router;

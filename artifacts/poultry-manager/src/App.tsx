@@ -20,6 +20,7 @@ import PrecisionAnalysis from "@/pages/precision-analysis";
 import Finance from "@/pages/finance";
 import Analytics from "@/pages/analytics";
 import FarmLab from "@/pages/farm-lab";
+import Brain from "@/pages/brain";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ function AppRoutes() {
         <Route path="/finance" component={Finance} />
         <Route path="/analytics" component={Analytics} />
         <Route path="/farm-lab" component={FarmLab} />
+        <Route path="/brain" component={Brain} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>

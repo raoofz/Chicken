@@ -33,6 +33,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.settings": { ar: "الإعدادات", sv: "Inställningar" },
   "nav.finance":    { ar: "المالية والإنتاج",  sv: "Ekonomi"        },
   "nav.analytics":  { ar: "التحليلات الفورية", sv: "Realtidsanalys"  },
+  "nav.brain":      { ar: "ذاكرة المزرعة",     sv: "Gårdsminne"     },
   "nav.farmLab":    { ar: "مختبر المزرعة",     sv: "Gårdslabb"      },
 
   "finance.title": { ar: "المالية والإنتاج", sv: "Ekonomi & Produktion" },
