@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, ne, sql } from "drizzle-orm";
 import { db, hatchingCyclesTable } from "@workspace/db";
+import { autoResolveFromCycles } from "../lib/self-monitor.js";
 import {
   CreateHatchingCycleBody,
   UpdateHatchingCycleBody,
@@ -101,6 +102,16 @@ router.put("/hatching-cycles/:id", async (req, res) => {
   });
 
   if (!cycle) { res.status(404).json({ error: "Not found" }); return; }
+
+  // Feedback loop: when a cycle completes, auto-resolve matching AI predictions
+  if (body.status === "completed" && cycle.eggsHatched != null && cycle.eggsSet > 0) {
+    const allCompleted = await db.select().from(hatchingCyclesTable)
+      .where(eq(hatchingCyclesTable.status, "completed"));
+    autoResolveFromCycles(
+      allCompleted.map(c => ({ startDate: c.startDate, eggsSet: c.eggsSet, eggsHatched: c.eggsHatched }))
+    ).catch(() => { /* non-critical, never block the response */ });
+  }
+
   res.json(formatCycle(cycle));
 });
 

@@ -1,6 +1,7 @@
-import { Router } from "express";
-import { db } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { Router, type Request, type Response } from "express";
+import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, flockProductionLogsTable, flockHealthLogsTable } from "@workspace/db";
+import { sql, desc } from "drizzle-orm";
+import { runBrainOrchestrator } from "../lib/brain-orchestrator.js";
 
 const router = Router();
 
@@ -506,6 +507,133 @@ router.get("/brain/stream", (req, res) => {
     closed = true;
     clearInterval(interval);
     clearInterval(pingInterval);
+  });
+});
+
+// ─── Shared Data Fetcher for Orchestrator ─────────────────────────────────────
+async function fetchUnifiedFarmData() {
+  const [flocks, hatchingCycles, tasks, goals, notes, productionLogs, healthLogs] = await Promise.all([
+    db.select().from(flocksTable),
+    db.select().from(hatchingCyclesTable),
+    db.select().from(tasksTable),
+    db.select().from(goalsTable),
+    db.select().from(dailyNotesTable).orderBy(desc(dailyNotesTable.date)).limit(60),
+    db.select().from(flockProductionLogsTable).orderBy(desc(flockProductionLogsTable.date)).limit(180),
+    db.select().from(flockHealthLogsTable).orderBy(desc(flockHealthLogsTable.date)).limit(120),
+  ]);
+  return { flocks, hatchingCycles: hatchingCycles as any[], tasks, goals: goals as any[], notes, productionLogs: productionLogs as any[], healthLogs: healthLogs as any[] };
+}
+
+// ─── Analysis cache (1 minute — analysis is expensive) ────────────────────────
+let analyzeCache: { ts: number; data: any; hash: string } | null = null;
+const ANALYZE_TTL = 60_000;
+
+// ─── SSE: connected clients for /brain/analyze-stream ─────────────────────────
+const analyzeClients = new Set<Response>();
+
+function broadcastAnalysis(data: any) {
+  const payload = `event: analysis\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of analyzeClients) {
+    try { client.write(payload); } catch { analyzeClients.delete(client); }
+  }
+}
+
+// ─── /api/brain/analyze  ──────────────────────────────────────────────────────
+// Full orchestrated AI analysis — combines all engines, returns BrainOutput
+router.get("/brain/analyze", async (req: Request, res: Response) => {
+  const force = req.query.force === "1";
+  const lang = (req.query.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
+
+  // Serve cache if fresh
+  if (!force && analyzeCache && Date.now() - analyzeCache.ts < ANALYZE_TTL) {
+    res.setHeader("X-Cache", "HIT");
+    res.json(analyzeCache.data);
+    return;
+  }
+
+  try {
+    const rawData = await fetchUnifiedFarmData();
+    const result = await runBrainOrchestrator(rawData, lang);
+    analyzeCache = { ts: Date.now(), data: result, hash: result.generatedAt };
+    res.setHeader("X-Cache", "MISS");
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message ?? "فشل التحليل الموحد" });
+  }
+});
+
+// ─── /api/brain/analyze-stream  ───────────────────────────────────────────────
+// Real-time SSE: pushes full BrainOutput whenever farm data changes
+// Also pushes immediately on connect so client has initial state
+router.get("/brain/analyze-stream", async (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  let lastHash = "";
+  let closed = false;
+
+  analyzeClients.add(res);
+
+  // Send last known analysis immediately if available
+  if (analyzeCache) {
+    res.write(`event: analysis\ndata: ${JSON.stringify(analyzeCache.data)}\n\n`);
+    lastHash = analyzeCache.hash;
+  }
+
+  const checkAndPush = async () => {
+    if (closed) return;
+    try {
+      // Quick fingerprint check (counts only — very cheap)
+      const snap = await db.execute(sql`
+        SELECT
+          (SELECT COUNT(*) FROM transactions)            AS tx_count,
+          (SELECT MAX(created_at) FROM transactions)    AS tx_last,
+          (SELECT COUNT(*) FROM flocks)                 AS flock_count,
+          (SELECT COUNT(*) FROM hatching_cycles)        AS cycle_count,
+          (SELECT COUNT(*) FROM tasks)                  AS task_count,
+          (SELECT COUNT(*) FROM flock_production_logs)  AS prod_count,
+          (SELECT COUNT(*) FROM flock_health_logs)      AS health_count
+      `);
+      const row = snap.rows[0] as any;
+      const hash = [row.tx_count, row.tx_last, row.flock_count, row.cycle_count, row.task_count, row.prod_count, row.health_count].join(":");
+
+      if (hash !== lastHash) {
+        lastHash = hash;
+        stateCache = null; // invalidate brain/state cache too
+        analyzeCache = null; // force fresh analysis
+
+        // Run full orchestration
+        const rawData = await fetchUnifiedFarmData();
+        const lang = (req.query.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
+        const result = await runBrainOrchestrator(rawData, lang);
+        analyzeCache = { ts: Date.now(), data: result, hash: result.generatedAt };
+        broadcastAnalysis(result);
+        lastHash = hash;
+      } else {
+        // No change — send tick so client knows system is alive
+        if (!closed) res.write(`event: tick\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+      }
+    } catch {
+      /* silently continue */
+    }
+  };
+
+  // Initial check
+  await checkAndPush();
+
+  const interval = setInterval(checkAndPush, 10_000); // check every 10s
+  const pingInterval = setInterval(() => {
+    if (!closed) res.write(": ping\n\n");
+  }, 25_000);
+
+  req.on("close", () => {
+    closed = true;
+    clearInterval(interval);
+    clearInterval(pingInterval);
+    analyzeClients.delete(res);
   });
 });
 
