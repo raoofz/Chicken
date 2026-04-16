@@ -1,27 +1,26 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Thermometer, Droplets, Wind, AlertTriangle, CheckCircle2, RefreshCw, MapPin, Clock } from "lucide-react";
+import { Thermometer, Droplets, Wind, AlertTriangle, CheckCircle2, RefreshCw, MapPin, Clock, FlaskConical, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const MOSUL_LAT = 36.3354;
 const MOSUL_LON = 43.1188;
 
 const WEATHER_CODES: Record<number, { ar: string; sv: string; icon: string }> = {
-  0: { ar: "صافٍ", sv: "Klart", icon: "☀️" },
-  1: { ar: "صافٍ جزئياً", sv: "Mestadels klart", icon: "🌤️" },
-  2: { ar: "غائم جزئياً", sv: "Delvis molnigt", icon: "⛅" },
-  3: { ar: "غائم", sv: "Mulet", icon: "☁️" },
-  45: { ar: "ضباب", sv: "Dimma", icon: "🌫️" },
-  48: { ar: "ضباب جليدي", sv: "Isimma", icon: "🌫️" },
-  51: { ar: "رذاذ خفيف", sv: "Lätt duggregn", icon: "🌦️" },
-  61: { ar: "مطر خفيف", sv: "Lätt regn", icon: "🌧️" },
-  63: { ar: "مطر معتدل", sv: "Måttligt regn", icon: "🌧️" },
-  65: { ar: "مطر غزير", sv: "Kraftigt regn", icon: "⛈️" },
-  80: { ar: "زخات مطر", sv: "Regnskurar", icon: "🌦️" },
-  95: { ar: "عاصفة رعدية", sv: "Åskstorm", icon: "⛈️" },
+  0:  { ar: "صافٍ",           sv: "Klart",              icon: "☀️" },
+  1:  { ar: "صافٍ جزئياً",    sv: "Mestadels klart",    icon: "🌤️" },
+  2:  { ar: "غائم جزئياً",    sv: "Delvis molnigt",     icon: "⛅" },
+  3:  { ar: "غائم",           sv: "Mulet",              icon: "☁️" },
+  45: { ar: "ضباب",           sv: "Dimma",              icon: "🌫️" },
+  48: { ar: "ضباب جليدي",     sv: "Isimma",             icon: "🌫️" },
+  51: { ar: "رذاذ خفيف",      sv: "Lätt duggregn",      icon: "🌦️" },
+  61: { ar: "مطر خفيف",       sv: "Lätt regn",          icon: "🌧️" },
+  63: { ar: "مطر معتدل",      sv: "Måttligt regn",      icon: "🌧️" },
+  65: { ar: "مطر غزير",       sv: "Kraftigt regn",      icon: "⛈️" },
+  80: { ar: "زخات مطر",       sv: "Regnskurar",         icon: "🌦️" },
+  95: { ar: "عاصفة رعدية",    sv: "Åskstorm",           icon: "⛈️" },
 };
 
 interface WeatherData {
@@ -33,39 +32,113 @@ interface WeatherData {
   updatedAt: Date;
 }
 
+interface CycleSummary {
+  optimalTemp: number;
+  optimalHumid1: number;
+  bestRate: number;
+  cycleCount: number;
+  source: "history" | "standard";
+}
+
 interface Alert {
-  level: "warning" | "critical" | "ok";
+  level: "warning" | "critical" | "ok" | "info";
   messageAr: string;
   messageSv: string;
 }
 
-function analyzeIncubationAlerts(weather: WeatherData): Alert[] {
+function calibrateFromCycles(cycles: any[]): CycleSummary {
+  const completed = cycles
+    .filter(c => c.status === "completed" && c.eggsHatched != null && c.eggsSet > 0)
+    .map(c => ({
+      rate: c.eggsHatched / c.eggsSet,
+      temp: c.temperature ?? null,
+      humidity: c.humidity ?? null,
+    }))
+    .sort((a, b) => b.rate - a.rate);
+
+  const withSettings = completed.filter(c => c.temp != null && c.humidity != null);
+  const top = withSettings.slice(0, Math.min(2, withSettings.length));
+
+  if (top.length === 0) {
+    return { optimalTemp: 37.5, optimalHumid1: 55, bestRate: 0, cycleCount: completed.length, source: "standard" };
+  }
+
+  const avgTemp = top.reduce((s, c) => s + c.temp!, 0) / top.length;
+  const avgHumid = top.reduce((s, c) => s + c.humidity!, 0) / top.length;
+  const bestRate = Math.round(completed[0].rate * 100);
+
+  return {
+    optimalTemp: Math.round(avgTemp * 10) / 10,
+    optimalHumid1: Math.round(avgHumid),
+    bestRate,
+    cycleCount: completed.length,
+    source: "history",
+  };
+}
+
+function adjustHumidityForOutdoor(baseHumid: number, outdoorHumid: number): number {
+  if (outdoorHumid >= 80) return Math.max(44, baseHumid - Math.round((outdoorHumid - 65) * 0.35));
+  if (outdoorHumid >= 70) return Math.max(48, baseHumid - Math.round((outdoorHumid - 65) * 0.25));
+  if (outdoorHumid <= 30) return Math.min(62, baseHumid + Math.round((35 - outdoorHumid) * 0.25));
+  if (outdoorHumid <= 40) return Math.min(60, baseHumid + Math.round((40 - outdoorHumid) * 0.15));
+  return baseHumid;
+}
+
+function buildAlerts(weather: WeatherData, calibrated: CycleSummary, adjustedHumid: number): Alert[] {
   const alerts: Alert[] = [];
-  if (weather.temperature >= 40) {
-    alerts.push({ level: "critical", messageAr: "⚠️ حرارة خارجية حرجة (+٤٠°م) — خطر ارتفاع حرارة الفقاسة، افحصها فوراً", messageSv: "⚠️ Kritisk utomhustemperatur (+40°C) — risk för överhettning i kläckmaskinen!" });
-  } else if (weather.temperature >= 35) {
-    alerts.push({ level: "warning", messageAr: "🌡️ حرارة خارجية مرتفعة (٣٥°م+) — راقب حرارة الفقاسة بكثرة", messageSv: "🌡️ Hög utomhustemperatur (35°C+) — övervaka kläckmaskinens temperatur noga" });
+  const outdoorH = weather.humidity;
+  const outdoorT = weather.temperature;
+
+  if (outdoorT >= 40) {
+    alerts.push({ level: "critical", messageAr: "⚠️ حرارة خارجية حرجة (+40°م) — خطر ارتفاع حرارة الفقاسة، افحصها فوراً!", messageSv: "⚠️ Kritisk utomhustemperatur — risk för överhettning i kläckmaskinen!" });
+  } else if (outdoorT >= 35) {
+    alerts.push({ level: "warning", messageAr: "🌡️ حرارة خارجية مرتفعة (35°م+) — راقب حرارة الفقاسة كل ساعة", messageSv: "🌡️ Hög utomhustemperatur — övervaka kläckmaskinens temperatur noga" });
   }
-  if (weather.humidity < 30) {
-    alerts.push({ level: "warning", messageAr: "💧 رطوبة خارجية منخفضة جداً — أضف ماء أكثر في الفقاسة للحفاظ على ٥٥٪", messageSv: "💧 Mycket låg utomhusfuktighet — lägg till mer vatten i kläckmaskinen för att hålla 55%" });
-  } else if (weather.humidity > 80) {
-    alerts.push({ level: "warning", messageAr: "💦 رطوبة خارجية مرتفعة — قد ترتفع رطوبة الفقاسة، قلل الماء قليلاً", messageSv: "💦 Hög utomhusfuktighet — kläckmaskinens fuktighet kan stiga, minska vattnet lite" });
+
+  if (outdoorH >= 80) {
+    alerts.push({ level: "warning", messageAr: `💦 رطوبة خارجية مرتفعة جداً (${outdoorH}٪) — قلل الماء بشكل ملحوظ. استهدف ${adjustedHumid}٪ داخل الفقاسة (بدلاً من ${calibrated.optimalHumid1}٪)`, messageSv: `💦 Mycket hög utomhusfuktighet (${outdoorH}%) — minska vattnet kraftigt, sikta på ${adjustedHumid}% inuti` });
+  } else if (outdoorH >= 70) {
+    alerts.push({ level: "warning", messageAr: `💧 رطوبة خارجية مرتفعة (${outdoorH}٪) — خفف الماء في الفقاسة. اضبط على ${adjustedHumid}٪ بدلاً من ${calibrated.optimalHumid1}٪`, messageSv: `💧 Hög utomhusfuktighet (${outdoorH}%) — minska vattnet lite, sikta på ${adjustedHumid}% inuti` });
+  } else if (outdoorH <= 30) {
+    alerts.push({ level: "warning", messageAr: `🏜️ رطوبة خارجية منخفضة جداً (${outdoorH}٪) — أضف ماء إضافياً. استهدف ${adjustedHumid}٪ داخل الفقاسة`, messageSv: `🏜️ Mycket låg utomhusfuktighet (${outdoorH}%) — lägg till mer vatten, sikta på ${adjustedHumid}%` });
+  } else if (outdoorH <= 40) {
+    alerts.push({ level: "info", messageAr: `💧 رطوبة منخفضة قليلاً (${outdoorH}٪) — راقب مستوى الماء. استهدف ${adjustedHumid}٪ داخلياً`, messageSv: `💧 Något låg utomhusfuktighet (${outdoorH}%) — håll koll på vattennivån` });
   }
+
   if (weather.windSpeed > 10) {
-    alerts.push({ level: "warning", messageAr: "💨 رياح قوية — تأكد من إغلاق نوافذ غرفة الفقاسة جيداً", messageSv: "💨 Starka vindar — se till att kläckrummets fönster är ordentligt stängda" });
+    alerts.push({ level: "warning", messageAr: "💨 رياح قوية — أغلق نوافذ غرفة الفقاسة جيداً", messageSv: "💨 Starka vindar — stäng kläckrummets fönster ordentligt" });
   }
+
   if (alerts.length === 0) {
-    alerts.push({ level: "ok", messageAr: "✅ الطقس مناسب — ظروف الفقاسة ضمن المعدل الطبيعي", messageSv: "✅ Vädret är lämpligt — kläckförhållandena inom normala gränser" });
+    if (calibrated.source === "history" && calibrated.bestRate < 60) {
+      alerts.push({ level: "info", messageAr: `📊 الطقس مناسب — لكن بيانات مزرعتك تُظهر أفضل نسبة فقس ${calibrated.bestRate}٪. الهدف 75٪ يتطلب ضبطاً دقيقاً للرطوبة والتقليب`, messageSv: `📊 Vädret lämpligt — din bästa kläckningsgrad är ${calibrated.bestRate}%, mål 75% kräver fin-justering` });
+    } else {
+      alerts.push({ level: "ok", messageAr: "✅ الطقس مناسب — ظروف الفقاسة ضمن النطاق الجيد", messageSv: "✅ Vädret är lämpligt — kläckförhållandena inom goda gränser" });
+    }
   }
+
   return alerts;
 }
 
 export function WeatherWidget() {
   const { t, lang } = useLanguage();
   const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [cycles, setCycles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [secondsAgo, setSecondsAgo] = useState(0);
+
+  const fetchCycles = useCallback(async () => {
+    try {
+      const resp = await fetch("/api/hatching-cycles", { credentials: "include" });
+      if (resp.ok) {
+        const data = await resp.json();
+        setCycles(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // silent — weather still works without cycle data
+    }
+  }, []);
 
   const fetchWeather = useCallback(async () => {
     try {
@@ -91,11 +164,17 @@ export function WeatherWidget() {
     }
   }, []);
 
-  useEffect(() => {
+  const refreshAll = useCallback(() => {
     fetchWeather();
-    const interval = setInterval(fetchWeather, 60000);
-    return () => clearInterval(interval);
-  }, [fetchWeather]);
+    fetchCycles();
+  }, [fetchWeather, fetchCycles]);
+
+  useEffect(() => {
+    refreshAll();
+    const wi = setInterval(fetchWeather, 60_000);
+    const ci = setInterval(fetchCycles, 120_000);
+    return () => { clearInterval(wi); clearInterval(ci); };
+  }, [refreshAll, fetchWeather, fetchCycles]);
 
   useEffect(() => {
     const tick = setInterval(() => setSecondsAgo(s => s + 1), 1000);
@@ -103,7 +182,12 @@ export function WeatherWidget() {
   }, [weather]);
 
   const wDesc = weather ? (WEATHER_CODES[weather.weatherCode] ?? { ar: "غير معروف", sv: "Okänt", icon: "🌡️" }) : null;
-  const alerts = weather ? analyzeIncubationAlerts(weather) : [];
+
+  const calibrated = calibrateFromCycles(cycles);
+  const adjustedHumid1 = weather ? adjustHumidityForOutdoor(calibrated.optimalHumid1, weather.humidity) : calibrated.optimalHumid1;
+  const adjustedHumid2 = weather ? adjustHumidityForOutdoor(calibrated.optimalHumid1 + 12, weather.humidity) : calibrated.optimalHumid1 + 12;
+  const humidChanged = adjustedHumid1 !== calibrated.optimalHumid1;
+  const alerts = weather ? buildAlerts(weather, calibrated, adjustedHumid1) : [];
 
   return (
     <Card className="border-none shadow-sm overflow-hidden">
@@ -118,7 +202,7 @@ export function WeatherWidget() {
               <p className="text-[10px] text-muted-foreground">{lang === "ar" ? "الموصل — إمام غربي" : "Mosul — Imam Al-Gharbi"}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={fetchWeather} disabled={loading}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refreshAll} disabled={loading}>
             <RefreshCw className={cn("w-3.5 h-3.5", loading && "animate-spin")} />
           </Button>
         </div>
@@ -132,13 +216,12 @@ export function WeatherWidget() {
         {error && !weather && (
           <div className="py-3 text-center space-y-2">
             <p className="text-xs text-destructive">{t("weather.error")}</p>
-            <Button variant="outline" size="sm" onClick={fetchWeather} className="h-7 text-xs">{t("weather.retry")}</Button>
+            <Button variant="outline" size="sm" onClick={refreshAll} className="h-7 text-xs">{t("weather.retry")}</Button>
           </div>
         )}
 
         {weather && wDesc && (
           <>
-            {/* Main weather display */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-4xl">{wDesc.icon}</span>
@@ -163,23 +246,60 @@ export function WeatherWidget() {
               </div>
             </div>
 
-            {/* Optimal incubation reference */}
-            <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2.5 space-y-1.5 border border-amber-200/50">
-              <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">{t("weather.incubation")}</p>
+            {/* Smart calibrated incubation targets */}
+            <div className={cn(
+              "rounded-lg p-2.5 space-y-1.5 border",
+              calibrated.source === "history"
+                ? "bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200/60"
+                : "bg-amber-50 dark:bg-amber-950/20 border-amber-200/50"
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  {calibrated.source === "history"
+                    ? <FlaskConical className="w-3 h-3 text-indigo-600" />
+                    : <Thermometer className="w-3 h-3 text-amber-600" />
+                  }
+                  <p className={cn("text-[10px] font-semibold", calibrated.source === "history" ? "text-indigo-700" : "text-amber-700")}>
+                    {calibrated.source === "history"
+                      ? (lang === "ar" ? `مُعيَّر من ${calibrated.cycleCount} دورات — أفضل نسبة ${calibrated.bestRate}٪` : `Kalibrerat från ${calibrated.cycleCount} omgångar — bästa ${calibrated.bestRate}%`)
+                      : t("weather.incubation")
+                    }
+                  </p>
+                </div>
+                {humidChanged && (
+                  <span className="text-[9px] text-amber-600 font-medium bg-amber-100 px-1.5 py-0.5 rounded-full border border-amber-300">
+                    {lang === "ar" ? "معدَّل للطقس" : "Väderanpassat"}
+                  </span>
+                )}
+              </div>
+
               <div className="grid grid-cols-3 gap-1.5 text-[9px]">
                 <div className="text-center bg-white dark:bg-black/20 rounded p-1.5">
-                  <div className="font-bold text-amber-700">37.5°C</div>
+                  <div className="font-bold text-amber-700">{calibrated.optimalTemp}°C</div>
                   <div className="text-muted-foreground">{t("weather.incub.temp")}</div>
                 </div>
-                <div className="text-center bg-white dark:bg-black/20 rounded p-1.5">
-                  <div className="font-bold text-blue-600">55%</div>
+                <div className={cn("text-center rounded p-1.5", humidChanged ? "bg-amber-100 border border-amber-300" : "bg-white dark:bg-black/20")}>
+                  <div className={cn("font-bold", humidChanged ? "text-amber-700" : "text-blue-600")}>
+                    {adjustedHumid1}%
+                    {humidChanged && <span className="block text-[8px] line-through opacity-50">{calibrated.optimalHumid1}%</span>}
+                  </div>
                   <div className="text-muted-foreground">{t("weather.incub.humid1")}</div>
                 </div>
-                <div className="text-center bg-white dark:bg-black/20 rounded p-1.5">
-                  <div className="font-bold text-blue-600">65%</div>
+                <div className={cn("text-center rounded p-1.5", humidChanged ? "bg-amber-100 border border-amber-300" : "bg-white dark:bg-black/20")}>
+                  <div className={cn("font-bold", humidChanged ? "text-amber-700" : "text-blue-600")}>
+                    {adjustedHumid2}%
+                    {humidChanged && <span className="block text-[8px] line-through opacity-50">{calibrated.optimalHumid1 + 12}%</span>}
+                  </div>
                   <div className="text-muted-foreground">{t("weather.incub.humid2")}</div>
                 </div>
               </div>
+
+              {calibrated.source === "history" && calibrated.bestRate < 75 && (
+                <div className="flex items-center gap-1 text-[9px] text-indigo-600/80">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  <span>{lang === "ar" ? `الهدف 75٪ — فجوة ${75 - calibrated.bestRate} نقطة للتحسين` : `Mål 75% — ${75 - calibrated.bestRate} poäng att förbättra`}</span>
+                </div>
+              )}
             </div>
 
             {/* Alerts */}
@@ -187,9 +307,10 @@ export function WeatherWidget() {
               {alerts.map((alert, i) => (
                 <div key={i} className={cn(
                   "flex items-start gap-2 rounded-lg p-2 text-xs",
-                  alert.level === "critical" && "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200/50",
-                  alert.level === "warning" && "bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200/50",
-                  alert.level === "ok" && "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50",
+                  alert.level === "critical" && "bg-red-50 dark:bg-red-950/20 text-red-700 border border-red-200/50",
+                  alert.level === "warning"  && "bg-amber-50 dark:bg-amber-950/20 text-amber-700 border border-amber-200/50",
+                  alert.level === "info"     && "bg-blue-50 dark:bg-blue-950/20 text-blue-700 border border-blue-200/50",
+                  alert.level === "ok"       && "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 border border-emerald-200/50",
                 )}>
                   {alert.level === "ok"
                     ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -200,7 +321,6 @@ export function WeatherWidget() {
               ))}
             </div>
 
-            {/* Updated time */}
             <div className="flex items-center gap-1 text-[9px] text-muted-foreground justify-center">
               <Clock className="w-2.5 h-2.5" />
               <span>{t("weather.updated")}: {secondsAgo < 60 ? `${secondsAgo}s` : `${Math.floor(secondsAgo / 60)}m`}</span>
