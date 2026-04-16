@@ -12,8 +12,8 @@
  * Smart linking: when creating an activity, the form suggests
  * open tasks in the same category, allowing one-click linkage.
  */
-import { useState, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useRef } from "react";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import {
   useListTasks,
   useUpdateTask,
@@ -29,16 +29,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   CheckCircle2, Circle, Plus, ClipboardList, Activity,
   Layers, AlertTriangle, Clock, Link2, Trash2, Calendar,
   ShieldCheck, ShieldAlert, RefreshCw, Zap, XCircle,
+  FileText, Sparkles, Loader2, MessageSquare,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+// ── Notes API helpers ────────────────────────────────────────────────────────
+const NOTE_CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  general:     { bg: "bg-slate-50",   text: "text-slate-700",  border: "border-slate-200" },
+  health:      { bg: "bg-red-50",     text: "text-red-700",    border: "border-red-200" },
+  production:  { bg: "bg-amber-50",   text: "text-amber-700",  border: "border-amber-200" },
+  feeding:     { bg: "bg-green-50",   text: "text-green-700",  border: "border-green-200" },
+  maintenance: { bg: "bg-blue-50",    text: "text-blue-700",   border: "border-blue-200" },
+  observation: { bg: "bg-purple-50",  text: "text-purple-700", border: "border-purple-200" },
+  incubator:   { bg: "bg-orange-50",  text: "text-orange-700", border: "border-orange-200" },
+  flock:       { bg: "bg-teal-50",    text: "text-teal-700",   border: "border-teal-200" },
+};
+const NOTE_CAT_KEYS = ["general","health","production","feeding","maintenance","observation","incubator","flock"] as const;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.BASE_URL ?? "/";
@@ -337,10 +353,89 @@ export default function OperationsPage() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const [tab,         setTab]         = useState<"overview" | "tasks" | "logs" | "system">("overview");
+  const [tab,         setTab]         = useState<"overview" | "tasks" | "logs" | "notes" | "system">("overview");
   const [taskDialog,  setTaskDialog]  = useState(false);
   const [actDialog,   setActDialog]   = useState(false);
   const [filter,      setFilter]      = useState<"all" | "pending" | "done">("all");
+
+  // ── Notes state ────────────────────────────────────────────────────────────
+  const [noteDialog,    setNoteDialog]    = useState(false);
+  const [noteContent,   setNoteContent]   = useState("");
+  const [noteCategory,  setNoteCategory]  = useState("general");
+  const [noteDate,      setNoteDate]      = useState(new Date().toISOString().split("T")[0]);
+  const [noteDeleteId,  setNoteDeleteId]  = useState<number | null>(null);
+  const [smartLoading,  setSmartLoading]  = useState(false);
+  const [smartResult,   setSmartResult]   = useState<{ totalSaved: number; summary: string } | null>(null);
+  const pendingNoteRef  = useRef<{ content: string; date: string } | null>(null);
+
+  const { data: notes = [], isLoading: notesLoading } = useQuery({
+    queryKey: ["notes"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE_URL}api/notes`, { credentials: "include" });
+      if (!r.ok) throw new Error("notes fetch failed");
+      return r.json();
+    },
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: async (data: { content: string; date: string; category: string }) => {
+      const r = await fetch(`${BASE_URL}api/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error("create note failed");
+      return r.json();
+    },
+    onSuccess: async () => {
+      qc.invalidateQueries({ queryKey: ["notes"] });
+      toast({ title: ar ? "تمت إضافة الملاحظة" : "Anteckning sparad" });
+      setNoteDialog(false);
+      const pending = pendingNoteRef.current;
+      setNoteContent("");
+      pendingNoteRef.current = null;
+      if (pending && pending.content.trim().length > 5) {
+        setSmartLoading(true);
+        setSmartResult(null);
+        try {
+          const r = await fetch(`${BASE_URL}api/ai/smart-analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text: pending.content, date: pending.date, lang }),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.totalSaved > 0) {
+              setSmartResult(data);
+              qc.invalidateQueries({ queryKey: ["transactions"] });
+              qc.invalidateQueries({ queryKey: ["transactions-summary"] });
+            }
+          }
+        } catch { /* silent */ }
+        finally { setSmartLoading(false); }
+      }
+    },
+    onError: () => toast({ title: ar ? "فشل إضافة الملاحظة" : "Misslyckades", variant: "destructive" }),
+  });
+
+  const delNoteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${BASE_URL}api/notes/${id}`, { method: "DELETE", credentials: "include" });
+      if (!r.ok && r.status !== 204) throw new Error("delete note failed");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notes"] });
+      toast({ title: ar ? "تم حذف الملاحظة" : "Anteckning raderad" });
+      setNoteDeleteId(null);
+    },
+    onError: () => toast({ title: ar ? "فشل الحذف" : "Misslyckades", variant: "destructive" }),
+  });
+
+  const noteCatLabel = (c: string) => ar
+    ? { general: "عام", health: "صحة", production: "إنتاج", feeding: "تغذية", maintenance: "صيانة", observation: "ملاحظة", incubator: "حاضنة", flock: "قطيع" }[c] ?? c
+    : { general: "Allmänt", health: "Hälsa", production: "Produktion", feeding: "Matning", maintenance: "Underhåll", observation: "Observation", incubator: "Inkubator", flock: "Flock" }[c] ?? c;
 
   // ── System Health state ───────────────────────────────────────────────────
   type IntegrityResult = {
@@ -496,43 +591,109 @@ export default function OperationsPage() {
             {ar ? "مهامك المخططة + سجل ما نُفِّذ — في مكان واحد" : "Planerade uppgifter + registrerade aktiviteter på ett ställe"}
           </p>
         </div>
-        {isAdmin && (
-          <div className="flex gap-2">
-            <Dialog open={taskDialog} onOpenChange={setTaskDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="gap-1.5">
-                  <ClipboardList className="w-4 h-4" />
-                  {ar ? "مهمة جديدة" : "Ny uppgift"}
+        <div className="flex gap-2 flex-wrap">
+          <Dialog open={noteDialog} onOpenChange={setNoteDialog}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <FileText className="w-4 h-4" />
+                {ar ? "ملاحظة جديدة" : "Ny anteckning"}
+              </Button>
+            </DialogTrigger>
+            <DialogContent dir={ar ? "rtl" : "ltr"} className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  {ar ? "إضافة ملاحظة يومية" : "Lägg till anteckning"}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 pt-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium block mb-1">{ar ? "التاريخ" : "Datum"}</label>
+                    <input type="date" value={noteDate} onChange={e => setNoteDate(e.target.value)}
+                      className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium block mb-1">{ar ? "الفئة" : "Kategori"}</label>
+                    <Select value={noteCategory} onValueChange={setNoteCategory}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {NOTE_CAT_KEYS.map(v => (
+                          <SelectItem key={v} value={v}>{noteCatLabel(v)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">{ar ? "المحتوى" : "Innehåll"}</label>
+                  <Textarea
+                    placeholder={ar ? "اكتب ملاحظتك هنا..." : "Skriv din anteckning här..."}
+                    value={noteContent}
+                    onChange={e => setNoteContent(e.target.value)}
+                    className="min-h-[120px] resize-none"
+                  />
+                </div>
+                <div className="bg-purple-50 dark:bg-purple-950/20 rounded-lg p-2.5 flex items-start gap-2 border border-purple-100 dark:border-purple-800/30">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
+                  <p className="text-xs text-purple-700 dark:text-purple-300">
+                    {ar ? "سيقوم الذكاء الاصطناعي بتحليل ملاحظتك واستخراج البيانات تلقائياً" : "AI analyserar anteckningen och extraherar data automatiskt"}
+                  </p>
+                </div>
+                <Button
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"
+                  disabled={!noteContent.trim() || addNoteMutation.isPending}
+                  onClick={() => {
+                    pendingNoteRef.current = { content: noteContent, date: noteDate };
+                    addNoteMutation.mutate({ content: noteContent, date: noteDate, category: noteCategory });
+                  }}
+                >
+                  {addNoteMutation.isPending
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />{ar ? "جاري الحفظ..." : "Sparar..."}</>
+                    : <><Sparkles className="w-4 h-4" />{ar ? "حفظ الملاحظة" : "Spara anteckning"}</>}
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{ar ? "إضافة مهمة" : "Lägg till uppgift"}</DialogTitle>
-                </DialogHeader>
-                <CreateTaskForm ar={ar} onSuccess={refresh} onClose={() => setTaskDialog(false)} />
-              </DialogContent>
-            </Dialog>
+              </div>
+            </DialogContent>
+          </Dialog>
 
-            <Dialog open={actDialog} onOpenChange={setActDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                  <Activity className="w-4 h-4" />
-                  {ar ? "تسجيل نشاط" : "Registrera aktivitet"}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{ar ? "تسجيل نشاط تم تنفيذه" : "Registrera utförd aktivitet"}</DialogTitle>
-                </DialogHeader>
-                <CreateActivityForm ar={ar} openTasks={openTasks} onSuccess={refresh} onClose={() => setActDialog(false)} />
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
+          {isAdmin && (
+            <>
+              <Dialog open={taskDialog} onOpenChange={setTaskDialog}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <ClipboardList className="w-4 h-4" />
+                    {ar ? "مهمة جديدة" : "Ny uppgift"}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{ar ? "إضافة مهمة" : "Lägg till uppgift"}</DialogTitle>
+                  </DialogHeader>
+                  <CreateTaskForm ar={ar} onSuccess={refresh} onClose={() => setTaskDialog(false)} />
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={actDialog} onOpenChange={setActDialog}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Activity className="w-4 h-4" />
+                    {ar ? "تسجيل نشاط" : "Registrera aktivitet"}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>{ar ? "تسجيل نشاط تم تنفيذه" : "Registrera utförd aktivitet"}</DialogTitle>
+                  </DialogHeader>
+                  <CreateActivityForm ar={ar} openTasks={openTasks} onSuccess={refresh} onClose={() => setActDialog(false)} />
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ── KPI Strip ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <div className="rounded-xl border bg-card p-3 text-center">
           <div className="text-2xl font-black text-violet-600">{openTasks.length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{ar ? "مهام مفتوحة" : "Öppna uppgifter"}</div>
@@ -544,6 +705,10 @@ export default function OperationsPage() {
         <div className="rounded-xl border bg-card p-3 text-center">
           <div className="text-2xl font-black text-emerald-600">{todayLogs.length}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{ar ? "أنشطة اليوم" : "Aktiviteter idag"}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-3 text-center">
+          <div className="text-2xl font-black text-indigo-600">{(notes as any[]).length}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{ar ? "الملاحظات" : "Anteckningar"}</div>
         </div>
       </div>
 
@@ -560,16 +725,17 @@ export default function OperationsPage() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
-        {(["overview", "tasks", "logs", "system"] as const).map(tab_ => (
+      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl flex-wrap">
+        {(["overview", "tasks", "logs", "notes", "system"] as const).map(tab_ => (
           <button
             key={tab_}
             onClick={() => setTab(tab_)}
-            className={`flex-1 text-xs font-medium py-2 rounded-lg transition-colors ${tab === tab_ ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex-1 text-xs font-medium py-2 rounded-lg transition-colors min-w-[60px] ${tab === tab_ ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
             {tab_ === "overview" && (ar ? "عامة" : "Översikt")}
             {tab_ === "tasks"    && (ar ? `المهام (${allTasks.length})` : `Uppg. (${allTasks.length})`)}
             {tab_ === "logs"     && (ar ? `النشاط (${allLogs.length})` : `Akt. (${allLogs.length})`)}
+            {tab_ === "notes"    && (ar ? `الملاحظات (${(notes as any[]).length})` : `Ant. (${(notes as any[]).length})`)}
             {tab_ === "system"   && (ar ? "🛡️ النظام" : "🛡️ System")}
           </button>
         ))}
@@ -892,6 +1058,109 @@ export default function OperationsPage() {
               </CardContent>
             </Card>
           )}
+        </div>
+      )}
+
+      {/* ══ NOTES TAB ══ */}
+      {tab === "notes" && (
+        <div className="space-y-3">
+          {/* Smart Analysis Result */}
+          {(smartLoading || smartResult) && (
+            <Card className="border-purple-200 bg-purple-50 dark:bg-purple-950/20">
+              <CardContent className="p-3">
+                {smartLoading ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500 flex items-center justify-center shrink-0">
+                      <Sparkles className="w-4 h-4 text-white animate-pulse" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-purple-700">{ar ? "يحلل الذكاء الاصطناعي ملاحظتك..." : "AI analyserar din anteckning..."}</p>
+                      <p className="text-xs text-purple-500">{ar ? "جاري استخراج البيانات" : "Extraherar data"}</p>
+                    </div>
+                    <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
+                  </div>
+                ) : smartResult ? (
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-purple-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-purple-700">
+                          {ar ? `تم استخراج ${smartResult.totalSaved} بيانات` : `${smartResult.totalSaved} poster extraherade`}
+                        </p>
+                        <button onClick={() => setSmartResult(null)} className="text-purple-400 hover:text-purple-600">
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-purple-600 mt-0.5">{smartResult.summary}</p>
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notes list */}
+          {notesLoading ? (
+            <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
+          ) : (notes as any[]).length === 0 ? (
+            <Card className="py-14 text-center border-dashed">
+              <MessageSquare className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">{ar ? "لا توجد ملاحظات بعد" : "Inga anteckningar ännu"}</p>
+              <p className="text-muted-foreground/60 text-xs mt-1">{ar ? "أضف ملاحظتك الأولى بالزر أعلاه" : "Lägg till din första anteckning"}</p>
+            </Card>
+          ) : (
+            (notes as any[]).map((note) => {
+              const colors = NOTE_CATEGORY_COLORS[note.category] ?? NOTE_CATEGORY_COLORS.general;
+              return (
+                <Card key={note.id} className={`border hover:shadow-sm transition-shadow ${colors.border}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <Badge className={`text-xs font-medium border-0 ${colors.bg} ${colors.text}`}>
+                            {noteCatLabel(note.category)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />{note.date}
+                          </span>
+                          {note.authorName && (
+                            <span className="text-xs text-muted-foreground opacity-60">{note.authorName}</span>
+                          )}
+                        </div>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => setNoteDeleteId(note.id)}
+                          className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors p-1"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+
+          {/* Delete confirm */}
+          <AlertDialog open={noteDeleteId !== null} onOpenChange={open => !open && setNoteDeleteId(null)}>
+            <AlertDialogContent dir={ar ? "rtl" : "ltr"}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{ar ? "حذف الملاحظة" : "Ta bort anteckning"}</AlertDialogTitle>
+                <AlertDialogDescription>{ar ? "هل أنت متأكد من حذف هذه الملاحظة؟" : "Är du säker på att du vill ta bort den här anteckningen?"}</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{ar ? "إلغاء" : "Avbryt"}</AlertDialogCancel>
+                <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => noteDeleteId && delNoteMutation.mutate(noteDeleteId)}>
+                  {ar ? "حذف" : "Ta bort"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 

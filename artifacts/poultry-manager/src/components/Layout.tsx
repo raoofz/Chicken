@@ -22,7 +22,6 @@ const NAV_KEYS = [
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },
   { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: false },
-  { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: false },
   { href: "/feed",        key: "nav.feed",         descKey: "nav.feed.desc",        icon: Wheat,           adminOnly: false },
   { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: false },
   { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: false },

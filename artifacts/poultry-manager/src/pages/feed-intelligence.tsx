@@ -18,8 +18,7 @@ import {
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, Radar,
-  LineChart, Line, ReferenceLine, Legend,
+  CartesianGrid,
 } from "recharts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -239,22 +238,11 @@ export default function FeedIntelligence() {
     ? <TrendingDown className="h-4 w-4 text-emerald-500" />
     : <Minus className="h-4 w-4 text-muted-foreground" />;
 
-  // Chart data: per-flock cost comparison
+  // Chart data: per-flock cost comparison (cost per bird only)
   const flockChartData = summary.flockAnalyses.map(f => ({
     name: f.flockName.split("—")[0].trim(),
     تكلفة_الطائر: f.feedData.costPerBird,
-    نقاط_الكفاءة: f.efficiencyScore,
-    علف_متوقع_جم: f.benchmark.expectedDailyFeedGrams,
   }));
-
-  // Radar chart: farm health dimensions
-  const radarData = [
-    { subject: "كفاءة العلف",    A: summary.farmEfficiencyScore },
-    { subject: "جودة البيانات",  A: summary.dataQuality.completenessScore },
-    { subject: "نسبة التكلفة",   A: Math.max(0, 100 - (summary.feedCostPctOfExpenses - 40)) },
-    { subject: "الإنتاج",        A: summary.totalEggsProduced > 0 ? 75 : 20 },
-    { subject: "التنبؤ",         A: summary.benchmarkComparison.feedCostPct.status === "good" ? 85 : 50 },
-  ];
 
   return (
     <div className="p-4 md:p-6 space-y-5" dir={isAr ? "rtl" : "ltr"}>
@@ -388,61 +376,32 @@ export default function FeedIntelligence() {
         </Card>
       )}
 
-      {/* ── Charts Row ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-        {/* Bar Chart: Per-flock cost */}
-        <Card className="lg:col-span-3">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-blue-500" />
-              تكلفة العلف ونقاط الكفاءة بالقطيع
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {flockChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={flockChartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/40" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: any, name: string) => [
-                    name === "نقاط_الكفاءة" ? `${v}/100` : v.toLocaleString(),
-                    name === "تكلفة_الطائر" ? "تكلفة/طائر" : "كفاءة"
-                  ]} />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="تكلفة_الطائر" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar yAxisId="right" dataKey="نقاط_الكفاءة" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.7} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                لا توجد قطعان لعرض بياناتها
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Radar: Farm health dimensions */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-emerald-500" />
-              أبعاد الصحة التشغيلية
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-                <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-                <Radar name="المزرعة" dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
-              </RadarChart>
+      {/* ── Cost Per Flock Chart ─────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-amber-500" />
+            تكلفة العلف بالطائر — مقارنة القطعان
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {flockChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={flockChartData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted/40" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: any) => [v.toLocaleString(), "تكلفة / طائر"]} />
+                <Bar dataKey="تكلفة_الطائر" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+              لا توجد قطعان لعرض بياناتها
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Top Insights ────────────────────────────────────────────────────── */}
       {summary.topInsights.length > 0 && (
