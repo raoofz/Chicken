@@ -76,3 +76,22 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - **Object Storage:**
     - **Google Cloud Storage:** Accessed via Replit sidecar proxy for storing farm photos under `/objects/uploads/`.
 - **Weather API:** Open-Meteo (used in Decision Logic Layer for live weather data).
+
+## Recent Updates (April 2026)
+
+- **Real-Time Analytics Page (`/analytics`):** New dashboard with 5-second live polling. Features AnimatedNum counters, LivePulse indicator, 4 KPI cards, period comparison (today/week/month), 7-day bar chart, monthly area chart, expense pie chart, category progress bars, QuickAddForm (collapsible, category grid, feed qty/unit), feed analysis panel, health score, smart alerts, and recent transactions with delete.
+- **Analytics API (`/api/analytics/live` + `/api/analytics/summary`):** Server-side SQL aggregations for KPIs, monthly trends, feed analysis, category breakdown, 7-day data, top records, and alert triggers.
+- **Finance Module v4.1:** Complete with HHI/Pearson clickable drill-down modals, EMA(α=0.35), Z-Score(threshold 1.8), Cash Runway, Profit Velocity, Linear Regression, Cumulative P&L, period-vs-period delta.
+- **i18n Fixes:** `nav.analytics` translation added; "السيرفر" corrected to "الخادم" in both i18n.ts and app.ts; WhatsApp link fixed to `wa.me`.
+- **Navigation:** Analytics route added to App.tsx and Layout.tsx with Activity icon.
+
+## Critical Technical Notes
+
+- `pg` direct import fails in API — use drizzle's `sql` template tag instead.
+- `zod` is NOT installed in api-server package.
+- Finance uses `ar` boolean (not `t()`) for language checks in inline strings.
+- No nested `<button>` inside buttons — InfoTip uses `<span role="button">`, KPI tiles use `<div role="button">`.
+- InfoTip must NOT be placed inside clickable `div[role="button"]` cards — it calls stopPropagation() blocking parent events.
+- Finance tabs: `dashboard|add|analysis|simulator|transactions|statement`
+- Analytics live polling: every 5 seconds (`REFRESH_INTERVAL = 5_000`), live tick counter every 1 second.
+- Feed unit parsing: كيلو/كغ→×1, طن/ton→×1000, غرام/gram→÷1000 (used in both analytics.ts backend AND analytics.tsx frontend).

@@ -372,7 +372,7 @@ function computeIntelligence(
         decisions.push({
           rank: decisions.length + 1, category: "financial",
           actionAr: "التفاوض مع موردي العلف للحصول على أسعار أفضل",
-          actionSv: "Förhandla med foderlevererntörer för bättre priser",
+          actionSv: "Förhandla med foderleverantörer för bättre priser",
           reasonAr: `العلف يمثل ${topExpensePct}% من تكاليفك — أعلى من المثالي`,
           reasonSv: `Foder utgör ${topExpensePct}% av dina kostnader — över optimalt`,
           impactAr: "تخفيض 10% في تكلفة العلف يزيد هامش الربح بشكل كبير",

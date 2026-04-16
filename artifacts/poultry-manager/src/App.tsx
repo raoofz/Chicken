@@ -18,6 +18,7 @@ import AiAnalysis from "@/pages/ai-analysis";
 import AdvancedAnalysis from "@/pages/advanced-analysis";
 import PrecisionAnalysis from "@/pages/precision-analysis";
 import Finance from "@/pages/finance";
+import Analytics from "@/pages/analytics";
 import FarmLab from "@/pages/farm-lab";
 import NotFound from "@/pages/not-found";
 
@@ -54,6 +55,7 @@ function AppRoutes() {
         <Route path="/ai/advanced" component={AdvancedAnalysis} />
         <Route path="/ai/precision" component={PrecisionAnalysis} />
         <Route path="/finance" component={Finance} />
+        <Route path="/analytics" component={Analytics} />
         <Route path="/farm-lab" component={FarmLab} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />

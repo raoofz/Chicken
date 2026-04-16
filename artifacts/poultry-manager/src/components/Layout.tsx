@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet, Microscope,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
-const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/XXXXXXXXXX";
+const WHATSAPP_GROUP_URL = "https://wa.me";
 
 const NAV_KEYS = [
   { href: "/", key: "nav.dashboard", icon: LayoutDashboard, adminOnly: false },
@@ -21,8 +22,9 @@ const NAV_KEYS = [
   { href: "/tasks", key: "nav.tasks", icon: CheckSquare, adminOnly: false },
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
   { href: "/notes", key: "nav.notes", icon: NotebookPen, adminOnly: false },
-  { href: "/finance", key: "nav.finance", icon: Wallet, adminOnly: false },
-  { href: "/farm-lab", key: "nav.farmLab", icon: Microscope, adminOnly: false },
+  { href: "/finance",    key: "nav.finance",    icon: Wallet,     adminOnly: false },
+  { href: "/analytics",  key: "nav.analytics",  icon: Activity,   adminOnly: false },
+  { href: "/farm-lab",   key: "nav.farmLab",    icon: Microscope, adminOnly: false },
   { href: "/ai/advanced", key: "nav.aiAdvanced", icon: FlaskConical, adminOnly: true },
   { href: "/ai/precision", key: "nav.aiPrecision", icon: BrainCircuit, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },

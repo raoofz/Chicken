@@ -100,7 +100,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(503).json({ error: "خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة بعد قليل" });
     return;
   }
-  res.status(500).json({ error: "حدث خطأ في السيرفر. يرجى المحاولة مرة أخرى" });
+  res.status(500).json({ error: "حدث خطأ في الخادم. يرجى المحاولة مرة أخرى" });
 });
 
 export default app;
