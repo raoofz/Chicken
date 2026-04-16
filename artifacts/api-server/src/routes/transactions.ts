@@ -1,17 +1,22 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
 import { db, transactionsTable } from "@workspace/db";
+import {
+  categoryToDomain,
+  validateCategoryDomainConsistency,
+} from "../lib/farmDomains.js";
 
 const router: IRouter = Router();
 
 router.get("/transactions", async (req, res) => {
   try {
-    const { type, from, to, category } = req.query as Record<string, string>;
+    const { type, from, to, category, domain } = req.query as Record<string, string>;
     const conditions = [];
     if (type && (type === "income" || type === "expense")) conditions.push(eq(transactionsTable.type, type));
-    if (from) conditions.push(gte(transactionsTable.date, from));
-    if (to) conditions.push(lte(transactionsTable.date, to));
+    if (from)     conditions.push(gte(transactionsTable.date, from));
+    if (to)       conditions.push(lte(transactionsTable.date, to));
     if (category) conditions.push(eq(transactionsTable.category, category));
+    if (domain)   conditions.push(eq(transactionsTable.domain, domain));
 
     const rows = await db.select().from(transactionsTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -28,11 +33,12 @@ router.get("/transactions/summary", async (req, res) => {
       SELECT
         type,
         category,
+        domain,
         TO_CHAR(date::date, 'YYYY-MM') as month,
         SUM(amount::numeric) as total,
         COUNT(*) as count
       FROM transactions
-      GROUP BY type, category, month
+      GROUP BY type, category, domain, month
       ORDER BY month DESC, type
     `);
     res.json(result.rows);
@@ -49,19 +55,31 @@ router.post("/transactions", async (req, res) => {
       return;
     }
     if (!["income", "expense"].includes(type)) {
-      res.status(400).json({ error: "Invalid type" });
+      res.status(400).json({ error: "Invalid type: must be 'income' or 'expense'" });
       return;
     }
+
+    // Domain integrity check
+    const domainError = validateCategoryDomainConsistency(type as "income" | "expense", category);
+    if (domainError) {
+      res.status(400).json({ error: domainError });
+      return;
+    }
+
     const user = await db.execute(sql`SELECT username FROM users WHERE id = ${req.session.userId}`);
     const authorName = (user.rows[0] as any)?.username ?? null;
 
     const [row] = await db.insert(transactionsTable).values({
-      date, type, category, description,
-      amount: String(amount),
+      date,
+      type,
+      category,
+      domain: categoryToDomain(category),  // SSOT — always derived server-side
+      description,
+      amount:   String(amount),
       quantity: quantity ? String(quantity) : null,
-      unit: unit || null,
-      notes: notes || null,
-      authorId: req.session.userId,
+      unit:     unit || null,
+      notes:    notes || null,
+      authorId:   req.session.userId,
       authorName,
     }).returning();
     res.status(201).json(row);
@@ -74,15 +92,23 @@ router.put("/transactions/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { date, type, category, description, amount, quantity, unit, notes } = req.body;
+
+    // If category is being updated, re-derive domain and re-validate
+    const updateDomain = category ? categoryToDomain(category) : undefined;
+    if (type && category) {
+      const domainError = validateCategoryDomainConsistency(type as "income" | "expense", category);
+      if (domainError) { res.status(400).json({ error: domainError }); return; }
+    }
+
     const [row] = await db.update(transactionsTable).set({
-      ...(date && { date }),
-      ...(type && { type }),
-      ...(category && { category }),
+      ...(date        && { date }),
+      ...(type        && { type }),
+      ...(category    && { category, domain: updateDomain }),
       ...(description && { description }),
-      ...(amount !== undefined && { amount: String(amount) }),
-      ...(quantity !== undefined && { quantity: quantity ? String(quantity) : null }),
-      ...(unit !== undefined && { unit }),
-      ...(notes !== undefined && { notes }),
+      ...(amount      !== undefined && { amount: String(amount) }),
+      ...(quantity    !== undefined && { quantity: quantity ? String(quantity) : null }),
+      ...(unit        !== undefined && { unit }),
+      ...(notes       !== undefined && { notes }),
     }).where(eq(transactionsTable.id, id)).returning();
     if (!row) { res.status(404).json({ error: "Not found" }); return; }
     res.json(row);

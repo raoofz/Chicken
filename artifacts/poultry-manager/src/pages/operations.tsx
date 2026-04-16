@@ -1,0 +1,690 @@
+/**
+ * مركز العمليات اليومية — Daily Operations Center
+ * ═══════════════════════════════════════════════
+ * Unified view of planned Tasks + completed Activity Logs.
+ * Core feature: when an activity is logged and linked to a task,
+ * that task is automatically marked complete server-side.
+ *
+ * Data sources:
+ *   - Tasks API       → planned/pending work
+ *   - Activity Logs   → completed/recorded work
+ *
+ * Smart linking: when creating an activity, the form suggests
+ * open tasks in the same category, allowing one-click linkage.
+ */
+import { useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListTasks,
+  useUpdateTask,
+  useDeleteTask,
+  useCreateTask,
+  getListTasksQueryKey,
+  useListActivityLogs,
+  getListActivityLogsQueryKey,
+} from "@workspace/api-client-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  CheckCircle2, Circle, Plus, ClipboardList, Activity,
+  Layers, AlertTriangle, Clock, Link2, Trash2, Calendar,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const BASE_URL = import.meta.env.BASE_URL ?? "/";
+
+const TASK_CATEGORIES = ["feeding", "health", "hatching", "cleaning", "observation", "other"] as const;
+const ACTIVITY_CATEGORIES = TASK_CATEGORIES;
+
+const PRIORITY_COLORS: Record<string, string> = {
+  high:   "bg-red-100 text-red-700 border-red-200",
+  medium: "bg-amber-100 text-amber-700 border-amber-200",
+  low:    "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+const CAT_ICONS: Record<string, string> = {
+  feeding:     "🌾",
+  health:      "💊",
+  hatching:    "🥚",
+  cleaning:    "🧹",
+  observation: "👁️",
+  other:       "📋",
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function todayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function fmtDate(d: string, ar: boolean) {
+  return new Date(d).toLocaleDateString(ar ? "ar-IQ" : "sv-SE", {
+    weekday: "short", month: "short", day: "numeric",
+  });
+}
+
+// ── Create Activity Form ─────────────────────────────────────────────────────
+function CreateActivityForm({
+  ar,
+  openTasks,
+  onSuccess,
+  onClose,
+}: {
+  ar: boolean;
+  openTasks: any[];
+  onSuccess: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    title:       "",
+    description: "",
+    category:    "other" as string,
+    date:        todayStr(),
+    taskId:      "" as string,
+  });
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const catLabel = (c: string) =>
+    ar
+      ? { feeding: "تغذية", health: "صحة", hatching: "تفقيس", cleaning: "نظافة", observation: "ملاحظة", other: "أخرى" }[c] ?? c
+      : { feeding: "Matning", health: "Hälsa", hatching: "Kläckning", cleaning: "Städning", observation: "Observation", other: "Övrigt" }[c] ?? c;
+
+  // Smart suggestion: filter open tasks by selected category
+  const suggestedTasks = openTasks.filter(t => !form.category || form.category === "other" || t.category === form.category);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}api/activity-logs`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          title:       form.title.trim(),
+          description: form.description.trim() || null,
+          category:    form.category,
+          date:        form.date,
+          taskId:      form.taskId ? Number(form.taskId) : null,
+        }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? ar ? "خطأ في الحفظ" : "Fel vid sparning");
+      }
+      toast({ title: ar ? "✅ تم تسجيل النشاط" : "✅ Aktivitet registrerad" });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast({ title: err?.message ?? (ar ? "فشل الحفظ" : "Misslyckades"), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>{ar ? "عنوان النشاط" : "Aktivitetstitel"} *</Label>
+        <Input
+          value={form.title}
+          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          placeholder={ar ? "ما الذي فعلته؟" : "Vad gjordes?"}
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{ar ? "التصنيف" : "Kategori"}</Label>
+          <Select
+            value={form.category}
+            onValueChange={v => setForm(f => ({ ...f, category: v, taskId: "" }))}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ACTIVITY_CATEGORIES.map(c => (
+                <SelectItem key={c} value={c}>{CAT_ICONS[c]} {catLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{ar ? "التاريخ" : "Datum"}</Label>
+          <Input
+            type="date"
+            value={form.date}
+            onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{ar ? "تفاصيل إضافية (اختياري)" : "Detaljer (valfritt)"}</Label>
+        <Input
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          placeholder={ar ? "أي ملاحظات..." : "Eventuella kommentarer..."} />
+      </div>
+
+      {/* Smart task link suggestion */}
+      {suggestedTasks.length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <Link2 className="w-3.5 h-3.5 text-blue-500" />
+            {ar ? "ربط بمهمة مفتوحة (اختياري)" : "Länka till öppen uppgift (valfritt)"}
+          </Label>
+          <Select
+            value={form.taskId}
+            onValueChange={v => setForm(f => ({ ...f, taskId: v }))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={ar ? "اختر مهمة..." : "Välj uppgift..."} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{ar ? "— بدون ربط —" : "— Ingen länk —"}</SelectItem>
+              {suggestedTasks.map(task => (
+                <SelectItem key={task.id} value={String(task.id)}>
+                  {CAT_ICONS[task.category] ?? "📋"} {task.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {form.taskId && (
+            <p className="text-xs text-blue-600 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              {ar ? "ستُحدَّد هذه المهمة كمكتملة تلقائياً" : "Uppgiften markeras som klar automatiskt"}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? (ar ? "جاري الحفظ..." : "Sparar...") : (ar ? "تسجيل النشاط" : "Registrera aktivitet")}
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>
+          {ar ? "إلغاء" : "Avbryt"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+// ── Create Task Form ─────────────────────────────────────────────────────────
+function CreateTaskForm({ ar, onSuccess, onClose }: { ar: boolean; onSuccess: () => void; onClose: () => void }) {
+  const [form, setForm] = useState({
+    title:       "",
+    description: "",
+    category:    "other" as string,
+    priority:    "medium" as string,
+    dueDate:     todayStr(),
+  });
+  const createTask = useCreateTask();
+  const { toast } = useToast();
+
+  const catLabel = (c: string) =>
+    ar
+      ? { feeding: "تغذية", health: "صحة", hatching: "تفقيس", cleaning: "نظافة", observation: "ملاحظة", other: "أخرى" }[c] ?? c
+      : { feeding: "Matning", health: "Hälsa", hatching: "Kläckning", cleaning: "Städning", observation: "Observation", other: "Övrigt" }[c] ?? c;
+
+  const priLabel = (p: string) =>
+    ar
+      ? { high: "عالية", medium: "متوسطة", low: "منخفضة" }[p] ?? p
+      : { high: "Hög", medium: "Medel", low: "Låg" }[p] ?? p;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    try {
+      await createTask.mutateAsync({
+        data: {
+          title:       form.title.trim(),
+          description: form.description.trim() || undefined,
+          category:    form.category as any,
+          priority:    form.priority as any,
+          completed:   false,
+          dueDate:     form.dueDate || undefined,
+        },
+      });
+      toast({ title: ar ? "✅ تمت إضافة المهمة" : "✅ Uppgift skapad" });
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast({ title: err?.message ?? (ar ? "فشل الحفظ" : "Misslyckades"), variant: "destructive" });
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>{ar ? "عنوان المهمة" : "Uppgiftstitel"} *</Label>
+        <Input
+          value={form.title}
+          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          placeholder={ar ? "ماذا يجب أن يُفعل؟" : "Vad ska göras?"}
+          required
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{ar ? "التصنيف" : "Kategori"}</Label>
+          <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TASK_CATEGORIES.map(c => (
+                <SelectItem key={c} value={c}>{CAT_ICONS[c]} {catLabel(c)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>{ar ? "الأولوية" : "Prioritet"}</Label>
+          <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {["high","medium","low"].map(p => (
+                <SelectItem key={p} value={p}>{priLabel(p)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>{ar ? "تاريخ الاستحقاق" : "Förfallodatum"}</Label>
+        <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>{ar ? "تفاصيل (اختياري)" : "Detaljer (valfritt)"}</Label>
+        <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="..." />
+      </div>
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" disabled={createTask.isPending} className="flex-1">
+          {createTask.isPending ? (ar ? "جاري الحفظ..." : "Sparar...") : (ar ? "إضافة المهمة" : "Lägg till uppgift")}
+        </Button>
+        <Button type="button" variant="outline" onClick={onClose}>{ar ? "إلغاء" : "Avbryt"}</Button>
+      </div>
+    </form>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function OperationsPage() {
+  const { t, lang } = useLanguage();
+  const { isAdmin } = useAuth();
+  const { toast } = useToast();
+  const ar = lang === "ar";
+  const qc = useQueryClient();
+
+  const { data: tasks,    isLoading: tasksLoading }  = useListTasks(
+    {},
+    { query: { queryKey: getListTasksQueryKey({}) } },
+  );
+  const { data: actLogs,  isLoading: logsLoading }   = useListActivityLogs(
+    { query: { queryKey: getListActivityLogsQueryKey() } },
+  );
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+
+  const [tab,         setTab]         = useState<"overview" | "tasks" | "logs">("overview");
+  const [taskDialog,  setTaskDialog]  = useState(false);
+  const [actDialog,   setActDialog]   = useState(false);
+  const [filter,      setFilter]      = useState<"all" | "pending" | "done">("all");
+
+  const today = todayStr();
+
+  const refresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: getListTasksQueryKey({}) });
+    qc.invalidateQueries({ queryKey: getListActivityLogsQueryKey() });
+    qc.invalidateQueries();
+  }, [qc]);
+
+  // Partition tasks
+  const allTasks    = tasks ?? [];
+  const openTasks   = allTasks.filter(t => !t.completed);
+  const doneTasks   = allTasks.filter(t =>  t.completed);
+  const overdueTasks = openTasks.filter(t => t.dueDate && t.dueDate < today);
+
+  // Filtered tasks
+  const filteredTasks = filter === "pending" ? openTasks
+    : filter === "done"    ? doneTasks
+    : allTasks;
+
+  // Today's activity logs
+  const allLogs   = actLogs ?? [];
+  const todayLogs = allLogs.filter(l => l.date === today);
+  const recentLogs = allLogs.slice(0, 20);
+
+  async function toggleTask(task: any) {
+    try {
+      await updateTask.mutateAsync({ id: task.id, data: { ...task, completed: !task.completed } });
+      refresh();
+    } catch (err: any) {
+      toast({ title: err?.message, variant: "destructive" });
+    }
+  }
+
+  async function handleDeleteTask(id: number) {
+    try {
+      await deleteTask.mutateAsync({ id });
+      refresh();
+    } catch (err: any) {
+      toast({ title: err?.message, variant: "destructive" });
+    }
+  }
+
+  async function deleteLog(id: number) {
+    try {
+      const res = await fetch(`${BASE_URL}api/activity-logs/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) throw new Error("delete failed");
+      refresh();
+    } catch (err: any) {
+      toast({ title: err?.message ?? (ar ? "فشل الحذف" : "Misslyckades"), variant: "destructive" });
+    }
+  }
+
+  const priLabel = (p: string) => ar
+    ? { high: "عالية", medium: "متوسطة", low: "منخفضة" }[p] ?? p
+    : { high: "Hög", medium: "Medel", low: "Låg" }[p] ?? p;
+
+  const catLabel = (c: string) => ar
+    ? { feeding: "تغذية", health: "صحة", hatching: "تفقيس", cleaning: "نظافة", observation: "ملاحظة", other: "أخرى" }[c] ?? c
+    : { feeding: "Matning", health: "Hälsa", hatching: "Kläckning", cleaning: "Städning", observation: "Observation", other: "Övrigt" }[c] ?? c;
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Layers className="w-6 h-6 text-violet-500" />
+            {ar ? "مركز العمليات اليومية" : "Daglig operationscentral"}
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {ar ? "مهامك المخططة + سجل ما نُفِّذ — في مكان واحد" : "Planerade uppgifter + registrerade aktiviteter på ett ställe"}
+          </p>
+        </div>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Dialog open={taskDialog} onOpenChange={setTaskDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <ClipboardList className="w-4 h-4" />
+                  {ar ? "مهمة جديدة" : "Ny uppgift"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{ar ? "إضافة مهمة" : "Lägg till uppgift"}</DialogTitle>
+                </DialogHeader>
+                <CreateTaskForm ar={ar} onSuccess={refresh} onClose={() => setTaskDialog(false)} />
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={actDialog} onOpenChange={setActDialog}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5">
+                  <Activity className="w-4 h-4" />
+                  {ar ? "تسجيل نشاط" : "Registrera aktivitet"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{ar ? "تسجيل نشاط تم تنفيذه" : "Registrera utförd aktivitet"}</DialogTitle>
+                </DialogHeader>
+                <CreateActivityForm ar={ar} openTasks={openTasks} onSuccess={refresh} onClose={() => setActDialog(false)} />
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+      </div>
+
+      {/* ── KPI Strip ── */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border bg-card p-3 text-center">
+          <div className="text-2xl font-black text-violet-600">{openTasks.length}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{ar ? "مهام مفتوحة" : "Öppna uppgifter"}</div>
+        </div>
+        <div className={`rounded-xl border p-3 text-center ${overdueTasks.length > 0 ? "bg-red-50 border-red-200" : "bg-card"}`}>
+          <div className={`text-2xl font-black ${overdueTasks.length > 0 ? "text-red-600" : "text-slate-400"}`}>{overdueTasks.length}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{ar ? "مهام متأخرة" : "Försenade"}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-3 text-center">
+          <div className="text-2xl font-black text-emerald-600">{todayLogs.length}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{ar ? "أنشطة اليوم" : "Aktiviteter idag"}</div>
+        </div>
+      </div>
+
+      {/* ── Overdue Alert ── */}
+      {overdueTasks.length > 0 && (
+        <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {ar
+              ? `${overdueTasks.length} مهمة متأخرة: ${overdueTasks.map(t => t.title).join("، ")}`
+              : `${overdueTasks.length} försenade uppgifter: ${overdueTasks.map(t => t.title).join(", ")}`}
+          </span>
+        </div>
+      )}
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
+        {(["overview", "tasks", "logs"] as const).map(tab_ => (
+          <button
+            key={tab_}
+            onClick={() => setTab(tab_)}
+            className={`flex-1 text-xs font-medium py-2 rounded-lg transition-colors ${tab === tab_ ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {tab_ === "overview" && (ar ? "نظرة عامة" : "Översikt")}
+            {tab_ === "tasks"    && (ar ? `المهام (${allTasks.length})` : `Uppgifter (${allTasks.length})`)}
+            {tab_ === "logs"     && (ar ? `النشاط (${allLogs.length})` : `Aktiviteter (${allLogs.length})`)}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ OVERVIEW TAB ══ */}
+      {tab === "overview" && (
+        <div className="grid gap-4">
+          {/* Today's pending tasks */}
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-violet-500" />
+                {ar ? "مهام اليوم" : "Dagens uppgifter"}
+                <Badge variant="secondary" className="text-xs">{openTasks.filter(t => !t.dueDate || t.dueDate <= today).length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {tasksLoading ? (
+                <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              ) : openTasks.filter(t => !t.dueDate || t.dueDate <= today).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">{ar ? "لا توجد مهام معلقة لهذا اليوم 🎉" : "Inga väntande uppgifter för idag 🎉"}</p>
+              ) : (
+                openTasks.filter(t => !t.dueDate || t.dueDate <= today).map(task => (
+                  <div key={task.id} className={`flex items-start gap-3 p-2.5 rounded-lg border ${task.dueDate && task.dueDate < today ? "border-red-200 bg-red-50/50" : "border-border/40 bg-muted/20"}`}>
+                    <button
+                      onClick={() => toggleTask(task)}
+                      className="mt-0.5 shrink-0 text-muted-foreground hover:text-emerald-500 transition-colors"
+                    >
+                      <Circle className="w-4.5 h-4.5" />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug">{task.title}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[10px] text-muted-foreground">{CAT_ICONS[task.category]} {catLabel(task.category)}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.medium}`}>{priLabel(task.priority)}</span>
+                        {task.dueDate && (
+                          <span className={`text-[10px] flex items-center gap-0.5 ${task.dueDate < today ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                            <Clock className="w-3 h-3" />
+                            {fmtDate(task.dueDate, ar)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Today's activity log */}
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-500" />
+                {ar ? "سجل نشاط اليوم" : "Dagens aktivitetslogg"}
+                <Badge variant="secondary" className="text-xs">{todayLogs.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-2">
+              {logsLoading ? (
+                <div className="space-y-2">{[1,2].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              ) : todayLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {ar ? "لم يُسجَّل أي نشاط اليوم بعد" : "Ingen aktivitet registrerad idag än"}
+                </p>
+              ) : (
+                todayLogs.map(log => (
+                  <div key={log.id} className="flex items-start gap-3 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40">
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug">{log.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-[10px] text-muted-foreground">{CAT_ICONS[log.category]} {catLabel(log.category)}</span>
+                        {(log as any).taskId && (
+                          <span className="text-[10px] text-blue-600 flex items-center gap-0.5">
+                            <Link2 className="w-3 h-3" />
+                            {ar ? "مرتبط بمهمة" : "Länkad uppgift"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ══ TASKS TAB ══ */}
+      {tab === "tasks" && (
+        <div className="space-y-3">
+          {/* Filter strip */}
+          <div className="flex gap-2">
+            {(["all", "pending", "done"] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${filter === f ? "bg-violet-100 border-violet-300 text-violet-700" : "bg-card border-border text-muted-foreground hover:bg-muted/50"}`}
+              >
+                {f === "all"     && (ar ? "الكل" : "Alla")}
+                {f === "pending" && (ar ? "معلقة" : "Pågående")}
+                {f === "done"    && (ar ? "مكتملة" : "Klara")}
+              </button>
+            ))}
+          </div>
+
+          {tasksLoading ? (
+            <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : filteredTasks.length === 0 ? (
+            <Card><CardContent className="py-10 text-center text-muted-foreground text-sm">{ar ? "لا توجد مهام في هذا التصنيف" : "Inga uppgifter i denna kategori"}</CardContent></Card>
+          ) : (
+            <div className="space-y-2">
+              {filteredTasks.map(task => (
+                <div
+                  key={task.id}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${task.completed ? "opacity-60 border-border/30 bg-muted/20" : task.dueDate && task.dueDate < today ? "border-red-200 bg-red-50/30" : "border-border/40 bg-card hover:bg-muted/20"}`}
+                >
+                  <button onClick={() => toggleTask(task)} className={`mt-0.5 shrink-0 transition-colors ${task.completed ? "text-emerald-500" : "text-muted-foreground hover:text-emerald-500"}`}>
+                    {task.completed ? <CheckCircle2 className="w-4.5 h-4.5" /> : <Circle className="w-4.5 h-4.5" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${task.completed ? "line-through text-muted-foreground" : ""}`}>{task.title}</p>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{task.description}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground">{CAT_ICONS[task.category]} {catLabel(task.category)}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.medium}`}>{priLabel(task.priority)}</span>
+                      {task.dueDate && (
+                        <span className={`text-[10px] flex items-center gap-0.5 ${!task.completed && task.dueDate < today ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
+                          <Calendar className="w-3 h-3" />
+                          {fmtDate(task.dueDate, ar)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ LOGS TAB ══ */}
+      {tab === "logs" && (
+        <div className="space-y-2">
+          {logsLoading ? (
+            <div className="space-y-2">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-14 w-full" />)}</div>
+          ) : recentLogs.length === 0 ? (
+            <Card><CardContent className="py-10 text-center text-muted-foreground text-sm">{ar ? "لا توجد سجلات نشاط بعد" : "Inga aktivitetsloggar ännu"}</CardContent></Card>
+          ) : (
+            recentLogs.map(log => (
+              <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl border border-border/40 bg-card hover:bg-muted/20 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0 text-sm">
+                  {CAT_ICONS[log.category] ?? "📋"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium leading-snug">{log.title}</p>
+                  {log.description && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{log.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-muted-foreground">{catLabel(log.category)}</span>
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <Calendar className="w-3 h-3" />
+                      {fmtDate(log.date, ar)}
+                    </span>
+                    {(log as any).taskId && (
+                      <span className="text-[10px] text-blue-600 flex items-center gap-0.5">
+                        <Link2 className="w-3 h-3" />
+                        {ar ? "مرتبط بمهمة" : "Länkad"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <button onClick={() => deleteLog(log.id)} className="shrink-0 text-muted-foreground hover:text-red-500 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

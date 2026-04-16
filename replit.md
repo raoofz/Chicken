@@ -120,3 +120,56 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 
 - **Removed HHI (Herfindahl-Hirschman Index) and Pearson Correlation** from `pages/finance.tsx` — they were academically interesting but operationally non-actionable for a single-farm context. Removed from: `GLOSSARY` entries, `pearson()` function, `AdvMetrics` interface (`hhi`, `hhiGrade`, `feedIncomeCorr`), `computeAdvanced()` logic, `generateRecommendations()` "diversify" rec, drill-down branches, the 2-tile UI section (replaced by a richer 3-cell next-month linear-regression prediction card), header subtitle, and file header comment.
 - **Income CV stability tile** is now static (no longer mistakenly bound to the deleted `setDrillKey("pearson")`).
+
+## Mission-Critical Architecture Upgrade (April 2026)
+
+### 1. farmDomains.ts — Single Source of Truth (SSOT)
+**File**: `artifacts/api-server/src/lib/farmDomains.ts`
+New central module that defines ALL transaction categories, domain partitions, bilingual labels, and classification logic. No other file hard-codes category strings.
+- **6 domains**: `feed | egg | health | operational | income | general`
+- **15 expense categories** + **5 income categories** — all as typed constants
+- **categoryToDomain()**: Deterministic category→domain mapping, imported by both transactions route and AI commit route
+- **classifyExpenseCategory()** / **classifyIncomeCategory()**: Priority-ranked regex classifiers for Arabic+Swedish text; eggs_purchase has priority 100 (highest) to prevent misclassification as feed or other
+- **validateCategoryDomainConsistency()**: Server-side integrity check — expense category cannot be used for income transactions and vice versa
+
+### 2. DB Schema Updates
+- `transactions` table: Added `domain` column (text, nullable) — auto-populated server-side from `categoryToDomain(category)` on every INSERT/UPDATE via both the transactions route and AI commit route
+- `activity_logs` table: Added `task_id` column (integer, nullable) — FK that links an activity to the task it fulfills; when a taskId is provided on log creation, the linked task is automatically marked `completed: true` atomically
+
+### 3. Egg Classification Bug Fix (Critical)
+`noteSmartParser.ts` was rewritten to use farmDomains SSOT:
+- **Root cause**: "شراء بيض" (buying eggs) was triggering `isSettingEggs` (hatching cycle detection) because the verb pattern matched and "بيض" keyword matched — parser had no priority guard
+- **Fix**: Added `isEggPurchase` guard at top of parser — explicitly detected before `isSettingEggs` check, and `isSettingEggs` now requires `!isEggPurchase`. Result: "اشترينا بيض" → `eggs_purchase` category (egg domain), never hatching cycle
+- `detectExpenseCategory()` replaced by `classifyExpenseCategory()` from farmDomains — priority-ranked with 15 patterns including eggs_purchase at priority 100
+
+### 4. Real-Time Incubation Live Tracker
+`HatchingLiveTracker` component added to `artifacts/poultry-manager/src/pages/hatching.tsx`:
+- Rendered for `status === "incubating" | "hatching"` cycles (hidden for completed/failed)
+- Formula: `progress = (now - startDateTime) / 21 days × 100`
+- Updates every 60 seconds via `setInterval` + `useEffect` (no WebSocket needed — deterministic from start date)
+- **4 phase colors**: Early (0–3d, green), Mid (4–17d, blue), Lockdown (18–21d, amber), Active hatching (red + pulse animation)
+- Shows: current day, hour within day, % complete, days remaining, phase label (AR/SV)
+- Lockdown marker at 85.7% on progress bar (day 18 of 21)
+
+### 5. Daily Operations Center (`/operations`)
+New page at `artifacts/poultry-manager/src/pages/operations.tsx`:
+- **3 tabs**: Overview (today's tasks + today's activities), Tasks (full list with filter), Activity Log (last 20)
+- **KPI strip**: open tasks count, overdue tasks count (red when > 0), today's activities count
+- **Overdue alert banner**: lists overdue task titles inline
+- **Smart task-activity linking**: when creating an activity, the form filters open tasks by category and offers one-click linkage; when linked, server auto-completes the task
+- **Immediate task toggle**: click circle → complete/reopen without page refresh
+- Accessible from nav as "مركز العمليات / Operationscentral" (Layers icon, position 5 in nav)
+
+### 6. Activity Logs Route Enhancement
+`activityLogs.ts` route rebuilt:
+- Accepts `taskId` on POST
+- Auto-completes linked task on activity creation
+- Added DELETE endpoint for single activity logs
+- Removed dependency on deprecated api-zod `CreateActivityLogBody` schema
+
+### 7. Transactions Route Enhancement
+`transactions.ts` route updated:
+- Auto-populates `domain` from `categoryToDomain(category)` on INSERT and UPDATE
+- Validates category↔type consistency via `validateCategoryDomainConsistency()` before every write (returns HTTP 400 on violation)
+- Added `domain` filter parameter to GET `/transactions`
+- Summary endpoint now includes `domain` in GROUP BY for domain-level analytics

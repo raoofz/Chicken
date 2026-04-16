@@ -3,6 +3,7 @@ import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNote
 import { sql, eq, desc } from "drizzle-orm";
 import { parseNote } from "../lib/noteSmartParser";
 import { validateActions } from "../lib/actionValidator";
+import { categoryToDomain } from "../lib/farmDomains.js";
 import { runFullAnalysis, buildQuickSolve } from "../lib/ai-engine";
 import {
   runPredictiveAnalysis,
@@ -717,15 +718,16 @@ router.post("/ai/commit", async (req: Request, res: Response) => {
           saved.push({ type: "hatching_result", id: cycle.id, description: action.description });
         } else if (action.type === "transaction") {
           const [row] = await tx.insert(transactionsTable).values({
-            date: d.date ?? noteDate,
-            type: d.type,
+            date:     d.date ?? noteDate,
+            type:     d.type,
             category: d.category,
+            domain:   categoryToDomain(d.category),  // SSOT — always server-derived
             description: d.description,
-            amount: String(d.amount),
+            amount:   String(d.amount),
             quantity: d.quantity ? String(d.quantity) : null,
-            unit: d.unit ?? null,
-            notes: d.notes ?? null,
-            authorId: authorId ?? null,
+            unit:     d.unit ?? null,
+            notes:    d.notes ?? null,
+            authorId:   authorId ?? null,
             authorName,
           }).returning();
           saved.push({ type: "transaction", id: row.id, description: action.description });
