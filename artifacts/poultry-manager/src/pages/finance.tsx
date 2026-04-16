@@ -3,8 +3,8 @@
  *  مدير مزرعة الدواجن — نظام الإدارة المالية والإنتاج v4.0
  *  Poultry Farm Finance & Production Intelligence System
  *
- *  Algorithms : EMA · Z-Score · HHI · Cash Runway · Profit Velocity · LinReg
- *               Pearson Correlation · Cumulative P&L · Period Comparison
+ *  Algorithms : EMA · Z-Score · Cash Runway · Profit Velocity · LinReg
+ *               Cumulative P&L · Period Comparison · Income CV (stability)
  *  UX          : InfoTips · Drill-Down Modals · Simulator · Heatmap
  *                Edit Transactions · Recommendations Engine · Best/Worst Month
  *                Animated Amounts · Period-vs-Period KPI delta badges
@@ -101,10 +101,8 @@ const GLOSSARY: Record<string, GlossaryEntry> = {
   gross_margin: { nameAr:"هامش الربح الإجمالي", nameSv:"Bruttomarginal", formulaAr:"الإيراد − التكاليف المتغيرة (علف + دواء + وقود...)", descAr:"الربح قبل خصم التكاليف الثابتة. يقيس ربحية الإنتاج الجوهرية.", descSv:"Vinst innan fasta kostnader.", benchmarkAr:"يجب أن يكون موجباً دائماً. سالب = مشكلة في التكاليف المتغيرة.", benchmarkSv:"Måste alltid vara positiv.", colorClass:"text-teal-600" },
   ema_trend: { nameAr:"المتوسط المتحرك الأسي (EMA)", nameSv:"Exponentiellt rörligt medelvärde (EMA)", formulaAr:"EMA = α × القيمة_الحالية + (1−α) × EMA_السابقة  (α=0.35)", descAr:"خوارزمية تعطي وزناً أكبر للبيانات الحديثة. أدق من المتوسط البسيط.", descSv:"Algoritm som prioriterar nyare data. Mer exakt än enkelt medelvärde.", benchmarkAr:"يُستخدم في تحليل الأسهم. يتكيف مع التغيرات السريعة.", benchmarkSv:"Används i aktieanalys. Anpassar sig till snabba förändringar.", colorClass:"text-indigo-600" },
   z_score: { nameAr:"الانحراف المعياري Z-Score", nameSv:"Z-Score Standardavvikelse", formulaAr:"Z = (القيمة − المتوسط) ÷ الانحراف_المعياري", descAr:"يحدد الشهور غير الطبيعية إحصائياً. |Z| > 1.8 = شهر استثنائي.", descSv:"Identifierar statistiskt onormala månader.", benchmarkAr:"|Z| < 1 طبيعي · 1–1.8 ملحوظ · > 1.8 استثنائي يستحق تحقيقاً", benchmarkSv:"|Z| < 1 Normalt · 1–1.8 Anmärkningsvärt · > 1.8 Exceptionellt", colorClass:"text-rose-600" },
-  hhi: { nameAr:"مؤشر هرفيندال-هيرشمان (HHI)", nameSv:"Herfindahl-Hirschman Index (HHI)", formulaAr:"HHI = Σ(نسبة_الفئة × 100)²", descAr:"يقيس تركّز المصاريف. HHI مرتفع = اعتماد خطير على بند واحد كالعلف.", descSv:"Mäter kostnadskoncentration. Högt HHI = farligt beroende.", benchmarkAr:"< 1500 متنوع ✅ · 1500–2500 متوسط ⚠️ · > 2500 مركز خطير ❌", benchmarkSv:"< 1500 Diversifierat ✅ · 1500–2500 Måttligt ⚠️ · > 2500 Farligt ❌", colorClass:"text-violet-600" },
   cash_runway: { nameAr:"مدة الاستمرارية النقدية", nameSv:"Kassabana (Cash Runway)", formulaAr:"مدة الاستمرار = متوسط_الإيراد_الشهري ÷ معدل_الإنفاق_اليومي", descAr:"كم يوماً تستطيع الاستمرار بالإيراد الحالي إذا لم تتغير المصاريف.", descSv:"Hur länge gården kan fortsätta med nuvarande intäkter.", benchmarkAr:"< 30 يوم خطر · 30–90 مقبول · 90–180 جيد · > 180 ممتاز", benchmarkSv:"< 30 Fara · 30–90 OK · 90–180 Bra · > 180 Utmärkt", colorClass:"text-cyan-600" },
   profit_velocity: { nameAr:"زخم الربح (Profit Velocity)", nameSv:"Vinstmomentum", formulaAr:"الزخم = ((ربح_الأخير − ربح_السابق) ÷ |ربح_السابق|) × 100", descAr:"معدل تسارع أو تباطؤ الربح. مثل مفهوم التسارع في الفيزياء.", descSv:"Vinstens accelerations-/inbromsningshastighet.", benchmarkAr:"> +20% ممتاز · +5 إلى +20% جيد · −5 إلى +5% محايد · < −5% تراجع", benchmarkSv:"> +20% Utmärkt · +5 till +20% Bra · −5 till +5% Neutral · < −5% Nedgång", colorClass:"text-emerald-600" },
-  pearson: { nameAr:"معامل ارتباط بيرسون", nameSv:"Pearsons korrelationskoefficient", formulaAr:"r = Σ((x−x̄)(y−ȳ)) ÷ √(Σ(x−x̄)² × Σ(y−ȳ)²)", descAr:"يقيس قوة العلاقة بين متغيرين (مثل: هل ارتفاع تكلفة العلف يرتبط بارتفاع الدخل؟)", descSv:"Mäter sambandsstyrkan mellan två variabler.", benchmarkAr:"|r| > 0.7 ارتباط قوي · 0.4–0.7 متوسط · < 0.4 ضعيف · سالب = عكسي", benchmarkSv:"|r| > 0.7 Starkt · 0.4–0.7 Måttligt · < 0.4 Svagt · Negativt = Invers", colorClass:"text-pink-600" },
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -235,17 +233,6 @@ function computeMonthly(txs: Tx[]): MonthRow[] {
   });
 }
 
-// ─── Pearson Correlation ──────────────────────────────────────────────────────
-function pearson(xs: number[], ys: number[]): number | null {
-  if (xs.length < 3 || xs.length !== ys.length) return null;
-  const xm = xs.reduce((s, v) => s + v, 0) / xs.length;
-  const ym = ys.reduce((s, v) => s + v, 0) / ys.length;
-  let num = 0, dx = 0, dy = 0;
-  xs.forEach((x, i) => { num += (x - xm) * (ys[i] - ym); dx += (x - xm) ** 2; dy += (ys[i] - ym) ** 2; });
-  const denom = Math.sqrt(dx * dy);
-  return denom > 0 ? num / denom : null;
-}
-
 // ─── Linear Regression ───────────────────────────────────────────────────────
 function linReg(vals: number[]): number {
   const n = vals.length;
@@ -260,12 +247,10 @@ function linReg(vals: number[]): number {
 interface AdvMetrics {
   emaIncome: number; emaExpense: number; emaProfit: number;
   monthZScores: { month: string; monthAr: string; profit: number; z: number; anomaly: boolean }[];
-  hhi: number; hhiGrade: "diverse" | "moderate" | "concentrated";
   cashRunway: number | null; profitVelocity: number | null; incomeCV: number | null;
   pred: { income: number; expense: number; profit: number } | null;
   heatmap: { cat: string; months: Record<string, number> }[];
   movingAvg: { month: string; monthAr: string; ma: number }[];
-  feedIncomeCorr: number | null;
   bestMonth: MonthRow | null; worstMonth: MonthRow | null;
   profitableStreak: number; lossStreak: number;
 }
@@ -281,12 +266,6 @@ function computeAdvanced(allTxs: Tx[], monthly: MonthRow[]): AdvMetrics {
   const mean = profits.length > 0 ? profits.reduce((s, v) => s + v, 0) / profits.length : 0;
   const std  = profits.length > 1 ? Math.sqrt(profits.map(p => (p - mean) ** 2).reduce((s, v) => s + v, 0) / profits.length) : 0;
   const monthZScores = monthly.map(m => ({ month: m.month, monthAr: m.monthAr, profit: m.profit, z: std > 0 ? (m.profit - mean) / std : 0, anomaly: std > 0 && Math.abs((m.profit - mean) / std) > 1.8 }));
-
-  const totalExp = allTxs.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
-  const expMap: Record<string, number> = {};
-  allTxs.filter(t => t.type === "expense").forEach(t => { expMap[t.category] = (expMap[t.category] || 0) + Number(t.amount); });
-  const hhi = totalExp > 0 ? Object.values(expMap).reduce((s, v) => s + ((v / totalExp) * 100) ** 2, 0) : 0;
-  const hhiGrade: AdvMetrics["hhiGrade"] = hhi < 1500 ? "diverse" : hhi < 2500 ? "moderate" : "concentrated";
 
   const avg3Inc = monthly.slice(-3).reduce((s, m) => s + m.income, 0) / Math.max(1, Math.min(3, monthly.length));
   const avg3Exp = monthly.slice(-3).reduce((s, m) => s + m.expense, 0) / Math.max(1, Math.min(3, monthly.length));
@@ -320,13 +299,6 @@ function computeAdvanced(allTxs: Tx[], monthly: MonthRow[]): AdvMetrics {
 
   const movingAvg = monthly.slice(2).map((m, i) => ({ month: m.month, monthAr: m.monthAr, ma: (monthly[i].profit + monthly[i + 1].profit + m.profit) / 3 }));
 
-  // Pearson: feed cost (monthly) vs income (monthly)
-  const monthFeedCost: Record<string, number> = {};
-  allTxs.filter(t => t.type === "expense" && t.category === "feed").forEach(t => { const mo = t.date.slice(0, 7); monthFeedCost[mo] = (monthFeedCost[mo] || 0) + Number(t.amount); });
-  const feedArr = monthly.map(m => monthFeedCost[`${new Date().getFullYear()}-${m.month}`] ?? 0);
-  const incArr  = monthly.map(m => m.income);
-  const feedIncomeCorr = pearson(feedArr, incArr);
-
   // Best/Worst month
   const bestMonth  = monthly.length > 0 ? monthly.reduce((a, b) => b.profit > a.profit ? b : a) : null;
   const worstMonth = monthly.length > 0 ? monthly.reduce((a, b) => b.profit < a.profit ? b : a) : null;
@@ -338,7 +310,7 @@ function computeAdvanced(allTxs: Tx[], monthly: MonthRow[]): AdvMetrics {
     else { if (profitableStreak === 0) lossStreak++; else break; }
   }
 
-  return { emaIncome: emaInc, emaExpense: emaExp, emaProfit, monthZScores, hhi, hhiGrade, cashRunway, profitVelocity, incomeCV, pred, heatmap, movingAvg, feedIncomeCorr, bestMonth, worstMonth, profitableStreak, lossStreak };
+  return { emaIncome: emaInc, emaExpense: emaExp, emaProfit, monthZScores, cashRunway, profitVelocity, incomeCV, pred, heatmap, movingAvg, bestMonth, worstMonth, profitableStreak, lossStreak };
 }
 
 // ─── Alert Engine ────────────────────────────────────────────────────────────
@@ -373,8 +345,6 @@ function generateRecommendations(m: FinMetrics, adv: AdvMetrics, monthly: MonthR
   const recs: Rec[] = [];
   if (m.feedRatio !== null && m.feedRatio > 65)
     recs.push({ id: "feed_cost", icon: "🌾", priority: "high", titleAr: "خفّض تكلفة العلف", titleSv: "Minska foderkostnaden", bodyAr: `العلف يستهلك ${m.feedRatio.toFixed(0)}% من ميزانيتك. حاول التفاوض مع الموردين أو التحول لعلف أرخص مع مراقبة FCR. هدفك: أقل من 65%.`, bodySv: `Foder förbrukar ${m.feedRatio.toFixed(0)}% av din budget. Förhandla med leverantörer eller byt till billigare foder.` });
-  if (adv.hhiGrade === "concentrated")
-    recs.push({ id: "diversify", icon: "📊", priority: "high", titleAr: "تنويع مصادر الدخل", titleSv: "Diversifiera inkomstkällor", bodyAr: "مصاريفك مركزة جداً في فئة واحدة (HHI مرتفع). هذا يجعلك عرضة لأي صدمة في الأسعار. حاول توزيع الإنفاق بشكل أكثر توازناً.", bodySv: "Dina kostnader är mycket koncentrerade. Hög HHI gör dig sårbar för prisrörelser." });
   if (m.profitMargin !== null && m.profitMargin > 0 && m.profitMargin < 15)
     recs.push({ id: "margin", icon: "💰", priority: "high", titleAr: "رفع أسعار البيع", titleSv: "Höj försäljningspriset", bodyAr: `هامش ربحك ${m.profitMargin.toFixed(1)}% — منخفض. زيادة أسعار البيع 10% ستحسن هامشك بشكل ملحوظ مع الحفاظ على تنافسيتك في السوق.`, bodySv: `Vinstmarginal ${m.profitMargin.toFixed(1)}% är låg. Öka priset 10% för märkbar förbättring.` });
   if (adv.cashRunway !== null && adv.cashRunway < 60)
@@ -967,11 +937,9 @@ export default function Finance() {
         {drillKey === "roi" && m.roi !== null && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "قيمتك الحالية" : "Ditt nuvarande värde"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{m.roi.toFixed(1)}%</p></div>}
         {drillKey === "profit_margin" && m.profitMargin !== null && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "قيمتك الحالية" : "Ditt nuvarande värde"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{m.profitMargin.toFixed(1)}%</p></div>}
         {drillKey === "oer" && m.oer !== null && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "قيمتك الحالية" : "Ditt nuvarande värde"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{m.oer.toFixed(1)}%</p></div>}
-        {drillKey === "hhi" && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "مؤشر HHI الحالي" : "Nuvarande HHI"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{Math.round(adv.hhi).toLocaleString()}</p><Badge className="mt-2">{adv.hhiGrade === "diverse" ? (ar ? "متنوع ✅" : "Diversifierat ✅") : adv.hhiGrade === "moderate" ? (ar ? "متوسط ⚠️" : "Måttligt ⚠️") : (ar ? "مركز ❌" : "Koncentrerat ❌")}</Badge></div>}
         {drillKey === "z_score" && <div className="space-y-2"><p className="text-[10px] font-bold">{ar ? "الشهور الاستثنائية:" : "Exceptionella månader:"}</p>{adv.monthZScores.filter(z => z.anomaly).map(z => <div key={z.month} className="flex items-center justify-between text-xs rounded-lg bg-rose-50 dark:bg-rose-950/20 px-3 py-2"><span>{ar ? z.monthAr : z.month}</span><span className="font-black text-rose-600">Z = {z.z.toFixed(2)}</span></div>)}{!adv.monthZScores.some(z => z.anomaly) && <p className="text-[11px] text-muted-foreground">{ar ? "لا توجد أشهر استثنائية — أداء مستقر" : "Inga exceptionella månader"}</p>}</div>}
         {drillKey === "ema_trend" && <div className="grid grid-cols-3 gap-2 text-center">{[{ l: ar?"دخل EMA":"Intäkt EMA", v: adv.emaIncome, c:"text-emerald-600" }, { l: ar?"مصاريف EMA":"Kostnad EMA", v: adv.emaExpense, c:"text-red-600" }, { l: ar?"ربح EMA":"Vinst EMA", v: adv.emaProfit, c:"text-blue-600" }].map(x => <div key={x.l} className="rounded-xl bg-muted/40 p-2.5"><p className="text-[9px] text-muted-foreground">{x.l}</p><p className={cn("text-xs font-black", x.c)}>{fmtAmount(x.v, lang as any)}</p></div>)}</div>}
         {drillKey === "cash_runway" && adv.cashRunway !== null && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "مدة الاستمرارية" : "Kassabana"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{Math.round(adv.cashRunway)}</p><p className="text-sm text-muted-foreground">{ar ? "يوم" : "dagar"}</p></div>}
-        {drillKey === "pearson" && <div className="text-center py-2"><p className="text-[10px] text-muted-foreground">{ar ? "معامل الارتباط (علف ↔ دخل)" : "Korrelation (foder ↔ intäkt)"}</p><p className={cn("text-4xl font-black mt-1", info.colorClass)}>{adv.feedIncomeCorr !== null ? adv.feedIncomeCorr.toFixed(3) : "—"}</p><p className="text-[10px] text-muted-foreground mt-1">{adv.feedIncomeCorr !== null ? (Math.abs(adv.feedIncomeCorr) > 0.7 ? (ar ? "ارتباط قوي" : "Starkt samband") : Math.abs(adv.feedIncomeCorr) > 0.4 ? (ar ? "ارتباط متوسط" : "Måttligt samband") : (ar ? "ارتباط ضعيف" : "Svagt samband")) : "—"}</p></div>}
       </div>
     );
   }, [drillKey, m, adv, ar, lang]);
@@ -988,7 +956,7 @@ export default function Finance() {
                 <Brain className="w-4 h-4 text-purple-500" />
                 {ar ? "المالية والإنتاج — الذكاء المتكامل" : "Ekonomi & Produktion — Integrerad intelligens"}
               </h1>
-              <p className="text-[9px] text-muted-foreground">EMA · Z-Score · HHI · Pearson · محاكاة · توصيات · اضغط أي رقم لفهمه</p>
+              <p className="text-[9px] text-muted-foreground">EMA · Z-Score · توقعات · محاكاة · توصيات · اضغط أي رقم لفهمه</p>
             </div>
             <LiveBadge fetching={isFetching} />
           </div>
@@ -1161,29 +1129,24 @@ export default function Finance() {
               </div>
             )}
 
-            {/* HHI + Pearson + Prediction */}
-            <div className="grid grid-cols-3 gap-2">
-              <div role="button" tabIndex={0} onClick={() => setDrillKey("hhi")} onKeyDown={e => e.key==="Enter"&&setDrillKey("hhi")} className={cn("rounded-2xl border border-border/40 p-3 cursor-pointer hover:shadow-md transition-all", adv.hhiGrade==="diverse"?"bg-emerald-50 dark:bg-emerald-950/20":adv.hhiGrade==="moderate"?"bg-amber-50 dark:bg-amber-950/20":"bg-red-50 dark:bg-red-950/20")}>
-                <p className="text-[9px] text-muted-foreground mb-1">HHI</p>
-                <p className="text-sm font-black">{Math.round(adv.hhi).toLocaleString()}</p>
-                <p className="text-[9px] mt-0.5">{adv.hhiGrade==="diverse"?"✅ متنوع":adv.hhiGrade==="moderate"?"⚠️ متوسط":"❌ مركز"}</p>
-                <p className="text-[8px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5"><Eye className="w-2 h-2" />{ar?"اضغط":"Tryck"}</p>
-              </div>
-              <div role="button" tabIndex={0} onClick={() => setDrillKey("pearson")} onKeyDown={e => e.key==="Enter"&&setDrillKey("pearson")} className="rounded-2xl border border-border/40 bg-pink-50 dark:bg-pink-950/20 p-3 cursor-pointer hover:shadow-md transition-all">
-                <p className="text-[9px] text-muted-foreground mb-1">{ar?"ارتباط بيرسون":"Pearson r"}</p>
-                <p className="text-sm font-black text-pink-600">{adv.feedIncomeCorr !== null ? adv.feedIncomeCorr.toFixed(2) : "—"}</p>
-                <p className="text-[9px] mt-0.5 text-pink-500">{ar?"علف ↔ دخل":"Foder ↔ Intäkt"}</p>
-                <p className="text-[8px] text-muted-foreground/40 mt-0.5 flex items-center gap-0.5"><Eye className="w-2 h-2" />{ar?"اضغط":"Tryck"}</p>
-              </div>
-              {adv.pred && (
-                <div className="rounded-2xl bg-slate-800 p-3 text-white">
-                  <p className="text-[9px] text-slate-400 mb-1.5 flex items-center gap-1"><Zap className="w-3 h-3 text-yellow-400" />{ar?"توقع":"Prognos"}</p>
-                  {[{ l:ar?"دخل":"Inc", v:adv.pred.income, c:"text-emerald-400" }, { l:ar?"ربح":"Vin", v:adv.pred.profit, c:adv.pred.profit>=0?"text-blue-400":"text-orange-400" }].map(x => (
-                    <div key={x.l} className="flex justify-between text-[9px] mb-1"><span className="text-slate-400">{x.l}</span><span className={cn("font-black", x.c)}>{fmtAmount(x.v, lang as any)}</span></div>
+            {/* Prediction (next-month linear projection) */}
+            {adv.pred && (
+              <div className="rounded-2xl bg-slate-800 p-3 text-white">
+                <p className="text-[9px] text-slate-400 mb-2 flex items-center gap-1"><Zap className="w-3 h-3 text-yellow-400" />{ar?"توقع الشهر القادم (انحدار خطي على آخر 6 أشهر)":"Prognos nästa månad (linjär regression, 6 mån)"}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { l:ar?"دخل متوقع":"Förv. intäkt", v:adv.pred.income,  c:"text-emerald-400" },
+                    { l:ar?"مصاريف متوقعة":"Förv. kostnad", v:adv.pred.expense, c:"text-red-400" },
+                    { l:ar?"ربح متوقع":"Förv. vinst",  v:adv.pred.profit,   c:adv.pred.profit>=0?"text-blue-400":"text-orange-400" },
+                  ].map(x => (
+                    <div key={x.l} className="rounded-lg bg-slate-700/50 p-2">
+                      <p className="text-[9px] text-slate-400 mb-0.5">{x.l}</p>
+                      <p className={cn("text-xs font-black", x.c)}>{fmtAmount(x.v, lang as any)}</p>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Expense Heatmap */}
             {adv.heatmap.length > 0 && monthly.length >= 2 && (
@@ -1232,7 +1195,7 @@ export default function Finance() {
                 <p className="text-sm font-black text-emerald-600 mt-1">{fmtAmount(m.dailyRevRate, lang as any)}</p>
                 <p className="text-[8px] text-muted-foreground">{ar?"/ يوم":"/ dag"}</p>
               </div>
-              <div role="button" tabIndex={0} onClick={() => setDrillKey("pearson")} className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-border/40 p-3 cursor-pointer hover:bg-muted/30">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-border/40 p-3">
                 <p className="text-[9px] text-muted-foreground">{ar?"ثبات الدخل CV":"Stabilitet CV"}</p>
                 <p className="text-sm font-black text-blue-600 mt-1">{adv.incomeCV !== null ? `${adv.incomeCV.toFixed(0)}%` : "—"}</p>
                 <p className="text-[8px] text-muted-foreground">{ar?"أقل = أكثر استقراراً":"Lägre = stabilt"}</p>

@@ -14,6 +14,8 @@ const translations: Record<string, Record<Lang, string>> = {
   "role.admin.badge": { ar: "مدير", sv: "Admin" },
 
   "nav.dashboard": { ar: "لوحة المتابعة", sv: "Översikt" },
+  "nav.smartInput": { ar: "إدخال ذكي", sv: "Smart inmatning" },
+  "nav.smartInput.desc": { ar: "اكتب يومك بالعربي ودع النظام يحفظه لك", sv: "Skriv din dag — systemet sparar åt dig" },
   "nav.flocks": { ar: "الدجاجات", sv: "Höns" },
   "nav.hatching": { ar: "التفقيس", sv: "Kläckning" },
   "nav.tasks": { ar: "المهام اليومية", sv: "Dagliga uppgifter" },

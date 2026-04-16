@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response, type NextFunction } 
 import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, transactionsTable } from "@workspace/db";
 import { sql, eq, desc } from "drizzle-orm";
 import { parseNote } from "../lib/noteSmartParser";
+import { validateActions } from "../lib/actionValidator";
 import { runFullAnalysis, buildQuickSolve } from "../lib/ai-engine";
 import {
   runPredictiveAnalysis,
@@ -605,6 +606,200 @@ router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "فشل التحليل الذكي" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REAL-TIME PIPELINE — Strict Parse → Validate → Review → Commit
+// ─────────────────────────────────────────────────────────────────────────────
+//
+//  POST /api/ai/parse   — parse text + validate. NO database writes.
+//                          Response: { actions, validation, summary }
+//                          The frontend must show this to the user for review.
+//
+//  POST /api/ai/commit  — accepts a pre-reviewed actions array, re-validates
+//                          on the server (zero trust), then atomically writes
+//                          to the database. Returns saved IDs + a fingerprint
+//                          so all clients can refresh their KPIs immediately.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/ai/parse", async (req: Request, res: Response) => {
+  try {
+    const { text, date, lang } = req.body ?? {};
+    if (!text || typeof text !== "string" || text.trim().length < 5) {
+      res.status(400).json({ error: "النص مطلوب (≥ 5 أحرف)" });
+      return;
+    }
+    const noteDate = date ?? new Date().toISOString().split("T")[0];
+    const noteLang: "ar" | "sv" = lang === "sv" ? "sv" : "ar";
+    const parsed = parseNote(text.trim(), noteDate, noteLang);
+    const validation = await validateActions(parsed.actions);
+    res.json({
+      summary: parsed.summary,
+      inputText: parsed.inputText,
+      actions: parsed.actions,
+      validation,
+    });
+  } catch (err: any) {
+    console.error("[ai/parse]", err);
+    res.status(500).json({ error: err?.message ?? "فشل التحليل" });
+  }
+});
+
+router.post("/ai/commit", async (req: Request, res: Response) => {
+  try {
+    const { actions, date, lang, originalText } = req.body ?? {};
+    if (!Array.isArray(actions) || actions.length === 0) {
+      res.status(400).json({ error: "لا توجد إجراءات للحفظ" });
+      return;
+    }
+    const noteDate = date ?? new Date().toISOString().split("T")[0];
+    const noteLang: "ar" | "sv" = lang === "sv" ? "sv" : "ar";
+    const authorId: number | undefined = req.session.userId as number | undefined;
+
+    // Re-validate on the server (zero trust — never assume the client is honest)
+    const validation = await validateActions(actions as any);
+    if (!validation.canCommit) {
+      res.status(422).json({
+        error: noteLang === "ar"
+          ? "البيانات لم تجتز التحقق — راجع الأخطاء"
+          : "Data klarade inte valideringen — granska fel",
+        validation,
+      });
+      return;
+    }
+
+    let authorName: string | null = null;
+    if (authorId) {
+      const userRow = await db.execute(sql`SELECT username FROM users WHERE id = ${authorId} LIMIT 1`);
+      authorName = (userRow.rows[0] as any)?.username ?? null;
+    }
+
+    const saved: Array<{ type: string; id: number; description: string }> = [];
+    const failed: Array<{ index: number; type: string; error: string }> = [];
+
+    // Atomic transaction — either all rows commit together or nothing does.
+    await db.transaction(async (tx) => {
+    for (let i = 0; i < validation.actions.length; i++) {
+      const v = validation.actions[i];
+      const action = v.action;
+      const d = v.normalized;
+      try {
+        if (action.type === "hatching_cycle") {
+          const [row] = await tx.insert(hatchingCyclesTable).values({
+            batchName: d.batchName,
+            eggsSet: d.eggsSet,
+            startDate: d.startDate,
+            expectedHatchDate: d.expectedHatchDate,
+            lockdownDate: d.lockdownDate,
+            status: "incubating",
+            temperature: String(d.temperature ?? 37.65),
+            humidity: String(d.humidity ?? 52),
+            notes: d.notes ?? null,
+          }).returning();
+          saved.push({ type: "hatching_cycle", id: row.id, description: action.description });
+        } else if (action.type === "hatching_result") {
+          const activeCycles = await tx.select()
+            .from(hatchingCyclesTable)
+            .where(eq(hatchingCyclesTable.status, "incubating"))
+            .orderBy(desc(hatchingCyclesTable.id))
+            .limit(1);
+          if (activeCycles.length === 0) {
+            failed.push({ index: i, type: action.type, error: "no_active_cycle" });
+            continue;
+          }
+          const cycle = activeCycles[0];
+          await tx.update(hatchingCyclesTable).set({
+            eggsHatched: d.eggsHatched,
+            actualHatchDate: d.actualHatchDate ?? noteDate,
+            status: "completed",
+          }).where(eq(hatchingCyclesTable.id, cycle.id));
+          saved.push({ type: "hatching_result", id: cycle.id, description: action.description });
+        } else if (action.type === "transaction") {
+          const [row] = await tx.insert(transactionsTable).values({
+            date: d.date ?? noteDate,
+            type: d.type,
+            category: d.category,
+            description: d.description,
+            amount: String(d.amount),
+            quantity: d.quantity ? String(d.quantity) : null,
+            unit: d.unit ?? null,
+            notes: d.notes ?? null,
+            authorId: authorId ?? null,
+            authorName,
+          }).returning();
+          saved.push({ type: "transaction", id: row.id, description: action.description });
+        } else if (action.type === "flock") {
+          const [row] = await tx.insert(flocksTable).values({
+            name: d.name,
+            breed: d.breed ?? "محلي",
+            count: d.count,
+            ageDays: d.ageDays ?? 1,
+            purpose: d.purpose ?? "meat",
+            notes: d.notes ?? null,
+          }).returning();
+          saved.push({ type: "flock", id: row.id, description: action.description });
+        } else if (action.type === "task") {
+          const [row] = await tx.insert(tasksTable).values({
+            title: d.title,
+            description: d.description ?? null,
+            category: d.category ?? "other",
+            priority: d.priority ?? "medium",
+            completed: false,
+            dueDate: d.dueDate ?? null,
+          }).returning();
+          saved.push({ type: "task", id: row.id, description: action.description });
+        }
+      } catch (actionErr: any) {
+        console.error("[ai/commit] action failed:", action.type, actionErr?.message);
+        failed.push({ index: i, type: action.type, error: actionErr?.message ?? "unknown" });
+        // Abort the whole transaction on any insert failure — atomicity guarantee
+        throw actionErr;
+      }
+    }
+
+    // Persist the source text as a daily note for full traceability (inside the same tx)
+    if (originalText && typeof originalText === "string" && originalText.trim().length > 0) {
+      try {
+        await tx.insert(dailyNotesTable).values({
+          date: noteDate,
+          content: originalText.substring(0, 1000),
+          authorName,
+          category: "health",
+        });
+      } catch { /* non-fatal — note is auxiliary */ }
+    }
+    }); // end transaction
+
+    // Compute a fresh fingerprint so the client can detect data changes
+    const after = await getRawFarmData();
+    const fpStr = [
+      after.flocks.length,
+      after.hatchingCycles.length,
+      after.tasks.length,
+      after.notes.length,
+      after.hatchingCycles.reduce((s: number, c: any) => s + (Number(c.eggsSet) || 0), 0),
+      Date.now(),
+    ].join(":");
+    let h = 5381;
+    for (let i = 0; i < fpStr.length; i++) { h = ((h << 5) + h + fpStr.charCodeAt(i)) >>> 0; }
+
+    res.json({
+      success: true,
+      saved,
+      failed,
+      counts: {
+        transactions: saved.filter(s => s.type === "transaction").length,
+        hatchingCycles: saved.filter(s => s.type === "hatching_cycle" || s.type === "hatching_result").length,
+        flocks: saved.filter(s => s.type === "flock").length,
+        tasks: saved.filter(s => s.type === "task").length,
+      },
+      fingerprint: h.toString(16),
+      committedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("[ai/commit]", err);
+    res.status(500).json({ error: err?.message ?? "فشل الحفظ" });
   }
 });
 

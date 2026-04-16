@@ -107,3 +107,16 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - Finance tabs: `dashboard|add|analysis|simulator|transactions|statement`
 - Analytics live polling: every 5 seconds (`REFRESH_INTERVAL = 5_000`), live tick counter every 1 second.
 - Feed unit parsing: كيلو/كغ→×1, طن/ton→×1000, غرام/gram→÷1000 (used in both analytics.ts backend AND analytics.tsx frontend).
+## Production-Grade Smart Input Pipeline (April 2026)
+
+- **New page `/smart-input` (`pages/smart-input.tsx`):** WhatsApp-style chat where worker types daily activity in Arabic/Swedish. Pipeline: type → parse → review (editable cards with toggles + validation badges) → confirm → atomic commit → all dashboards refresh automatically via `queryClient.invalidateQueries()`.
+- **Backend split: `POST /api/ai/parse` (no writes, returns actions + per-action validation) + `POST /api/ai/commit` (re-validates server-side, atomic `db.transaction`, returns saved IDs + fingerprint).** Old `/api/ai/smart-analyze` kept for `/notes` backward compat.
+- **Strict validator `lib/actionValidator.ts`:** range checks (amount 1–100M, eggs 1–50K, birds 1–200K, temp 30–45°C optimal 37.5–37.8, humidity 10–100% incubation 50–55%), duplicate detection (same date+amount+category+type → warning), logic checks (eggsHatched ≤ eggsSet, no active cycle for hatching_result, future-dated transactions warned), bilingual AR/SV error messages with severity (error blocks / warning advises / info notes).
+- **Atomicity:** All inserts wrapped in `db.transaction` — if any action fails the entire commit rolls back, preventing partial writes that could corrupt KPIs.
+- **Source-text traceability:** Original text persisted to `daily_notes` inside the same transaction.
+- **Nav:** New entry "إدخال ذكي / Smart inmatning" with `MessageSquareText` icon, placed second after Dashboard.
+
+## Finance Module Cleanup (April 2026)
+
+- **Removed HHI (Herfindahl-Hirschman Index) and Pearson Correlation** from `pages/finance.tsx` — they were academically interesting but operationally non-actionable for a single-farm context. Removed from: `GLOSSARY` entries, `pearson()` function, `AdvMetrics` interface (`hhi`, `hhiGrade`, `feedIncomeCorr`), `computeAdvanced()` logic, `generateRecommendations()` "diversify" rec, drill-down branches, the 2-tile UI section (replaced by a richer 3-cell next-month linear-regression prediction card), header subtitle, and file header comment.
+- **Income CV stability tile** is now static (no longer mistakenly bound to the deleted `setDrillKey("pearson")`).

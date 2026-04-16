@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet, Microscope,
-  Activity, Database,
+  Activity, Database, MessageSquareText,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const WHATSAPP_GROUP_URL = "https://wa.me";
 
 const NAV_KEYS = [
   { href: "/",            key: "nav.dashboard",   descKey: "nav.dashboard.desc",   icon: LayoutDashboard, adminOnly: false },
+  { href: "/smart-input", key: "nav.smartInput",  descKey: "nav.smartInput.desc",  icon: MessageSquareText, adminOnly: false },
   { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/tasks",       key: "nav.tasks",        descKey: "nav.tasks.desc",       icon: CheckSquare,     adminOnly: false },
