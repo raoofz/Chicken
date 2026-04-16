@@ -300,6 +300,83 @@ function linReg(vals: number[]): number {
   return Math.max(0, Math.round(ym - slope * xm + slope * n));
 }
 
+// ─── Feed Unit Parser — normalise to kg ───────────────────────────────────────
+// Accepts Arabic & English units. Returns null when unit is unknown/missing.
+function parseFeedKg(qty: string | null, unit: string | null): number | null {
+  if (!qty || Number(qty) <= 0) return null;
+  const q = Number(qty);
+  const u = (unit ?? "").trim().toLowerCase();
+  if (/^(كيلو|كغ|كيلوغرام|كيلوجرام|كلو|كلغ|kg|kilogram)$/.test(u)) return q;
+  if (/^(طن|تن|ton|t|tonne)$/.test(u)) return q * 1000;
+  if (/^(غرام|جرام|gram|g|غ|جـ)$/.test(u)) return q / 1000;
+  if (u === "نصف طن") return q * 500;
+  return null;
+}
+
+// ─── Feed Consumption Metrics Engine ─────────────────────────────────────────
+interface FeedMetrics {
+  totalFeedKg:      number;
+  totalFeedCost:    number;
+  dailyFeedKg:      number;
+  feedPerBirdKg:    number | null;
+  feedCostPerKg:    number | null;
+  feedCostPerBird:  number | null;
+  trackedEntries:   number;
+  untrackedEntries: number;
+  monthlyFeed: { month: string; monthAr: string; kg: number; cost: number }[];
+  fcrGrade:  "excellent" | "good" | "fair" | "high";
+}
+
+function computeFeedMetrics(
+  allTxs: Tx[], flocks: Flock[], periodTxs: Tx[], periodDays: number
+): FeedMetrics {
+  const feedTxs = periodTxs.filter(t => t.type === "expense" && t.category === "feed");
+  const totalFeedCost = feedTxs.reduce((s, t) => s + Number(t.amount), 0);
+
+  let totalFeedKg = 0, tracked = 0, untracked = 0;
+  feedTxs.forEach(t => {
+    const kg = parseFeedKg(t.quantity, t.unit);
+    if (kg !== null) { totalFeedKg += kg; tracked++; } else untracked++;
+  });
+
+  const totalBirds     = flocks.reduce((s, f) => s + f.count, 0);
+  const feedPerBirdKg  = totalFeedKg > 0 && totalBirds > 0 ? totalFeedKg   / totalBirds : null;
+  const feedCostPerKg  = totalFeedKg > 0                   ? totalFeedCost / totalFeedKg : null;
+  const feedCostPerBird = totalBirds > 0 && totalFeedCost > 0 ? totalFeedCost / totalBirds : null;
+  const dailyFeedKg    = periodDays > 0 && totalFeedKg > 0  ? totalFeedKg  / periodDays : 0;
+
+  const AR_MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو",
+                     "يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const mMap: Record<string, { kg: number; cost: number }> = {};
+  allTxs.filter(t => t.type === "expense" && t.category === "feed").forEach(t => {
+    const m = t.date.slice(0, 7);
+    if (!mMap[m]) mMap[m] = { kg: 0, cost: 0 };
+    mMap[m].cost += Number(t.amount);
+    const kg = parseFeedKg(t.quantity, t.unit);
+    if (kg !== null) mMap[m].kg += kg;
+  });
+  const monthlyFeed = Object.entries(mMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([m, d]) => {
+      const [, mo] = m.split("-");
+      return { month: m.slice(5), monthAr: AR_MONTHS[parseInt(mo) - 1] ?? m, ...d };
+    });
+
+  // FCR grade by kg/bird (broiler benchmark: 3.5–5 kg/bird per 42-day cycle)
+  const fcrGrade: FeedMetrics["fcrGrade"] =
+    feedPerBirdKg === null ? "good" :
+    feedPerBirdKg < 3     ? "excellent" :
+    feedPerBirdKg <= 5    ? "good" :
+    feedPerBirdKg <= 7    ? "fair" : "high";
+
+  return {
+    totalFeedKg, totalFeedCost, dailyFeedKg,
+    feedPerBirdKg, feedCostPerKg, feedCostPerBird,
+    trackedEntries: tracked, untrackedEntries: untracked,
+    monthlyFeed, fcrGrade,
+  };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 //  SUB-COMPONENTS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -453,6 +530,190 @@ function ChartTooltip({ active, payload, label, ar }: any) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+//  FEED CONSUMPTION CARD
+// ══════════════════════════════════════════════════════════════════════════════
+function FeedConsumptionCard({ feed, ar, lang, onAddFeed }: {
+  feed: FeedMetrics; ar: boolean; lang: string; onAddFeed: () => void;
+}) {
+  const fmtKg = (kg: number) =>
+    kg >= 1000
+      ? `${(kg / 1000).toFixed(2)} ${ar ? "طن" : "ton"}`
+      : `${kg.toFixed(1)} ${ar ? "كغ" : "kg"}`;
+
+  const gradeInfo = {
+    excellent: { label: ar ? "كفاءة ممتازة 🌟" : "Utmärkt effektivitet 🌟", color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/20", bar: "#10b981", pct: 95 },
+    good:      { label: ar ? "كفاءة جيدة ✅"    : "Bra effektivitet ✅",    color: "text-blue-600",    bg: "bg-blue-50 dark:bg-blue-950/20",    bar: "#3b82f6", pct: 70 },
+    fair:      { label: ar ? "استهلاك مرتفع ⚠️" : "Hög konsumtion ⚠️",   color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/20",  bar: "#f59e0b", pct: 45 },
+    high:      { label: ar ? "استهلاك مفرط ❌"   : "Överdriven konsumtion ❌", color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/20",    bar: "#ef4444", pct: 20 },
+  }[feed.fcrGrade];
+
+  const hasFeedData = feed.totalFeedCost > 0;
+  const hasKgData   = feed.totalFeedKg > 0;
+
+  return (
+    <Card className="border-none shadow-sm overflow-hidden">
+      <div className="h-1 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-500" />
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Wheat className="w-4 h-4 text-amber-500" />
+          {ar ? "استهلاك وكفاءة العلف" : "Foder konsumtion & effektivitet"}
+          <Badge variant="outline" className="text-[9px] ms-auto">
+            {feed.trackedEntries} {ar ? "سجل بوزن" : "viktposter"}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 space-y-4">
+
+        {!hasFeedData ? (
+          <div className="text-center py-6">
+            <span className="text-4xl mb-3 block">🌾</span>
+            <p className="text-sm font-semibold mb-1">{ar ? "لا توجد سجلات علف بعد" : "Inga foderposter ännu"}</p>
+            <p className="text-[10px] text-muted-foreground mb-3">
+              {ar
+                ? "أضف مصاريف العلف مع الكمية (كغ أو طن) لتفعيل تحليل الاستهلاك"
+                : "Lägg till foderkostnader med vikt (kg eller ton) för att aktivera analys"}
+            </p>
+            <button onClick={onAddFeed}
+              className="text-xs font-bold text-amber-600 hover:text-amber-700 underline underline-offset-2">
+              {ar ? "← سجّل علفاً الآن" : "← Registrera foder nu"}
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* KPI Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                {
+                  label: ar ? "إجمالي العلف المستهلك" : "Total foder konsumerat",
+                  value: hasKgData ? fmtKg(feed.totalFeedKg) : "—",
+                  sub:   hasKgData ? (ar ? `يومياً: ${fmtKg(feed.dailyFeedKg)}` : `Per dag: ${fmtKg(feed.dailyFeedKg)}`) : (ar ? "أدخل الكمية والوحدة" : "Ange mängd och enhet"),
+                  bg: "bg-amber-50 dark:bg-amber-950/20", color: "text-amber-700 dark:text-amber-300",
+                },
+                {
+                  label: ar ? "تكلفة إجمالي العلف" : "Total foderkostnad",
+                  value: fmtAmount(feed.totalFeedCost, lang as any),
+                  sub:   feed.feedCostPerKg !== null
+                    ? (ar ? `${fmtAmount(feed.feedCostPerKg, lang as any)} / كغ` : `${fmtAmount(feed.feedCostPerKg, lang as any)} / kg`)
+                    : (ar ? "أدخل وزن العلف لحساب السعر/كغ" : "Ange vikt för att beräkna pris/kg"),
+                  bg: "bg-red-50 dark:bg-red-950/20", color: "text-red-700 dark:text-red-300",
+                },
+                {
+                  label: ar ? "علف لكل طير" : "Foder per fågel",
+                  value: feed.feedPerBirdKg !== null ? fmtKg(feed.feedPerBirdKg) : "—",
+                  sub:   ar ? "معيار دجاج اللحم: 3.5–5 كغ/طير" : "Broilerstandard: 3,5–5 kg/fågel",
+                  bg: "bg-orange-50 dark:bg-orange-950/20", color: "text-orange-700 dark:text-orange-300",
+                },
+                {
+                  label: ar ? "تكلفة العلف للطير" : "Foderkostnad per fågel",
+                  value: feed.feedCostPerBird !== null ? fmtAmount(feed.feedCostPerBird, lang as any) : "—",
+                  sub:   ar ? "من إجمالي تكلفة العلف" : "Av total foderkostnad",
+                  bg: "bg-yellow-50 dark:bg-yellow-950/20", color: "text-yellow-700 dark:text-yellow-300",
+                },
+              ].map(({ label, value, sub, bg, color }) => (
+                <div key={label} className={cn("rounded-xl p-3", bg)}>
+                  <p className="text-[9px] text-muted-foreground leading-tight">{label}</p>
+                  <p className={cn("text-sm font-black mt-0.5", color)}>{value}</p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5 leading-tight">{sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* FCR Efficiency Rating */}
+            {feed.feedPerBirdKg !== null && (
+              <div className={cn("rounded-xl p-3.5", gradeInfo.bg)}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">{ar ? "كفاءة معدل التحويل الغذائي (FCR)" : "Foderkonverteringsgrad (FCR)"}</p>
+                    <p className={cn("text-sm font-black", gradeInfo.color)}>{gradeInfo.label}</p>
+                  </div>
+                  <div className="text-end">
+                    <p className={cn("text-xl font-black", gradeInfo.color)}>
+                      {feed.feedPerBirdKg.toFixed(1)}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground">{ar ? "كغ/طير" : "kg/fågel"}</p>
+                  </div>
+                </div>
+                <div className="h-2 bg-white/50 dark:bg-black/20 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${gradeInfo.pct}%`, background: gradeInfo.bar }} />
+                </div>
+                <div className="flex justify-between text-[9px] text-muted-foreground mt-1.5">
+                  <span>{ar ? "ممتاز < 3" : "Utmärkt < 3"}</span>
+                  <span>{ar ? "جيد 3–5" : "Bra 3–5"}</span>
+                  <span>{ar ? "مرتفع > 7" : "Hög > 7"}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Monthly feed bar chart */}
+            {feed.monthlyFeed.length > 1 && hasKgData && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-2">
+                  {ar ? "استهلاك العلف الشهري (كغ)" : "Månatlig foderkonsumtion (kg)"}
+                </p>
+                <ResponsiveContainer width="100%" height={100}>
+                  <BarChart data={feed.monthlyFeed} margin={{ top: 0, right: 0, bottom: 0, left: -28 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey={ar ? "monthAr" : "month"} tick={{ fontSize: 8 }} />
+                    <YAxis tick={{ fontSize: 8 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}t` : `${v}`} />
+                    <Tooltip
+                      formatter={(v: any) => [`${Number(v).toFixed(0)} ${ar ? "كغ" : "kg"}`, ar ? "علف" : "Foder"]}
+                      labelFormatter={l => l}
+                    />
+                    <Bar dataKey="kg" fill="#f59e0b" radius={[3,3,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Untracked warning */}
+            {feed.untrackedEntries > 0 && (
+              <div className="flex items-start gap-2 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-border/40 p-3">
+                <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-[10px] font-semibold">
+                    {ar
+                      ? `${feed.untrackedEntries} سجل علف بدون وزن مُعرَّف`
+                      : `${feed.untrackedEntries} foderposter utan definierad vikt`}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5">
+                    {ar
+                      ? "أضف الكمية بوحدة: كيلو، كغ، طن — لتشمل في حساب الاستهلاك الكلي"
+                      : "Lägg till mängd med enhet: kg, kilo, ton — för att inkludera i totalberäkning"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Benchmark table */}
+            <div className="rounded-xl border border-border/40 overflow-hidden">
+              <div className="bg-muted/30 px-3 py-1.5">
+                <p className="text-[10px] font-bold text-muted-foreground">
+                  {ar ? "معايير صناعة الدواجن العالمية" : "Internationella branschnormer"}
+                </p>
+              </div>
+              {[
+                { type: ar ? "دجاج لحم (42 يوم)" : "Broiler (42 dagar)",       fcr: "1.6–2.0", kg: "3.5–5 كغ/طير" },
+                { type: ar ? "دجاج بياض (الدورة كاملة)" : "Värphöna (hel cykel)", fcr: "2.0–2.5", kg: "7–10 كغ/طير" },
+                { type: ar ? "دجاج رومي" : "Kalkon",                            fcr: "2.5–3.5", kg: "35–40 كغ/طير" },
+              ].map(row => (
+                <div key={row.type} className="flex items-center justify-between px-3 py-2 border-t border-border/30 text-[10px]">
+                  <span className="text-muted-foreground">{row.type}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium">FCR: {row.fcr}</span>
+                    <span className="text-muted-foreground">{row.kg}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 //  ADD TRANSACTION FORM
 // ══════════════════════════════════════════════════════════════════════════════
 function AddTransactionForm({ ar, onSuccess }: { ar: boolean; onSuccess: () => void }) {
@@ -577,6 +838,33 @@ function AddTransactionForm({ ar, onSuccess }: { ar: boolean; onSuccess: () => v
                 {(selectedCat as any).fixed ? (ar ? "ثابت" : "Fast") : (ar ? "متغير" : "Rörlig")}
               </Badge>
             )}
+          </div>
+        )}
+        {/* Feed-specific unit guidance */}
+        {form.category === "feed" && (
+          <div className="mt-2 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2.5">
+            <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 mb-1">
+              <Wheat className="w-3 h-3" />
+              {ar ? "لتفعيل تحليل الاستهلاك — أدخل الوزن" : "För förbrukningsanalys — ange vikt"}
+            </p>
+            <p className="text-[9px] text-amber-600 dark:text-amber-400">
+              {ar
+                ? "استخدم الوحدات المعرَّفة: كيلو · كغ · كيلوغرام · طن · غرام"
+                : "Använd definierade enheter: kg · kilo · ton · gram"}
+            </p>
+            <div className="flex gap-1 mt-1.5 flex-wrap">
+              {["كيلو","كغ","طن"].map(u => (
+                <button key={u} onClick={() => { set("unit", u); if (!form.useCalc) set("useCalc", true); }}
+                  className={cn(
+                    "text-[9px] px-2 py-0.5 rounded-md border font-bold transition-all",
+                    form.unit === u
+                      ? "bg-amber-500 text-white border-amber-500"
+                      : "bg-white dark:bg-transparent border-amber-300 text-amber-700 hover:bg-amber-100"
+                  )}>
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -740,6 +1028,12 @@ export default function Finance() {
   const m = useMemo(() => computeMetrics(periodTxs, flocks, period), [periodTxs, flocks, period]);
   const monthly = useMemo(() => computeMonthlyData(allTxs), [allTxs]);
   const alerts = useMemo(() => detectAlerts(m, periodTxs.length), [m, periodTxs.length]);
+
+  // Feed consumption metrics
+  const feedMetrics = useMemo(
+    () => computeFeedMetrics(allTxs, flocks, periodTxs, getPeriodDays(period)),
+    [allTxs, flocks, periodTxs, period]
+  );
 
   // Prediction
   const pred = useMemo(() => {
@@ -1159,6 +1453,14 @@ export default function Finance() {
                 </CardContent>
               </Card>
             )}
+
+            {/* ── Feed Consumption Analysis ── */}
+            <FeedConsumptionCard
+              feed={feedMetrics}
+              ar={ar}
+              lang={lang}
+              onAddFeed={() => setTab("add")}
+            />
 
             {/* Key Ratios & Benchmarks */}
             <Card className="border-none shadow-sm">
