@@ -16,6 +16,7 @@ import transactionsRouter from "./transactions";
 import analyticsRouter from "./analytics";
 import brainRouter from "./brain";
 import validationRouter from "./validation";
+import hatchingStreamRouter from "./hatchingStream";
 
 const router: IRouter = Router();
 
@@ -51,5 +52,6 @@ router.use(transactionsRouter);
 router.use(analyticsRouter);
 router.use(brainRouter);
 router.use(validationRouter);
+router.use(hatchingStreamRouter);
 
 export default router;
