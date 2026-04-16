@@ -844,10 +844,18 @@ export default function Dashboard() {
         {/* Insights */}
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Brain className="w-5 h-5 text-primary" />
-              {lang === "ar" ? "تقرير الذكاء الزراعي" : "Jordbruksintelligensrapport"}
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Brain className="w-5 h-5 text-primary" />
+                {lang === "ar" ? "تقرير الذكاء الزراعي" : "Jordbruksintelligensrapport"}
+              </CardTitle>
+              <Link href="/farm-lab">
+                <span className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer">
+                  {lang === "ar" ? "المختبر الكامل" : "Fullständigt labb"}
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </span>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {insights.length === 0 ? (
@@ -857,6 +865,25 @@ export default function Dashboard() {
             ) : (
               insights.map((ins, i) => <InsightCard key={i} insight={ins} lang={lang} />)
             )}
+            {/* Lab CTA */}
+            <Link href="/farm-lab">
+              <div className="mt-2 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 border border-indigo-100 dark:border-indigo-800/30 p-3 flex items-center justify-between cursor-pointer hover:shadow-sm transition-shadow group">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
+                    <Brain className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400">
+                      {lang === "ar" ? "مختبر المزرعة الذكية" : "Smarta Gårdslaboratoriet"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {lang === "ar" ? "مستشار متخصص · خطط تطوير · تحليل شامل" : "Specialrådgivare · Expansionsplaner · Djupanalys"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </Link>
           </CardContent>
         </Card>
 

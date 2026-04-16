@@ -1,0 +1,240 @@
+🚀 **Directive: Build Autonomous, Self-Evolving Financial Intelligence System (Next-Gen Accounting AI)**
+
+This is not a standard accounting feature request.
+
+This is a directive to build a **self-evolving financial intelligence system** that functions beyond traditional accounting software.
+
+The system must operate as:
+
+> Accountant + Financial Analyst + Auditor + CFO + Predictive Engine
+
+All in one integrated system inside the application.
+
+---
+
+# 🧠 1. Core Philosophy (غير قابل للتفاوض)
+
+The system must:
+
+* Not just record financial data
+* But:
+
+  * Understand it
+  * Analyze it
+  * Predict outcomes
+  * Detect anomalies
+  * Recommend actions
+
+---
+
+# 🧾 2. Full Double-Entry Accounting Engine
+
+Implement a complete accounting system:
+
+* Double-entry bookkeeping (Debit/Credit)
+* General Ledger
+* Chart of Accounts (customizable)
+* Journals (automatic + manual)
+
+---
+
+# 📊 3. Real-Time Financial State Engine
+
+The system must always know:
+
+* Current financial position (live)
+* Cash availability
+* Liabilities vs Assets
+* Profitability status at any moment
+
+---
+
+# 🧠 4. Autonomous Categorization System
+
+* Automatically classify every transaction:
+
+  * Feed cost
+  * Labor
+  * Equipment
+  * Utilities
+
+* Learn from user behavior
+
+* Improve classification accuracy over time
+
+---
+
+# 🔍 5. Financial Anomaly Detection (Critical)
+
+The system must detect:
+
+* Abnormal spending
+* Hidden losses
+* Cost spikes
+* Profit inconsistencies
+
+Example:
+IF feed cost ↑ 25% without production increase
+→ Alert: inefficiency or loss
+
+---
+
+# 📈 6. Deep Cost Intelligence
+
+The system must calculate:
+
+* Cost per chicken
+* Cost per egg
+* Cost per cycle
+* Cost per day
+
+Including:
+
+* Feed
+* Labor
+* Mortality impact
+* Energy
+
+---
+
+# 🔗 7. Full Integration with Farm Data
+
+Financial system must integrate with:
+
+* Bird count
+* Mortality
+* Production
+* Feed consumption
+
+→ No isolated accounting allowed
+
+---
+
+# 🔮 8. Predictive Financial Engine
+
+The system must:
+
+* Forecast:
+
+  * Future profit/loss
+  * Cost increases
+  * Financial risks
+
+* Based on:
+
+  * Historical data
+  * Current trends
+
+---
+
+# 🧠 9. AI Financial Reasoning Layer
+
+The system must answer:
+
+* Why profit dropped?
+* Where is money being lost?
+* What action increases profit?
+
+---
+
+# 🔁 10. Self-Learning System
+
+* Learn from:
+
+  * User corrections
+  * Historical outcomes
+
+* Continuously improve:
+
+  * Predictions
+  * Insights
+
+---
+
+# 📊 11. Advanced Reporting System
+
+Generate:
+
+* Profit & Loss (dynamic)
+* Cash Flow (live)
+* Balance Sheet
+* Cost breakdown
+* ROI per cycle
+
+---
+
+# 🚨 12. Smart Financial Alerts
+
+Real-time alerts when:
+
+* Loss detected
+* Cash risk
+* Over-spending
+
+---
+
+# 🧠 13. Decision Engine (CFO-Level)
+
+The system must:
+
+* Recommend actions:
+
+  * Reduce cost
+  * Optimize feed
+  * Adjust operations
+
+---
+
+# 🔄 14. Time Intelligence
+
+* Track:
+
+  * Daily
+  * Weekly
+  * Monthly
+  * Per cycle
+
+* Detect trends over time
+
+---
+
+# ⚙️ 15. System Architecture Requirements
+
+* Modular
+* Scalable
+* Data-driven
+* API-based
+
+---
+
+# ⚠️ NON-NEGOTIABLE CONDITIONS
+
+❌ Not acceptable:
+
+* Simple accounting UI
+* Manual-only tracking
+* Static reports
+
+✅ Required:
+
+* Automation
+* Intelligence
+* Prediction
+* Continuous adaptation
+
+---
+
+# 🎯 FINAL OBJECTIVE
+
+Build a system that:
+
+* Understands finances deeply
+* Detects hidden problems
+* Predicts the future
+* Recommends decisions
+
+And evolves into:
+
+> A fully autonomous financial intelligence system
+
+---

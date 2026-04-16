@@ -32,6 +32,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "ai.analyzing": { ar: "جارٍ التحليل العميق...", sv: "Djupanalys pågår..." },
   "nav.settings": { ar: "الإعدادات", sv: "Inställningar" },
   "nav.finance": { ar: "المالية والإنتاج", sv: "Ekonomi" },
+  "nav.farmLab": { ar: "مختبر المزرعة", sv: "Gårdslabb" },
 
   "finance.title": { ar: "المالية والإنتاج", sv: "Ekonomi & Produktion" },
   "finance.desc": { ar: "تتبع الدخل والمصاريف وحلل أرباح مزرعتك", sv: "Spåra inkomster, kostnader och analysera gårdens vinst" },

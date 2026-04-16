@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
-  Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet,
+  Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet, Microscope,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ const NAV_KEYS = [
   { href: "/goals", key: "nav.goals", icon: Target, adminOnly: false },
   { href: "/notes", key: "nav.notes", icon: NotebookPen, adminOnly: false },
   { href: "/finance", key: "nav.finance", icon: Wallet, adminOnly: false },
+  { href: "/farm-lab", key: "nav.farmLab", icon: Microscope, adminOnly: false },
   { href: "/ai/advanced", key: "nav.aiAdvanced", icon: FlaskConical, adminOnly: true },
   { href: "/ai/precision", key: "nav.aiPrecision", icon: BrainCircuit, adminOnly: true },
   { href: "/logs", key: "nav.logs", icon: BookOpen, adminOnly: false },
