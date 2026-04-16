@@ -1,7 +1,6 @@
 import { useMemo, useEffect, useState, useRef, type ElementType } from "react";
 import {
   useGetDashboardSummary, getGetDashboardSummaryQueryKey,
-  useListHatchingCycles,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -595,8 +594,11 @@ function DecisionCard({ decision, lang, isRtl }: { decision: Decision; lang: str
 const BASE = import.meta.env.BASE_URL;
 
 // ─── Live Hatching Monitor ─────────────────────────────────────────────────────
+// Fetches the active batch directly from /api/dashboard/active-cycles,
+// which uses the explicit is_active flag (set at creation time) as the
+// source of truth — not ad-hoc status filtering.
+
 const TOTAL_INCUBATION_DAYS = 21;
-const BASE_HATCHING = import.meta.env.BASE_URL ?? "/";
 
 type HatchPhase = "early" | "mid" | "lockdown" | "hatching";
 
@@ -604,33 +606,66 @@ const PHASE_META: Record<HatchPhase, {
   color: string; bg: string; border: string;
   labelAr: string; labelSv: string; Icon: ElementType;
 }> = {
-  early:    { color: "#3b82f6", bg: "bg-blue-50 dark:bg-blue-900/20",    border: "border-blue-200 dark:border-blue-800",    labelAr: "مرحلة النمو المبكر",  labelSv: "Tidig tillväxtfas",   Icon: Egg },
-  mid:      { color: "#8b5cf6", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800", labelAr: "مرحلة التطور",        labelSv: "Utvecklingsfas",      Icon: Activity },
-  lockdown: { color: "#f59e0b", bg: "bg-amber-50 dark:bg-amber-900/20",   border: "border-amber-200 dark:border-amber-800",   labelAr: "مرحلة الإقفال",       labelSv: "Nedlåsningsfas",      Icon: Lock },
-  hatching: { color: "#10b981", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", labelAr: "التفقيس النشط!",   labelSv: "Aktiv kläckning!",   Icon: Zap },
+  early:    { color: "#3b82f6", bg: "bg-blue-50 dark:bg-blue-900/20",     border: "border-blue-200 dark:border-blue-800",    labelAr: "مرحلة النمو المبكر", labelSv: "Tidig tillväxtfas",  Icon: Egg },
+  mid:      { color: "#8b5cf6", bg: "bg-violet-50 dark:bg-violet-900/20", border: "border-violet-200 dark:border-violet-800", labelAr: "مرحلة التطور",       labelSv: "Utvecklingsfas",     Icon: Activity },
+  lockdown: { color: "#f59e0b", bg: "bg-amber-50 dark:bg-amber-900/20",   border: "border-amber-200 dark:border-amber-800",   labelAr: "مرحلة الإقفال",      labelSv: "Nedlåsningsfas",     Icon: Lock },
+  hatching: { color: "#10b981", bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", labelAr: "التفقيس النشط!", labelSv: "Aktiv kläckning!", Icon: Zap },
 };
 
-function getPhase(elapsedDays: number, status: string): HatchPhase {
+function getHatchPhase(elapsedDays: number, status: string): HatchPhase {
   if (status === "hatching") return "hatching";
-  if (elapsedDays >= 18) return "lockdown";
-  if (elapsedDays >= 7)  return "mid";
+  if (elapsedDays >= 18)     return "lockdown";
+  if (elapsedDays >= 7)      return "mid";
   return "early";
+}
+
+interface ActiveCycle {
+  id: number;
+  batchName: string;
+  eggsSet: number;
+  startDate: string;
+  setTime: string | null;
+  status: string;
+  temperature: number | null;
+  humidity: number | null;
+  expectedHatchDate: string;
+  isActive: boolean;
 }
 
 function LiveHatchingMonitor({ lang }: { lang: string }) {
   const ar = lang === "ar";
+  const base = import.meta.env.BASE_URL ?? "/";
+
   const clockOffsetRef = useRef(0);
-  const [clockReady, setClockReady] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [clockReady,  setClockReady]  = useState(false);
+  const [now,         setNow]         = useState(Date.now());
+  const [cycles,      setCycles]      = useState<ActiveCycle[]>([]);
+  const [loaded,      setLoaded]      = useState(false);
 
-  const { data: allCycles } = useListHatchingCycles({});
-  const activeCycles = (allCycles ?? []).filter(
-    (c: any) => c.status === "incubating" || c.status === "hatching",
-  );
+  // ── Fetch active cycles via dedicated endpoint (is_active = true) ──────────
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch(`${base}api/dashboard/active-cycles`, { credentials: "include" });
+        if (res.ok) {
+          const data: ActiveCycle[] = await res.json();
+          if (!cancelled) setCycles(data);
+        }
+      } catch { /* silent */ } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    }
+    load();
+    // Refresh every 5 minutes
+    const id = setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [base]);
 
+  // ── Fetch server time once and compute clock offset ───────────────────────
   useEffect(() => {
     const before = Date.now();
-    fetch(`${BASE_HATCHING}api/server-time`, { credentials: "include" })
+    fetch(`${base}api/server-time`, { credentials: "include" })
       .then(r => r.json())
       .then((d: { timestamp: number }) => {
         const rtt = Date.now() - before;
@@ -638,8 +673,9 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
       })
       .catch(() => {})
       .finally(() => setClockReady(true));
-  }, []);
+  }, [base]);
 
+  // ── Server-synced clock tick (every 60 s) ─────────────────────────────────
   useEffect(() => {
     if (!clockReady) return;
     setNow(Date.now() + clockOffsetRef.current);
@@ -647,28 +683,30 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
     return () => clearInterval(id);
   }, [clockReady]);
 
-  if (!activeCycles.length) return null;
+  // Hide entirely if not loaded yet, or no active cycles
+  if (!loaded || cycles.length === 0) return null;
 
   return (
-    <Card className="border-border/50 shadow-sm overflow-hidden">
+    <Card className="border-border/50 shadow-sm overflow-hidden relative">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500" />
       <CardHeader className="pb-3 pt-5">
         <CardTitle className="text-base flex items-center gap-2">
-          <div className="relative">
+          <div className="relative shrink-0">
             <Egg className="w-5 h-5 text-emerald-600" />
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           </div>
           {ar ? "مراقب التفقيس المباشر" : "Live Kläckningsövervakare"}
           <Badge className="ms-auto text-xs bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">
-            {activeCycles.length} {ar ? "دورة نشطة" : "aktiva cykler"}
+            {cycles.length} {ar ? (cycles.length === 1 ? "دورة نشطة" : "دورات نشطة") : "aktiva cykler"}
           </Badge>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="pb-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {activeCycles.map((cycle: any) => {
-            const start = new Date(`${cycle.startDate}T${cycle.setTime ?? "00:00"}:00`);
-            const elapsedMs = now - start.getTime();
+          {cycles.map(cycle => {
+            const start      = new Date(`${cycle.startDate}T${cycle.setTime ?? "00:00"}:00`);
+            const elapsedMs  = now - start.getTime();
             if (elapsedMs < 0) return null;
 
             const elapsedDays = elapsedMs / 86_400_000;
@@ -678,7 +716,7 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
             const msLeft      = Math.max(0, TOTAL_INCUBATION_DAYS * 86_400_000 - elapsedMs);
             const daysLeft    = Math.floor(msLeft / 86_400_000);
             const hoursLeft   = Math.floor((msLeft % 86_400_000) / 3_600_000);
-            const phase       = getPhase(elapsedDays, cycle.status);
+            const phase       = getHatchPhase(elapsedDays, cycle.status);
             const meta        = PHASE_META[phase];
             const PhaseIcon   = meta.Icon;
             const hatchDate   = new Date(start.getTime() + TOTAL_INCUBATION_DAYS * 86_400_000);
@@ -691,15 +729,15 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
                 key={cycle.id}
                 className={`rounded-xl border p-4 ${meta.bg} ${meta.border} transition-all duration-300`}
               >
-                {/* Cycle header */}
+                {/* Header */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground text-sm truncate">
-                      {cycle.batchName ?? (ar ? `دورة #${cycle.id}` : `Cykel #${cycle.id}`)}
+                      {cycle.batchName || (ar ? `دورة #${cycle.id}` : `Cykel #${cycle.id}`)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      <Egg className="w-3 h-3 inline" />
-                      {cycle.totalEggs ?? "—"} {ar ? "بيضة" : "ägg"}
+                      <Egg className="w-3 h-3 inline shrink-0" />
+                      {cycle.eggsSet ?? "—"} {ar ? "بيضة في الحاضنة" : "ägg i kuvösen"}
                     </p>
                   </div>
                   <div
@@ -712,63 +750,77 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
                 </div>
 
                 {/* Progress bar */}
-                <div className="relative mb-3">
+                <div className="mb-3">
                   <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-1000"
                       style={{
                         width: `${progress}%`,
-                        background: `linear-gradient(90deg, ${meta.color}99, ${meta.color})`,
-                        boxShadow: `0 0 6px ${meta.color}66`,
+                        background: `linear-gradient(90deg, ${meta.color}88, ${meta.color})`,
+                        boxShadow: `0 0 6px ${meta.color}55`,
                       }}
                     />
                   </div>
                   <div className="flex justify-between mt-1">
-                    <span className="text-[10px] text-muted-foreground">
-                      {ar ? "البداية" : "Start"}
-                    </span>
-                    <span className="text-[10px] font-semibold" style={{ color: meta.color }}>
-                      {Math.round(progress)}%
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {ar ? "التفقيس" : "Kläckning"}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground">{ar ? "البداية" : "Start"}</span>
+                    <span className="text-[10px] font-bold" style={{ color: meta.color }}>{Math.round(progress)}%</span>
+                    <span className="text-[10px] text-muted-foreground">{ar ? "اليوم ٢١" : "Dag 21"}</span>
                   </div>
                 </div>
 
-                {/* Stats row */}
-                <div className="grid grid-cols-3 gap-2">
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
                   <div className="text-center">
-                    <div className="text-lg font-bold text-foreground leading-tight">
+                    <div className="text-xl font-bold text-foreground leading-tight">
                       {currentDay}
-                      <span className="text-xs font-normal text-muted-foreground"> /{TOTAL_INCUBATION_DAYS}</span>
+                      <span className="text-xs font-normal text-muted-foreground">/{TOTAL_INCUBATION_DAYS}</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                       {ar ? "اليوم الحالي" : "Aktuell dag"}
                     </p>
                   </div>
                   <div className="text-center border-x border-border/40">
-                    <div className="text-lg font-bold text-foreground leading-tight flex items-center justify-center gap-0.5">
+                    <div className="text-xl font-bold text-foreground leading-tight flex items-center justify-center gap-0.5">
                       <Timer className="w-3.5 h-3.5 text-muted-foreground" />
-                      {currentHour}
-                      <span className="text-xs font-normal text-muted-foreground">h</span>
+                      {currentHour}<span className="text-xs font-normal text-muted-foreground">h</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      {ar ? "ساعة في اليوم" : "Timme på dagen"}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {ar ? "الساعة الحالية" : "Aktuell timme"}
                     </p>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-bold leading-tight" style={{ color: meta.color }}>
-                      {daysLeft > 0 ? `${daysLeft}d` : `${hoursLeft}h`}
+                    <div className="text-xl font-bold leading-tight" style={{ color: meta.color }}>
+                      {daysLeft > 0
+                        ? `${daysLeft}${ar ? "ي" : "d"}`
+                        : `${hoursLeft}${ar ? "س" : "h"}`
+                      }
                     </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      {ar ? "متبقي" : "Återstår"}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {ar ? "الوقت المتبقي" : "Återstående"}
                     </p>
                   </div>
                 </div>
 
-                {/* Hatch estimate */}
-                <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/30 pt-2.5">
+                {/* Environment */}
+                {(cycle.temperature != null || cycle.humidity != null) && (
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                    {cycle.temperature != null && (
+                      <span className="flex items-center gap-1">
+                        <Flame className="w-3 h-3 text-orange-500" />
+                        {cycle.temperature}°C
+                      </span>
+                    )}
+                    {cycle.humidity != null && (
+                      <span className="flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-blue-500" />
+                        {cycle.humidity}% {ar ? "رطوبة" : "luftfuktighet"}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Hatch date */}
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/30 pt-2.5">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3 h-3" />
                     {ar ? "موعد التفقيس المتوقع:" : "Beräknad kläckning:"}
@@ -784,7 +836,7 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
                   >
                     <Flame className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     {phase === "lockdown"
-                      ? (ar ? "⚠️ مرحلة الإقفال — لا تفتح الحاضنة! حافظ على الرطوبة 65-70%" : "⚠️ Nedlåsning — öppna inte kuvösen! Håll fuktigheten 65–70%")
+                      ? (ar ? "⚠️ مرحلة الإقفال — لا تفتح الحاضنة! حافظ على الرطوبة ٦٥–٧٠٪" : "⚠️ Nedlåsning — öppna inte kuvösen! Håll fuktigheten 65–70%")
                       : (ar ? "🐣 التفقيس جارٍ الآن — تحقق من الصيصان كل ساعة!" : "🐣 Kläckning pågår — kontrollera kycklingarna varje timme!")
                     }
                   </div>
@@ -794,9 +846,12 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
           })}
         </div>
 
-        <p className="text-[10px] text-muted-foreground/60 mt-3 text-end flex items-center justify-end gap-1">
+        <p className="text-[10px] text-muted-foreground/50 mt-3 flex items-center justify-end gap-1">
           <Clock className="w-3 h-3" />
-          {ar ? "يتحدث كل دقيقة · مزامن مع وقت الخادم" : "Uppdateras varje minut · synkroniserad med servertid"}
+          {ar
+            ? "يتجدد كل دقيقة · مزامن مع وقت الخادم · يعتمد على علامة is_active المعيّنة عند الإنشاء"
+            : "Uppdateras varje minut · synkroniserad med servertid · baserat på is_active-flaggan satt vid skapande"
+          }
         </p>
       </CardContent>
     </Card>

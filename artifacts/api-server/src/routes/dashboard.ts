@@ -2,6 +2,17 @@ import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable } from "@workspace/db";
 
+function formatCycle(c: typeof hatchingCyclesTable.$inferSelect) {
+  return {
+    ...c,
+    temperature:         c.temperature         ? Number(c.temperature)         : null,
+    humidity:            c.humidity            ? Number(c.humidity)            : null,
+    lockdownTemperature: c.lockdownTemperature ? Number(c.lockdownTemperature) : null,
+    lockdownHumidity:    c.lockdownHumidity    ? Number(c.lockdownHumidity)    : null,
+    createdAt: c.createdAt.toISOString(),
+  };
+}
+
 const router: IRouter = Router();
 
 router.get("/dashboard/summary", async (_req, res) => {
@@ -48,6 +59,11 @@ router.get("/dashboard/summary", async (_req, res) => {
     overallHatchRate = totalSet > 0 ? Math.round((totalHatched / totalSet) * 100) : 0;
   }
 
+  // Include the active cycles (is_active = true) directly in the summary
+  const activeCycleRows = await db.select()
+    .from(hatchingCyclesTable)
+    .where(eq(hatchingCyclesTable.isActive, true));
+
   res.json({
     totalFlocks: flockStats?.totalFlocks ?? 0,
     totalChickens: flockStats?.totalChickens ?? 0,
@@ -58,7 +74,17 @@ router.get("/dashboard/summary", async (_req, res) => {
     goalsCompleted: goalStats?.goalsCompleted ?? 0,
     totalGoals: goalStats?.totalGoals ?? 0,
     overallHatchRate,
+    activeCycles: activeCycleRows.map(formatCycle),
   });
+});
+
+// Dedicated endpoint for the active hatching batch(es)
+// This is the source of truth for the dashboard live monitor — uses is_active flag
+router.get("/dashboard/active-cycles", async (_req, res) => {
+  const cycles = await db.select()
+    .from(hatchingCyclesTable)
+    .where(eq(hatchingCyclesTable.isActive, true));
+  res.json(cycles.map(formatCycle));
 });
 
 router.get("/dashboard/hatch-stats", async (_req, res) => {
