@@ -683,8 +683,32 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
     return () => clearInterval(id);
   }, [clockReady]);
 
-  // Hide entirely if not loaded yet, or no active cycles
-  if (!loaded || cycles.length === 0) return null;
+  // ── Skeleton while fetching ─────────────────────────────────────────────────
+  if (!loaded) {
+    return (
+      <Card className="border-border/50 shadow-sm overflow-hidden relative">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-violet-400 to-emerald-400 animate-pulse" />
+        <CardContent className="pt-5 pb-5 flex items-center gap-3">
+          <Egg className="w-5 h-5 text-emerald-500 animate-pulse shrink-0" />
+          <Skeleton className="h-5 w-48" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Empty state when no active batch ───────────────────────────────────────
+  if (cycles.length === 0) {
+    return (
+      <Card className="border-dashed border-border/70 shadow-sm">
+        <CardContent className="pt-4 pb-4 flex items-center gap-3 text-muted-foreground">
+          <Egg className="w-5 h-5 shrink-0" />
+          <span className="text-sm">
+            {ar ? "لا توجد دورة تفقيس نشطة حالياً" : "Ingen aktiv kläckningscykel för tillfället"}
+          </span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-border/50 shadow-sm overflow-hidden relative">
@@ -926,6 +950,8 @@ export default function Dashboard() {
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
+        {/* Show hatching monitor even while intelligence is loading */}
+        <LiveHatchingMonitor lang={lang} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>)}
         </div>
@@ -989,6 +1015,9 @@ export default function Dashboard() {
           {lang === "ar" ? "يحلل · يقرر · يتنبأ" : "Analyserar · Beslutar · Förutsäger"}
         </Badge>
       </div>
+
+      {/* ── Live Hatching Monitor — TOP PRIORITY ───────────────────────────── */}
+      <LiveHatchingMonitor lang={lang} />
 
       {/* ── Intelligence Score + Pillars ────────────────────────────────────── */}
       <Card className="border-border/50 shadow-sm overflow-hidden">
@@ -1252,9 +1281,6 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
-
-      {/* ── Live Hatching Monitor ───────────────────────────────────────────── */}
-      <LiveHatchingMonitor lang={lang} />
 
       {/* ── Farm Operations Quick View ──────────────────────────────────────── */}
       <div>
