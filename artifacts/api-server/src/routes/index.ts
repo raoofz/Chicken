@@ -17,6 +17,7 @@ import analyticsRouter from "./analytics";
 import brainRouter from "./brain";
 import validationRouter from "./validation";
 import hatchingStreamRouter from "./hatchingStream";
+import feedIntelligenceRouter from "./feed-intelligence";
 
 const router: IRouter = Router();
 
@@ -53,5 +54,6 @@ router.use(analyticsRouter);
 router.use(brainRouter);
 router.use(validationRouter);
 router.use(hatchingStreamRouter);
+router.use(feedIntelligenceRouter);
 
 export default router;

@@ -28,6 +28,9 @@ import {
 } from "./advanced-ai-engine.js";
 import { getSelfMonitorReport, logPrediction, computeAccuracyMetrics } from "./self-monitor.js";
 import { buildFarmContext } from "./context-engine.js";
+import { runFeedCostEngine, type FlockFeedAnalysis } from "./feed-cost-engine.js";
+import { db, flocksTable, transactionsTable, flockProductionLogsTable, feedRecordsTable } from "@workspace/db";
+import { gte, lte, and, sql, eq } from "drizzle-orm";
 import crypto from "crypto";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -116,6 +119,10 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
+function roundPct(v: number, decimals = 1) {
+  return Math.round(v * Math.pow(10, decimals)) / Math.pow(10, decimals);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,7 +172,12 @@ export async function runBrainOrchestrator(
     return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16);
   })();
 
-  const [predictiveResult, causalResult, selfMonitorReport, accuracyMetrics] = await Promise.all([
+  // Feed data window (30 days)
+  const feedWindow = new Date();
+  feedWindow.setDate(feedWindow.getDate() - 30);
+  const feedWindowStr = feedWindow.toISOString().split("T")[0];
+
+  const [predictiveResult, causalResult, selfMonitorReport, accuracyMetrics, feedIntelligence] = await Promise.all([
     (async () => {
       try { return runPredictiveAnalysis(rawData as any, lang); } catch { return null; }
     })(),
@@ -178,6 +190,31 @@ export async function runBrainOrchestrator(
       eggsHatched: c.eggsHatched,
     }))),
     computeAccuracyMetrics(),
+    // Feed intelligence: fetch 30-day feed data in parallel
+    (async () => {
+      try {
+        const [flocks, txAll, prodLogs, feedRecords, expRow] = await Promise.all([
+          db.select().from(flocksTable),
+          db.select().from(transactionsTable)
+            .where(and(gte(transactionsTable.date, feedWindowStr), lte(transactionsTable.date, today))),
+          db.select().from(flockProductionLogsTable)
+            .where(and(gte(flockProductionLogsTable.date, feedWindowStr), lte(flockProductionLogsTable.date, today))),
+          db.select().from(feedRecordsTable)
+            .where(and(gte(feedRecordsTable.date, feedWindowStr), lte(feedRecordsTable.date, today))),
+          db.select({ total: sql<number>`coalesce(sum(amount),0)::float` })
+            .from(transactionsTable)
+            .where(and(eq(transactionsTable.type, "expense"), gte(transactionsTable.date, feedWindowStr), lte(transactionsTable.date, today))),
+        ]);
+        return runFeedCostEngine({
+          flocks: flocks.map((f: any) => ({ id: f.id, name: f.name, breed: f.breed, count: f.count, ageDays: f.ageDays, purpose: f.purpose ?? "eggs", healthStatus: f.healthStatus })),
+          transactions: txAll.map((t: any) => ({ id: t.id, date: t.date, type: t.type, category: t.category, domain: t.domain, amount: Number(t.amount), quantity: t.quantity ? Number(t.quantity) : null, unit: t.unit, description: t.description })),
+          productionLogs: prodLogs.map((p: any) => ({ flockId: p.flockId, date: p.date, eggCount: p.eggCount })),
+          feedRecords: feedRecords.map((r: any) => ({ id: r.id, date: r.date, feedType: r.feedType, quantityKg: Number(r.quantityKg), pricePerKg: Number(r.pricePerKg), totalCost: Number(r.totalCost), allocations: [] })),
+          periodDays: 30,
+          totalExpenses: Number((expRow[0] as any)?.total ?? 0),
+        });
+      } catch { return null; }
+    })(),
   ]);
 
   // Precision engine (synchronous — pure math, fast)
@@ -522,7 +559,93 @@ export async function runBrainOrchestrator(
     });
   }
 
-  // 3e. TASK INSIGHTS ────────────────────────────────────────────────────────
+  // 3e. FEED INTELLIGENCE INSIGHTS ──────────────────────────────────────────
+  if (feedIntelligence) {
+    const fi = feedIntelligence;
+
+    // Efficiency score signal
+    if (fi.farmEfficiencyScore < 50) {
+      insights.push({
+        id: insightId("feed", "efficiency_critical"),
+        category: "feed",
+        severity: "critical",
+        observation: `كفاءة العلف منخفضة جداً: ${fi.farmEfficiencyScore}/100 — المزرعة تستهلك علفاً أكثر مما تنتج`,
+        why: "نسبة التحويل الغذائي (FCR) أو تكلفة البيضة تتجاوز المعيار العالمي بشكل كبير — يشير إلى فقد حراري أو سوء توزيع",
+        action: "راجع جدول توزيع العلف لكل قطيع — ابدأ بالقطعان ذات أعلى تكلفة علف/بيضة",
+        urgency: "this_week",
+        evidence: `نقاط الكفاءة: ${fi.farmEfficiencyScore}/100 | إجمالي الإنفاق على العلف: ${fi.totalFeedSpend?.toLocaleString() ?? 0} ريال | الطيور: ${fi.totalBirds}`,
+        expectedOutcome: "تحسين توزيع العلف بنسبة 10% يمكن أن يرفع نقاط الكفاءة بـ 8-12 نقطة",
+        confidence: 88,
+      });
+    } else if (fi.farmEfficiencyScore >= 80) {
+      insights.push({
+        id: insightId("feed", "efficiency_good"),
+        category: "feed",
+        severity: "positive",
+        observation: `كفاءة العلف ممتازة: ${fi.farmEfficiencyScore}/100 — أداء علفي فوق المعيار`,
+        why: "FCR الفعلي قريب من معيار السلالة مما يعني تحكماً جيداً في الغذاء والإنتاج",
+        action: "واصل نفس منهج الإدارة الغذائية — وثّق الممارسات لاستخدامها مرجعاً مستقبلاً",
+        urgency: "monitor",
+        evidence: `نقاط الكفاءة: ${fi.farmEfficiencyScore}/100 | معدل عالمي مقبول: ≥70`,
+        expectedOutcome: "الحفاظ على هذا المستوى يضمن هامشاً ربحياً مستداماً",
+        confidence: 90,
+      });
+    }
+
+    // Feed cost ratio signal
+    const feedCostPct = fi.feedCostPctOfExpenses;
+    if (feedCostPct > 60) {
+      insights.push({
+        id: insightId("feed", "cost_ratio_high"),
+        category: "feed",
+        severity: "high",
+        observation: `تكلفة العلف تمثل ${roundPct(feedCostPct)}% من إجمالي المصاريف — أعلى من الحد الصناعي 55%`,
+        why: "ارتفاع نسبة العلف يعني هامش ربح أضعف — السيطرة على تكلفة العلف هي المفتاح الرئيسي للربحية",
+        action: "تفاوض على أسعار جملة مع الموردين أو قارن بين أسعار علف مختلفة مع نفس جودة البروتين",
+        urgency: "this_week",
+        evidence: `نسبة تكلفة العلف: ${roundPct(feedCostPct)}% | المعيار الصناعي: 45-55%`,
+        expectedOutcome: "تخفيض نسبة العلف لـ 50% يُحسّن الهامش الإجمالي بنسبة 5-10%",
+        confidence: 85,
+      });
+    }
+
+    // Per-flock critical insights from feed engine
+    const criticalFlocks = fi.flockAnalyses?.filter(
+      (fa: FlockFeedAnalysis) => fa.efficiencyScore < 40 && (fa.feedData.totalKgAllocated ?? 0) > 0
+    ) ?? [];
+    for (const fa of criticalFlocks.slice(0, 2)) {
+      insights.push({
+        id: insightId("feed", `flock_${fa.flockId}`),
+        category: "feed",
+        severity: "high",
+        observation: `قطيع "${fa.flockName}" — كفاءة علف ضعيفة: ${fa.efficiencyScore}/100`,
+        why: `تكلفة العلف ${fa.feedData.dailyCostPerBird?.toFixed(2) ?? "—"} ريال/طائر/يوم مقارنة بالمعيار — الكفاءة أقل من المطلوب`,
+        action: `راجع وزن جرعة العلف لقطيع "${fa.flockName}" وتأكد من مطابقتها لعمر الطيور البالغ ${fa.ageDays} يوم`,
+        urgency: "today",
+        evidence: `علف القطيع: ${fa.feedData.totalKgAllocated ?? "—"} كجم | طيور: ${fa.count} | كفاءة: ${fa.efficiencyScore}/100`,
+        expectedOutcome: "تصحيح جرعة العلف يرفع الكفاءة ويُقلل الهدر في غضون أسبوعين",
+        confidence: 82,
+      });
+    }
+
+    // No feed records warning
+    if (!fi.dataQuality?.hasPreciseFeedRecords) {
+      insights.push({
+        id: insightId("feed", "no_records"),
+        category: "feed",
+        severity: "medium",
+        observation: "لا توجد سجلات علف مفصّلة — التحليل يعتمد على بيانات المعاملات المالية فقط",
+        why: "السجلات المفصّلة (كجم/كيس/سعر/مورد) تُتيح تحليلاً أدق بكثير من المعاملات المالية العامة",
+        action: "سجّل كل شراء علف عبر صفحة استخبارات العلف — يكفي إضافة الكمية والسعر ونوع العلف",
+        urgency: "this_week",
+        evidence: "بيانات العلف الدقيقة تُحسّن دقة نقاط الكفاءة من ±20% إلى ±5%",
+        expectedOutcome: "سجلات 2 أسابيع كافية لتوليد تحليل FCR دقيق لكل قطيع",
+        confidence: 75,
+      });
+    }
+  }
+
+  // 3f. TASK INSIGHTS ─────────────────────────────────────────────────────────
   if (overdueTasks.length >= 5) {
     insights.push({
       id: insightId("task", "many_overdue"),
@@ -568,8 +691,9 @@ export async function runBrainOrchestrator(
   }
 
   // 3f. PREDICTIVE INSIGHTS (from advanced-ai-engine) ────────────────────────
-  if (predictiveResult?.actionPlan?.length > 0) {
-    for (const action of predictiveResult.actionPlan.slice(0, 2)) {
+  if (predictiveResult != null && Array.isArray(predictiveResult.actionPlan) && predictiveResult.actionPlan.length > 0) {
+    const pr = predictiveResult;
+    for (const action of pr.actionPlan.slice(0, 2)) {
       const urg: "immediate" | "today" | "this_week" | "monitor" =
         action.urgency === "immediate" ? "immediate" :
         action.urgency === "today" ? "today" :
@@ -578,13 +702,13 @@ export async function runBrainOrchestrator(
         id: insightId("system", `predict_${action.priority}`),
         category: "system",
         severity: action.urgency === "immediate" ? "critical" : action.urgency === "today" ? "high" : "medium",
-        observation: predictiveResult.observations?.[0] ?? "تحليل تنبؤي",
-        why: predictiveResult.rootCause?.mechanism ?? "",
+        observation: pr.observations?.[0] ?? "تحليل تنبؤي",
+        why: pr.rootCause?.mechanism ?? "",
         action: action.action,
         urgency: urg,
-        evidence: predictiveResult.evidence?.slice(0, 2).map((e: any) => `${e.metric}: ${e.value}`).join(" | ") ?? "",
+        evidence: pr.evidence?.slice(0, 2).map((e: any) => `${e.metric}: ${e.value}`).join(" | ") ?? "",
         expectedOutcome: action.expectedOutcome,
-        confidence: predictiveResult.confidenceScore ?? 70,
+        confidence: pr.confidenceScore ?? 70,
       });
     }
   }

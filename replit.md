@@ -45,6 +45,8 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - **Real-Time Incubation Live Tracker:** A component in `pages/hatching.tsx` that displays the progress of incubation cycles in real-time with phase-specific coloring and markers.
 - **Daily Operations Center (`/operations`):** A new page with tabs for Overview, Tasks, and Activity Log. Features KPI strips, overdue task alerts, smart task-activity linking (auto-completes tasks when linked activities are created), and immediate task completion toggles.
 - **Activity Logs/Transactions Route Enhancements:** Routes updated to accept `taskId` for activity logs, auto-complete linked tasks, support DELETE, and auto-populate/validate the `domain` column for transactions based on `farmDomains`.
+- **Feed Cost Intelligence Engine (`/feed`):** Enterprise-grade feed analytics system with: `feed_records` + `feed_record_allocations` DB tables, `breed-benchmarks.ts` (FCR/production curves for 5 breeds), `feed-cost-engine.ts` (per-flock FCR vs benchmark, cost-per-egg, efficiency score 0-100), 5 API routes (`/api/feed-intelligence/*`), and a full dashboard page (`feed-intelligence.tsx`) with ScoreGauge, radar/bar charts, per-flock deep-dive, and breed benchmark table.
+- **Brain Orchestrator Feed Integration:** The Brain Orchestrator (`/brain/analyze`) now runs `runFeedCostEngine` in parallel with all other engines, contributing feed-specific insights (efficiency score, cost ratio, per-flock warnings, missing-records alert) to the unified decision output.
 
 ## External Dependencies
 

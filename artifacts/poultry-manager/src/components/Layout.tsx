@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet, Microscope,
-  Activity, Database, MessageSquareText, Layers,
+  Activity, Database, MessageSquareText, Layers, Wheat,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ const NAV_KEYS = [
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },
   { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: false },
   { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: false },
+  { href: "/feed",        key: "nav.feed",         descKey: "nav.feed.desc",        icon: Wheat,           adminOnly: false },
   { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: false },
   { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: false },
   { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: false },
