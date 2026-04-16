@@ -86,6 +86,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "finance.tab.overview":     { ar: "نظرة عامة",  sv: "Översikt" },
   "finance.tab.charts":       { ar: "الرسوم البيانية", sv: "Diagram" },
   "finance.tab.transactions": { ar: "المعاملات",  sv: "Transaktioner" },
+  "finance.tab.reports":      { ar: "التقارير",   sv: "Rapporter" },
   "finance.tab.ai":           { ar: "التحليل الذكي", sv: "AI-analys" },
 
   "finance.health.score":     { ar: "درجة الصحة المالية", sv: "Finansiellt hälsopoäng" },

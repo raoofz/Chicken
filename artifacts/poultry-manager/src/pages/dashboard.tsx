@@ -749,74 +749,94 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* ── KPI Strip ──────────────────────────────────────────────────────── */}
+      {/* ── KPI Strip — all clickable → Finance page ───────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Profit Margin */}
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Percent className="w-4 h-4 text-emerald-500" />
-              <span className="text-xs text-muted-foreground font-medium">
-                {lang === "ar" ? "هامش الربح" : "Vinstmarginal"}
-              </span>
-            </div>
-            <div className="text-2xl font-bold" style={{ color: margin === null ? "#94a3b8" : margin < 0 ? "#ef4444" : margin < 10 ? "#f59e0b" : "#10b981" }}>
-              {margin === null ? "—" : `${Math.round(margin)}%`}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lang === "ar" ? "المثالي: 20%+" : "Optimalt: 20%+"}
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/finance">
+          <Card className="border-border/50 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all duration-200 cursor-pointer group">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Percent className="w-4 h-4 text-emerald-500" />
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {lang === "ar" ? "هامش الربح" : "Vinstmarginal"}
+                  </span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-emerald-500 transition-colors" />
+              </div>
+              <div className="text-2xl font-bold" style={{ color: margin === null ? "#94a3b8" : margin < 0 ? "#ef4444" : margin < 10 ? "#f59e0b" : "#10b981" }}>
+                {margin === null ? "—" : `${Math.round(margin)}%`}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lang === "ar" ? "المثالي: 20%+" : "Optimalt: 20%+"}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
         {/* Cost Efficiency */}
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Activity className="w-4 h-4 text-blue-500" />
-              <span className="text-xs text-muted-foreground font-medium">
-                {lang === "ar" ? "كفاءة التكلفة" : "Kostnadseffektivitet"}
-              </span>
-            </div>
-            <div className="text-2xl font-bold" style={{ color: efficiency === null ? "#94a3b8" : efficiency > 90 ? "#ef4444" : efficiency > 75 ? "#f59e0b" : "#10b981" }}>
-              {efficiency === null ? "—" : `${Math.round(efficiency)}%`}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lang === "ar" ? "نسبة المصاريف/الدخل" : "Kostnader/inkomstkvot"}
-            </p>
-          </CardContent>
-        </Card>
-        {/* Profit (current period) */}
-        <Card className="border-border/50 shadow-sm">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-2 mb-1">
-              <DollarSign className="w-4 h-4 text-purple-500" />
-              <span className="text-xs text-muted-foreground font-medium">
-                {lang === "ar" ? "صافي الربح" : "Nettovinst"}
-              </span>
-            </div>
-            <div className="text-2xl font-bold" style={{ color: profit < 0 ? "#ef4444" : profit === 0 ? "#94a3b8" : "#10b981" }}>
-              {profit < 0 ? "-" : "+"}{Math.abs(profit).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lang === "ar" ? "د.ع — كل المعاملات" : "IQD — alla transaktioner"}
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/finance">
+          <Card className="border-border/50 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer group">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {lang === "ar" ? "كفاءة التكلفة" : "Kostnadseffektivitet"}
+                  </span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-blue-500 transition-colors" />
+              </div>
+              <div className="text-2xl font-bold" style={{ color: efficiency === null ? "#94a3b8" : efficiency > 90 ? "#ef4444" : efficiency > 75 ? "#f59e0b" : "#10b981" }}>
+                {efficiency === null ? "—" : `${Math.round(efficiency)}%`}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lang === "ar" ? "نسبة المصاريف/الدخل" : "Kostnader/inkomstkvot"}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+        {/* Profit */}
+        <Link href="/finance">
+          <Card className="border-border/50 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 cursor-pointer group">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-purple-500" />
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {lang === "ar" ? "صافي الربح" : "Nettovinst"}
+                  </span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-purple-500 transition-colors" />
+              </div>
+              <div className="text-2xl font-bold" style={{ color: profit < 0 ? "#ef4444" : profit === 0 ? "#94a3b8" : "#10b981" }}>
+                {profit < 0 ? "-" : "+"}{Math.abs(profit).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lang === "ar" ? "د.ع — كل المعاملات" : "IQD — alla transaktioner"}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
         {/* Risk Level */}
-        <Card className={`border-border/50 shadow-sm ${riskBg}`}>
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-2 mb-1">
-              <RiskIcon className={`w-4 h-4 ${riskColor}`} />
-              <span className="text-xs text-muted-foreground font-medium">
-                {lang === "ar" ? "مستوى المخاطرة" : "Risknivå"}
-              </span>
-            </div>
-            <div className={`text-2xl font-bold ${riskColor}`}>{riskLabel}</div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {lang === "ar" ? `ثقة التنبؤ: ${prediction.confidence}%` : `Prognossäkerhet: ${prediction.confidence}%`}
-            </p>
-          </CardContent>
-        </Card>
+        <Link href="/finance">
+          <Card className={`border-border/50 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group ${riskBg}`}>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <RiskIcon className={`w-4 h-4 ${riskColor}`} />
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {lang === "ar" ? "مستوى المخاطرة" : "Risknivå"}
+                  </span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-foreground/60 transition-colors" />
+              </div>
+              <div className={`text-2xl font-bold ${riskColor}`}>{riskLabel}</div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {lang === "ar" ? `ثقة التنبؤ: ${prediction.confidence}%` : `Prognossäkerhet: ${prediction.confidence}%`}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* ── Insights + Decisions ────────────────────────────────────────────── */}
@@ -945,7 +965,7 @@ export default function Dashboard() {
           <Clock className="w-4 h-4" />
           {lang === "ar" ? "العمليات اليومية" : "Dagliga operationer"}
         </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
             { href: "/flocks", icon: Bird, color: "text-amber-600", bg: "bg-amber-100 dark:bg-amber-900/20",
               label: lang === "ar" ? "إجمالي الدجاج" : "Totalt höns",
@@ -963,6 +983,10 @@ export default function Dashboard() {
               label: lang === "ar" ? "الأهداف" : "Mål",
               val: `${summary!.goalsCompleted}/${summary!.totalGoals}`,
               sub: lang === "ar" ? "أهداف منجزة" : "mål uppnådda" },
+            { href: "/finance", icon: DollarSign, color: "text-emerald-700", bg: "bg-emerald-100 dark:bg-emerald-900/20",
+              label: lang === "ar" ? "المحاسبة المالية" : "Ekonomi",
+              val: profit < 0 ? `-${Math.abs(profit).toLocaleString()}` : `+${profit.toLocaleString()}`,
+              sub: lang === "ar" ? "د.ع — صافي الربح" : "IQD — nettovinst" },
           ].map((s, i) => {
             const Icon = s.icon;
             return (

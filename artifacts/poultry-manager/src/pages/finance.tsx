@@ -24,6 +24,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, Filter, Brain, RefreshCw,
   Receipt, Search, Target, BarChart2, Activity, Wallet, Sparkles,
   ChevronDown, AlertTriangle, CheckCircle, Calendar, Award,
+  FileText, ShieldAlert, ShieldCheck, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ const CAT_ICONS: Record<string,string> = {
 };
 
 type Period = "today" | "week" | "month" | "year" | "all";
-type TabType = "overview" | "charts" | "transactions" | "ai";
+type TabType = "overview" | "charts" | "transactions" | "reports" | "ai";
 type FilterType = "all" | "income" | "expense";
 
 interface Transaction {
@@ -344,6 +345,7 @@ export default function Finance() {
     { key: "overview",      labelKey: "finance.tab.overview",      icon: Activity },
     { key: "charts",        labelKey: "finance.tab.charts",        icon: BarChart2 },
     { key: "transactions",  labelKey: "finance.tab.transactions",  icon: Receipt },
+    { key: "reports",       labelKey: "finance.tab.reports",       icon: FileText },
     { key: "ai",            labelKey: "finance.tab.ai",            icon: Brain },
   ];
 
@@ -963,6 +965,330 @@ Make recommendations immediately actionable for a small Iraqi poultry farm.`;
           )}
         </div>
       )}
+
+      {/* ─── REPORTS TAB ────────────────────────────────── */}
+      {activeTab === "reports" && (() => {
+        // ── Compute report data ──────────────────────────────
+        const allIncome = periodFiltered.filter(t => t.type === "income");
+        const allExpense = periodFiltered.filter(t => t.type === "expense");
+        const grossProfit = totalIncome - totalExpense;
+        const marginNum = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
+
+        // Expense breakdown by category with amounts + percentages
+        const expBreakdown = CATEGORIES_EXPENSE.map(cat => {
+          const amt = allExpense.filter(t => t.category === cat).reduce((s,t) => s+Number(t.amount), 0);
+          return { cat, name: CAT_ICONS[cat] + " " + (lang === "ar" ? {
+            feed:"علف", medicine:"دواء", equipment:"معدات", electricity:"كهرباء",
+            labor:"عمالة", maintenance:"صيانة", other:"أخرى"
+          }[cat] : {
+            feed:"Foder", medicine:"Medicin", equipment:"Utrustning", electricity:"El",
+            labor:"Arbete", maintenance:"Underhåll", other:"Övrigt"
+          }[cat] ?? cat), amt };
+        }).filter(x => x.amt > 0).sort((a,b) => b.amt - a.amt);
+
+        // Income breakdown by category
+        const incBreakdown = CATEGORIES_INCOME.map(cat => {
+          const amt = allIncome.filter(t => t.category === cat).reduce((s,t) => s+Number(t.amount), 0);
+          return { cat, name: CAT_ICONS[cat] + " " + (lang === "ar" ? {
+            chick_sale:"بيع كتاكيت", egg_sale:"بيع بيض", other:"أخرى"
+          }[cat] : {
+            chick_sale:"Kycklingförsäljning", egg_sale:"Äggförsäljning", other:"Övrigt"
+          }[cat] ?? cat), amt };
+        }).filter(x => x.amt > 0).sort((a,b) => b.amt - a.amt);
+
+        // Financial Alerts — rule-based intelligence
+        type AlertLevel = "critical" | "warning" | "good" | "info";
+        interface FinAlert { level: AlertLevel; titleAr: string; titleSv: string; msgAr: string; msgSv: string; }
+        const alerts: FinAlert[] = [];
+
+        if (periodFiltered.length === 0) {
+          alerts.push({ level: "info",
+            titleAr: "لا توجد بيانات", titleSv: "Ingen data",
+            msgAr: "لا توجد معاملات في الفترة المحددة. أضف معاملاتك لرؤية التحليل.",
+            msgSv: "Inga transaktioner i vald period. Lägg till transaktioner för analys." });
+        } else {
+          if (totalIncome === 0 && totalExpense > 0) {
+            alerts.push({ level: "critical",
+              titleAr: "⚠️ لا دخل مسجّل", titleSv: "⚠️ Ingen registrerad inkomst",
+              msgAr: `مصاريف ${fmtAmount(totalExpense, lang)} بدون أي دخل مسجّل في هذه الفترة. سجّل مبيعاتك فوراً.`,
+              msgSv: `Kostnader på ${fmtAmount(totalExpense, lang)} utan registrerade intäkter. Lägg in försäljning omgående.` });
+          } else if (grossProfit < 0) {
+            alerts.push({ level: "critical",
+              titleAr: "خسارة صافية مرصودة", titleSv: "Nettoförlust detekterad",
+              msgAr: `الخسارة الحالية: ${fmtAmount(Math.abs(grossProfit), lang)}. المصاريف تتجاوز الدخل بنسبة ${Math.abs(marginNum).toFixed(0)}%.`,
+              msgSv: `Aktuell förlust: ${fmtAmount(Math.abs(grossProfit), lang)}. Kostnader överstiger intäkter med ${Math.abs(marginNum).toFixed(0)}%.` });
+          } else if (marginNum < 10 && totalIncome > 0) {
+            alerts.push({ level: "warning",
+              titleAr: "هامش ربح منخفض", titleSv: "Låg vinstmarginal",
+              msgAr: `هامش الربح ${marginNum.toFixed(1)}% أقل من المستوى الموصى به (20%+). راجع التكاليف.`,
+              msgSv: `Vinstmarginal ${marginNum.toFixed(1)}% är under rekommenderad nivå (20%+). Se över kostnaderna.` });
+          } else if (marginNum >= 20) {
+            alerts.push({ level: "good",
+              titleAr: "هامش ربح ممتاز", titleSv: "Utmärkt vinstmarginal",
+              msgAr: `هامش الربح ${marginNum.toFixed(1)}% يتجاوز الهدف المثالي 20%. أداء مالي ممتاز!`,
+              msgSv: `Vinstmarginal ${marginNum.toFixed(1)}% överstiger målnivån 20%. Utmärkt ekonomisk prestanda!` });
+          }
+
+          // High single-category expense warning
+          if (expBreakdown.length > 0 && totalExpense > 0) {
+            const top = expBreakdown[0];
+            const pct = (top.amt / totalExpense) * 100;
+            if (pct > 60) {
+              alerts.push({ level: "warning",
+                titleAr: `تركّز المصاريف في فئة واحدة`, titleSv: `Kostnadskoncentration`,
+                msgAr: `${top.name} يمثّل ${pct.toFixed(0)}% من إجمالي المصاريف. تنويع التكاليف يقلّل المخاطر.`,
+                msgSv: `${top.name} utgör ${pct.toFixed(0)}% av totala kostnader. Diversifiera för att minska risken.` });
+            }
+          }
+
+          // ROI check: good if income > 1.5× expense
+          if (totalExpense > 0 && totalIncome > 0) {
+            const roi = ((totalIncome - totalExpense) / totalExpense) * 100;
+            if (roi >= 50) {
+              alerts.push({ level: "good",
+                titleAr: "عائد استثماري عالٍ", titleSv: "Hög avkastning",
+                msgAr: `عائد الاستثمار ${roi.toFixed(0)}% — كل دينار مستثمر ينتج ${(roi/100).toFixed(1)} دينار ربح صافي.`,
+                msgSv: `ROI ${roi.toFixed(0)}% — varje investerad krona ger ${(roi/100).toFixed(1)} IQD nettovinst.` });
+            } else if (roi < 5 && roi >= 0) {
+              alerts.push({ level: "info",
+                titleAr: "عائد استثماري ضعيف", titleSv: "Låg avkastning",
+                msgAr: `عائد الاستثمار ${roi.toFixed(1)}% فقط. حسّن الكفاءة أو زد المبيعات لتحقيق ربحية أفضل.`,
+                msgSv: `ROI på ${roi.toFixed(1)}%. Förbättra effektiviteten eller öka försäljningen för bättre lönsamhet.` });
+            }
+          }
+
+          // High labor cost
+          const laborAmt = allExpense.filter(t => t.category === "labor").reduce((s,t) => s+Number(t.amount), 0);
+          if (totalExpense > 0 && laborAmt / totalExpense > 0.4) {
+            alerts.push({ level: "info",
+              titleAr: "تكلفة العمالة مرتفعة", titleSv: "Höga arbetskraftskostnader",
+              msgAr: `العمالة تمثّل ${((laborAmt/totalExpense)*100).toFixed(0)}% من المصاريف. راجع جدولة العمل.`,
+              msgSv: `Arbete utgör ${((laborAmt/totalExpense)*100).toFixed(0)}% av kostnaderna. Se över arbetsplaneringen.` });
+          }
+        }
+
+        const alertCfg = {
+          critical: { bg: "bg-red-50 dark:bg-red-950/20", border: "border-red-300 dark:border-red-800", dot: "bg-red-500", icon: ShieldAlert, iconColor: "text-red-500" },
+          warning:  { bg: "bg-amber-50 dark:bg-amber-950/20", border: "border-amber-300 dark:border-amber-800", dot: "bg-amber-500", icon: AlertTriangle, iconColor: "text-amber-500" },
+          good:     { bg: "bg-emerald-50 dark:bg-emerald-950/20", border: "border-emerald-300 dark:border-emerald-800", dot: "bg-emerald-500", icon: ShieldCheck, iconColor: "text-emerald-500" },
+          info:     { bg: "bg-blue-50 dark:bg-blue-950/20", border: "border-blue-300 dark:border-blue-800", dot: "bg-blue-500", icon: Info, iconColor: "text-blue-500" },
+        };
+
+        return (
+          <div className="space-y-5">
+
+            {/* ── Report Header ─────────────────────────────── */}
+            <Card className="border-none shadow-sm overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">{lang === "ar" ? "تقرير الأداء المالي" : "Finansiell prestationsrapport"}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {lang === "ar" ? "تحليل شامل ← قائمة الأرباح والخسائر ← التنبيهات" : "Fullständig analys ← P&L-rapport ← Varningar"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* P&L Summary Cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-emerald-50 dark:bg-emerald-950/20 rounded-xl p-3 text-center">
+                    <ArrowUpCircle className="w-4 h-4 text-emerald-500 mx-auto mb-1" />
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{lang === "ar" ? "إجمالي الدخل" : "Total inkomst"}</p>
+                    <p className="text-sm font-black text-emerald-700 dark:text-emerald-400">{fmtAmount(totalIncome, lang)}</p>
+                  </div>
+                  <div className="bg-red-50 dark:bg-red-950/20 rounded-xl p-3 text-center">
+                    <ArrowDownCircle className="w-4 h-4 text-red-500 mx-auto mb-1" />
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{lang === "ar" ? "إجمالي المصاريف" : "Totala kostnader"}</p>
+                    <p className="text-sm font-black text-red-700 dark:text-red-400">{fmtAmount(totalExpense, lang)}</p>
+                  </div>
+                  <div className={cn("rounded-xl p-3 text-center", grossProfit >= 0 ? "bg-blue-50 dark:bg-blue-950/20" : "bg-orange-50 dark:bg-orange-950/20")}>
+                    <DollarSign className={cn("w-4 h-4 mx-auto mb-1", grossProfit >= 0 ? "text-blue-500" : "text-orange-500")} />
+                    <p className="text-[10px] text-muted-foreground mb-0.5">{lang === "ar" ? "صافي الربح" : "Nettovinst"}</p>
+                    <p className={cn("text-sm font-black", grossProfit >= 0 ? "text-blue-700 dark:text-blue-400" : "text-orange-700 dark:text-orange-400")}>
+                      {grossProfit >= 0 ? "+" : ""}{fmtAmount(Math.abs(grossProfit), lang)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Financial Alerts ──────────────────────────── */}
+            <div>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5 flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                {lang === "ar" ? "التنبيهات المالية الذكية" : "Smarta finansiella varningar"}
+              </h3>
+              <div className="space-y-2">
+                {alerts.map((a, i) => {
+                  const cfg = alertCfg[a.level];
+                  const Icon = cfg.icon;
+                  return (
+                    <div key={i} className={cn("rounded-xl border p-3.5 flex items-start gap-3", cfg.bg, cfg.border)}>
+                      <Icon className={cn("w-4 h-4 flex-shrink-0 mt-0.5", cfg.iconColor)} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground mb-0.5">{lang === "ar" ? a.titleAr : a.titleSv}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{lang === "ar" ? a.msgAr : a.msgSv}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── P&L Breakdown ─────────────────────────────── */}
+            {(incBreakdown.length > 0 || expBreakdown.length > 0) && (
+              <Card className="border-none shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    {lang === "ar" ? "قائمة الأرباح والخسائر التفصيلية" : "Detaljerad resultaträkning (P&L)"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-4 space-y-4">
+                  {/* Income sources */}
+                  {incBreakdown.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                        {lang === "ar" ? "مصادر الدخل" : "Inkomstkällor"}
+                      </p>
+                      <div className="space-y-2">
+                        {incBreakdown.map((item, i) => {
+                          const pct = totalIncome > 0 ? (item.amt / totalIncome) * 100 : 0;
+                          return (
+                            <div key={item.cat}>
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="text-muted-foreground">{item.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground">({pct.toFixed(0)}%)</span>
+                                  <span className="font-semibold text-emerald-700">{fmtAmount(item.amt, lang)}</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50 mt-2">
+                          <span className="font-semibold">{lang === "ar" ? "الإجمالي" : "Totalt"}</span>
+                          <span className="font-black text-emerald-700">{fmtAmount(totalIncome, lang)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expense breakdown */}
+                  {expBreakdown.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                        {lang === "ar" ? "تفصيل المصاريف" : "Kostnadsfördelning"}
+                      </p>
+                      <div className="space-y-2">
+                        {expBreakdown.map((item, i) => {
+                          const pct = totalExpense > 0 ? (item.amt / totalExpense) * 100 : 0;
+                          return (
+                            <div key={item.cat}>
+                              <div className="flex items-center justify-between text-xs mb-1">
+                                <span className="text-muted-foreground">{item.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-muted-foreground">({pct.toFixed(0)}%)</span>
+                                  <span className="font-semibold text-red-700">{fmtAmount(item.amt, lang)}</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: COLORS_EXPENSE[i % COLORS_EXPENSE.length] }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-border/50 mt-2">
+                          <span className="font-semibold">{lang === "ar" ? "الإجمالي" : "Totalt"}</span>
+                          <span className="font-black text-red-700">{fmtAmount(totalExpense, lang)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Net result row */}
+                  <div className={cn("rounded-xl p-3 flex items-center justify-between", grossProfit >= 0 ? "bg-emerald-50 dark:bg-emerald-950/20" : "bg-red-50 dark:bg-red-950/20")}>
+                    <span className="text-xs font-bold">{lang === "ar" ? "صافي النتيجة" : "Nettoresultat"}</span>
+                    <span className={cn("text-sm font-black", grossProfit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                      {grossProfit >= 0 ? "+" : ""}{fmtAmount(Math.abs(grossProfit), lang)}
+                      <span className="text-[10px] font-medium ms-1 opacity-70">({marginNum.toFixed(1)}%)</span>
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Cost Efficiency Metrics ────────────────────── */}
+            {totalExpense > 0 && (
+              <Card className="border-none shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-blue-500" />
+                    {lang === "ar" ? "مؤشرات كفاءة التكلفة" : "Kostnadseffektivitetsmått"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      {
+                        label: lang === "ar" ? "نسبة المصاريف/الدخل" : "Kostnader/inkomst",
+                        val: totalIncome > 0 ? `${((totalExpense/totalIncome)*100).toFixed(1)}%` : "—",
+                        sub: lang === "ar" ? "الأفضل: أقل من 80%" : "Optimalt: under 80%",
+                        color: totalIncome > 0 && (totalExpense/totalIncome) < 0.8 ? "text-emerald-600" : "text-red-600",
+                      },
+                      {
+                        label: lang === "ar" ? "عائد الاستثمار (ROI)" : "Avkastning (ROI)",
+                        val: totalExpense > 0 && totalIncome > 0 ? `${(((totalIncome-totalExpense)/totalExpense)*100).toFixed(1)}%` : "—",
+                        sub: lang === "ar" ? "الأفضل: أكثر من 20%" : "Optimalt: över 20%",
+                        color: totalExpense > 0 && totalIncome > 0 && (totalIncome-totalExpense)/totalExpense >= 0.2 ? "text-emerald-600" : "text-amber-600",
+                      },
+                      {
+                        label: lang === "ar" ? "متوسط المصاريف/يوم" : "Snittkostad/dag",
+                        val: fmtAmount(totalExpense / (period === "today" ? 1 : period === "week" ? 7 : period === "month" ? 30 : period === "year" ? 365 : Math.max(1, transactions.length)), lang),
+                        sub: lang === "ar" ? "للفترة المحددة" : "Under vald period",
+                        color: "text-blue-600",
+                      },
+                      {
+                        label: lang === "ar" ? "درجة الصحة المالية" : "Finansiell hälsa",
+                        val: `${health.score}/100`,
+                        sub: lang === "ar" ? { excellent:"ممتاز", good:"جيد", fair:"مقبول", poor:"ضعيف" }[health.grade] : { excellent:"Utmärkt", good:"Bra", fair:"Godkänt", poor:"Svagt" }[health.grade],
+                        color: health.color,
+                      },
+                    ].map((m, i) => (
+                      <div key={i} className="bg-muted/30 rounded-xl p-3">
+                        <p className="text-[10px] text-muted-foreground mb-1">{m.label}</p>
+                        <p className={cn("text-lg font-black", m.color)}>{m.val}</p>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">{m.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Empty state ────────────────────────────────── */}
+            {periodFiltered.length === 0 && (
+              <Card className="border-dashed">
+                <CardContent className="py-14 text-center">
+                  <FileText className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
+                  <p className="text-sm text-muted-foreground">
+                    {lang === "ar" ? "أضف معاملات لرؤية التقارير المالية التفصيلية" : "Lägg till transaktioner för detaljerade finansiella rapporter"}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ─── AI ANALYSIS TAB ────────────────────────────── */}
       {activeTab === "ai" && (
