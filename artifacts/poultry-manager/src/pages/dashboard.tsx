@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WeatherWidget } from "@/components/WeatherWidget";
+import { DecisionPanel } from "@/components/DecisionPanel";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Link } from "wouter";
 import {
@@ -987,8 +988,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Weather */}
+      {/* Weather + Decision Logic */}
       <WeatherWidget />
+      <DecisionPanel />
     </div>
   );
 }

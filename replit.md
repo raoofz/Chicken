@@ -233,6 +233,8 @@ Indexes on: created_at, due_date, status, completed, date, author_id, username
 - `POST /api/ai/analyze` — AI farm analysis (admin-only, uses OpenAI)
 - `GET /api/dashboard/summary` — stats for dashboard
 - `GET /api/tasks/today` — tasks for today
+- `GET /api/ai/intelligence` — 7-point bilingual intelligence report (admin-only)
+- `GET /api/ai/decision` — Decision Logic Layer: live weather (Open-Meteo) + farm state → bilingual rules-based decisions (status/reason/impact/advice per factor)
 
 All data routes require authentication (session-based `requireAuth` middleware).
 

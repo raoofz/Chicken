@@ -649,5 +649,22 @@ router.post("/ai/intelligence/feedback", requireAdmin, async (req: Request, res:
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Decision Logic Layer — Operational Intelligence with Live Weather
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/ai/decision", async (req: Request, res: Response) => {
+  try {
+    const { buildDecisionReport } = await import("../lib/decision-logic.js");
+    const report = await buildDecisionReport();
+    // No-cache so every poll gets fresh data
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.json(report);
+  } catch (err: any) {
+    console.error("[decision]", err);
+    res.status(500).json({ error: err?.message ?? "فشل نظام القرار الذكي" });
+  }
+});
+
 export default router;
 
