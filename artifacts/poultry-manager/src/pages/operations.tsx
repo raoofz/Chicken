@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import {
   CheckCircle2, Circle, Plus, ClipboardList, Activity,
   Layers, AlertTriangle, Clock, Link2, Trash2, Calendar,
+  ShieldCheck, ShieldAlert, RefreshCw, Zap, XCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -336,10 +337,88 @@ export default function OperationsPage() {
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
-  const [tab,         setTab]         = useState<"overview" | "tasks" | "logs">("overview");
+  const [tab,         setTab]         = useState<"overview" | "tasks" | "logs" | "system">("overview");
   const [taskDialog,  setTaskDialog]  = useState(false);
   const [actDialog,   setActDialog]   = useState(false);
   const [filter,      setFilter]      = useState<"all" | "pending" | "done">("all");
+
+  // ── System Health state ───────────────────────────────────────────────────
+  type IntegrityResult = {
+    status: "ok" | "issues";
+    durationMs: number;
+    checkedAt: string;
+    summary: {
+      totalTransactions: number;
+      nullDomainCount: number;
+      domainMismatchCount: number;
+      categoryViolationCount: number;
+      eggClassifiedAsFeedCount: number;
+      orphanActivityLogs: number;
+      nullAmountCount: number;
+      unknownCategories: string[];
+      domainDistribution: Record<string, number>;
+    };
+    issues: Array<{ severity: "critical" | "warning"; check: string; detail: string }>;
+    passed: string[];
+  };
+  type SeedResult = { inserted: number; durationMs: number; throughputPerSec: number; domainBreakdown: Record<string, number> };
+
+  const [integrityResult, setIntegrityResult] = useState<IntegrityResult | null>(null);
+  const [integrityLoading, setIntegrityLoading] = useState(false);
+  const [seedResult, setSeedResult] = useState<SeedResult | null>(null);
+  const [seedLoading, setSeedLoading] = useState(false);
+  const [seedCount, setSeedCount] = useState(200);
+
+  async function runIntegrityCheck() {
+    setIntegrityLoading(true);
+    try {
+      const r = await fetch(`${BASE_URL}api/validate/integrity`, { credentials: "include" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "فشل الفحص");
+      setIntegrityResult(data);
+    } catch (err: any) {
+      toast({ title: err?.message ?? (ar ? "فشل الفحص" : "Kontroll misslyckades"), variant: "destructive" });
+    } finally {
+      setIntegrityLoading(false);
+    }
+  }
+
+  async function runSeedTest() {
+    setSeedLoading(true);
+    setSeedResult(null);
+    try {
+      const r = await fetch(`${BASE_URL}api/dev/seed-transactions`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: seedCount }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "فشل الاختبار");
+      setSeedResult(data);
+      refresh();
+    } catch (err: any) {
+      toast({ title: err?.message ?? (ar ? "فشل اختبار الضغط" : "Stresstest misslyckades"), variant: "destructive" });
+    } finally {
+      setSeedLoading(false);
+    }
+  }
+
+  async function purgeSeedData() {
+    try {
+      const r = await fetch(`${BASE_URL}api/dev/seed-transactions`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error);
+      toast({ title: ar ? `تم حذف ${data.deleted} سجل اختباري` : `${data.deleted} testposter borttagna` });
+      setSeedResult(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: err?.message, variant: "destructive" });
+    }
+  }
 
   const today = todayStr();
 
@@ -482,15 +561,16 @@ export default function OperationsPage() {
 
       {/* ── Tabs ── */}
       <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
-        {(["overview", "tasks", "logs"] as const).map(tab_ => (
+        {(["overview", "tasks", "logs", "system"] as const).map(tab_ => (
           <button
             key={tab_}
             onClick={() => setTab(tab_)}
             className={`flex-1 text-xs font-medium py-2 rounded-lg transition-colors ${tab === tab_ ? "bg-white shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
-            {tab_ === "overview" && (ar ? "نظرة عامة" : "Översikt")}
-            {tab_ === "tasks"    && (ar ? `المهام (${allTasks.length})` : `Uppgifter (${allTasks.length})`)}
-            {tab_ === "logs"     && (ar ? `النشاط (${allLogs.length})` : `Aktiviteter (${allLogs.length})`)}
+            {tab_ === "overview" && (ar ? "عامة" : "Översikt")}
+            {tab_ === "tasks"    && (ar ? `المهام (${allTasks.length})` : `Uppg. (${allTasks.length})`)}
+            {tab_ === "logs"     && (ar ? `النشاط (${allLogs.length})` : `Akt. (${allLogs.length})`)}
+            {tab_ === "system"   && (ar ? "🛡️ النظام" : "🛡️ System")}
           </button>
         ))}
       </div>
@@ -639,6 +719,178 @@ export default function OperationsPage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ SYSTEM HEALTH TAB ══ */}
+      {tab === "system" && (
+        <div className="space-y-4">
+          {/* Data Integrity Check */}
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-violet-500" />
+                {ar ? "فحص سلامة البيانات" : "Dataintegritetskontroll"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {ar
+                  ? "يتحقق من: صحة domain لكل معاملة، أن البيض لا يدخل في العلف، تطابق SSOT، روابط المهام."
+                  : "Kontrollerar: domän för varje transaktion, att ägg ej klassas som foder, SSOT-matchning, uppgiftslänkar."}
+              </p>
+              <Button
+                size="sm"
+                onClick={runIntegrityCheck}
+                disabled={integrityLoading}
+                className="gap-1.5 w-full"
+              >
+                {integrityLoading
+                  ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />{ar ? "جارٍ الفحص..." : "Kontrollerar..."}</>
+                  : <><ShieldCheck className="w-3.5 h-3.5" />{ar ? "تشغيل الفحص الشامل" : "Kör fullständig kontroll"}</>}
+              </Button>
+
+              {integrityResult && (
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  {/* Status banner */}
+                  <div className={`flex items-center gap-2 rounded-lg p-3 text-sm font-medium ${integrityResult.status === "ok" ? "bg-emerald-50 border border-emerald-200 text-emerald-700" : "bg-red-50 border border-red-200 text-red-700"}`}>
+                    {integrityResult.status === "ok"
+                      ? <><ShieldCheck className="w-4 h-4" /> {ar ? "✅ النظام سليم — لا توجد مشاكل" : "✅ Systemet är friskt — inga problem"}</>
+                      : <><ShieldAlert className="w-4 h-4" /> {ar ? `⚠️ ${integrityResult.issues.filter(i=>i.severity==="critical").length} مشاكل حرجة` : `⚠️ ${integrityResult.issues.filter(i=>i.severity==="critical").length} kritiska problem`}</>}
+                    <span className="ml-auto text-[10px] opacity-70">{integrityResult.durationMs}ms</span>
+                  </div>
+
+                  {/* Summary grid */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {[
+                      { label: ar ? "إجمالي المعاملات" : "Totala transaktioner", val: integrityResult.summary.totalTransactions, ok: true },
+                      { label: ar ? "بدون domain" : "Utan domän", val: integrityResult.summary.nullDomainCount, ok: integrityResult.summary.nullDomainCount === 0 },
+                      { label: ar ? "تعارض domain/SSOT" : "Domän/SSOT-konflikt", val: integrityResult.summary.domainMismatchCount, ok: integrityResult.summary.domainMismatchCount === 0 },
+                      { label: ar ? "بيض ↔ علف (الخطأ الأصلي)" : "Ägg→foder-fel", val: integrityResult.summary.eggClassifiedAsFeedCount, ok: integrityResult.summary.eggClassifiedAsFeedCount === 0 },
+                      { label: ar ? "مهام يتيمة" : "Föräldralösa uppg.", val: integrityResult.summary.orphanActivityLogs, ok: integrityResult.summary.orphanActivityLogs === 0 },
+                      { label: ar ? "مبالغ فارغة" : "Tomma belopp", val: integrityResult.summary.nullAmountCount, ok: integrityResult.summary.nullAmountCount === 0 },
+                    ].map(({ label, val, ok }) => (
+                      <div key={label} className={`rounded-lg border p-2 flex justify-between items-center ${ok ? "bg-card" : "bg-red-50 border-red-200"}`}>
+                        <span className="text-muted-foreground">{label}</span>
+                        <span className={`font-bold ${ok ? (val > 0 ? "text-foreground" : "text-emerald-600") : "text-red-600"}`}>{val}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Domain distribution */}
+                  {Object.keys(integrityResult.summary.domainDistribution).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{ar ? "توزيع النطاقات" : "Domänfördelning"}</p>
+                      {Object.entries(integrityResult.summary.domainDistribution).map(([domain, cnt]) => (
+                        <div key={domain} className="flex items-center gap-2 text-xs">
+                          <span className="w-24 text-muted-foreground">{domain}</span>
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-violet-400 rounded-full"
+                              style={{ width: `${Math.round((cnt / integrityResult.summary.totalTransactions) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="w-6 text-right font-medium">{cnt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Passed checks */}
+                  {integrityResult.passed.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide">{ar ? "✅ فحوصات اجتازها النظام" : "✅ Godkända kontroller"}</p>
+                      {integrityResult.passed.map(p => (
+                        <div key={p} className="flex items-start gap-1.5 text-xs text-emerald-700">
+                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span>{p}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Issues */}
+                  {integrityResult.issues.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide">{ar ? "🚨 المشاكل المكتشفة" : "🚨 Hittade problem"}</p>
+                      {integrityResult.issues.map((issue, i) => (
+                        <div key={i} className={`flex items-start gap-1.5 text-xs rounded px-2 py-1 ${issue.severity === "critical" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                          {issue.severity === "critical" ? <XCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                          <span className="break-all">{issue.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stress Test */}
+          {isAdmin && (
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  {ar ? "اختبار الضغط" : "Stresstest"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {ar
+                    ? "يُدخل معاملات وهمية في معاملة DB واحدة ويقيس الأداء. البيانات بالكامل قابلة للحذف بعد الاختبار."
+                    : "Infogar syntetiska transaktioner i en enda DB-transaktion och mäter prestanda. All data kan rensas efteråt."}
+                </p>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={2000}
+                    value={seedCount}
+                    onChange={e => setSeedCount(Number(e.target.value))}
+                    className="w-28 text-sm h-8"
+                  />
+                  <span className="text-xs text-muted-foreground">{ar ? "معاملة" : "transaktioner"}</span>
+                  <Button size="sm" onClick={runSeedTest} disabled={seedLoading} className="gap-1.5 ml-auto">
+                    {seedLoading
+                      ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" />{ar ? "جارٍ..." : "Kör..."}</>
+                      : <><Zap className="w-3.5 h-3.5" />{ar ? "تشغيل الاختبار" : "Kör test"}</>}
+                  </Button>
+                </div>
+
+                {seedResult && (
+                  <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 space-y-2 animate-in fade-in duration-300">
+                    <p className="text-xs font-semibold text-amber-800">{ar ? "نتائج اختبار الضغط" : "Stresstest-resultat"}</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-lg font-black text-amber-700">{seedResult.inserted}</div>
+                        <div className="text-[10px] text-muted-foreground">{ar ? "معاملة أدخلت" : "Infogade"}</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-black text-amber-700">{seedResult.durationMs}ms</div>
+                        <div className="text-[10px] text-muted-foreground">{ar ? "وقت الإدخال" : "Tid"}</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-black text-amber-700">{seedResult.throughputPerSec}</div>
+                        <div className="text-[10px] text-muted-foreground">{ar ? "معاملة/ثانية" : "tx/sek"}</div>
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      {Object.entries(seedResult.domainBreakdown).map(([d, n]) => (
+                        <div key={d} className="flex justify-between text-[11px] text-amber-700">
+                          <span>{d}</span><span className="font-bold">{n}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Button size="sm" variant="outline" onClick={purgeSeedData} className="w-full gap-1.5 text-red-600 border-red-200 hover:bg-red-50">
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {ar ? "حذف البيانات الاختبارية" : "Rensa testdata"}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
       )}

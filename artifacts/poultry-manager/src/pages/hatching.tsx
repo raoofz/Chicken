@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useListHatchingCycles, getListHatchingCyclesQueryKey,
   useCreateHatchingCycle, useDeleteHatchingCycle, useUpdateHatchingCycle
@@ -19,9 +19,36 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 // ── Real-Time Incubation Tracker ────────────────────────────────────────────
-// Updates every 60 seconds. Formula: Progress = (now - startDateTime) / 21d × 100
+// Updates every 60 seconds.
+// TIME SOURCE: server clock (fetched via /api/server-time on mount).
+//   clockOffset = serverTimestamp − deviceTimestamp (milliseconds).
+//   All "now" calculations use:  Date.now() + clockOffset
+//   If the server-time fetch fails, offset stays 0 (device time fallback).
+// Formula: Progress = (serverNow - startDateTime) / 21d × 100
+const BASE_URL_TRACKER = import.meta.env.BASE_URL ?? "/";
+
 function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
   const TOTAL_DAYS = 21;
+  const clockOffsetRef = useRef(0);    // server - device (ms), updated on mount
+  const [clockReady, setClockReady] = useState(false);
+
+  // Sync clock offset once on mount
+  useEffect(() => {
+    const before = Date.now();
+    fetch(`${BASE_URL_TRACKER}api/server-time`, { credentials: "include" })
+      .then(r => r.json())
+      .then((d: { timestamp: number }) => {
+        const after = Date.now();
+        const rtt = after - before;
+        // Estimate server time at response midpoint to minimise RTT error
+        clockOffsetRef.current = d.timestamp - (before + rtt / 2);
+      })
+      .catch(() => {
+        // Graceful fallback: device time (offset stays 0)
+        console.warn("[HatchingLiveTracker] server-time fetch failed — using device clock");
+      })
+      .finally(() => setClockReady(true));
+  }, []);
 
   function computeState() {
     const start = cycle.startDate
@@ -29,8 +56,9 @@ function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
       : null;
     if (!start) return null;
 
-    const now = new Date();
-    const elapsedMs = now.getTime() - start.getTime();
+    // Use server-adjusted "now" for all calculations
+    const nowMs    = Date.now() + clockOffsetRef.current;
+    const elapsedMs = nowMs - start.getTime();
     if (elapsedMs < 0) return null;
 
     const elapsedDays  = elapsedMs / 86400000;
@@ -54,13 +82,15 @@ function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
     return { progress, currentDay, hourInDay, daysLeft, phase, elapsedDays };
   }
 
-  const [state, setState] = useState(computeState);
+  const [state, setState] = useState<ReturnType<typeof computeState>>(null);
 
+  // Recompute once clock is ready, then every 60s
   useEffect(() => {
+    if (!clockReady) return;
     setState(computeState());
     const id = setInterval(() => setState(computeState()), 60_000);
     return () => clearInterval(id);
-  }, [cycle.startDate, cycle.setTime, cycle.status]);
+  }, [clockReady, cycle.startDate, cycle.setTime, cycle.status]);
 
   if (!state) return null;
   if (cycle.status === "completed" || cycle.status === "failed") return null;

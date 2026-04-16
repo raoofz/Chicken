@@ -15,6 +15,7 @@ import noteImagesRouter from "./noteImages";
 import transactionsRouter from "./transactions";
 import analyticsRouter from "./analytics";
 import brainRouter from "./brain";
+import validationRouter from "./validation";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,11 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
 
 router.use(authRouter);
 router.use(healthRouter);
+// Server-time is public (no auth) — must be registered before requireAuth
+router.get("/server-time", (_req, res) => {
+  const now = new Date();
+  res.json({ serverTime: now.toISOString(), timestamp: now.getTime() });
+});
 
 router.use(requireAuth);
 router.use(flocksRouter);
@@ -44,5 +50,6 @@ router.use(noteImagesRouter);
 router.use(transactionsRouter);
 router.use(analyticsRouter);
 router.use(brainRouter);
+router.use(validationRouter);
 
 export default router;
