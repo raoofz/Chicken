@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, transactionsTable } from "@workspace/db";
+import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, transactionsTable, flockProductionLogsTable, flockHealthLogsTable } from "@workspace/db";
 import { sql, eq, desc } from "drizzle-orm";
 import { parseNote } from "../lib/noteSmartParser";
 import { validateActions } from "../lib/actionValidator";
@@ -25,14 +25,24 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 async function getRawFarmData() {
-  const [flocks, hatchingCycles, tasks, goals, notes] = await Promise.all([
+  const [flocks, hatchingCycles, tasks, goals, notes, productionLogs, healthLogs] = await Promise.all([
     db.select().from(flocksTable),
     db.select().from(hatchingCyclesTable),
     db.select().from(tasksTable),
     db.select().from(goalsTable),
     db.select().from(dailyNotesTable).orderBy(sql`${dailyNotesTable.date} DESC`).limit(60),
+    db.select().from(flockProductionLogsTable).orderBy(desc(flockProductionLogsTable.date)).limit(180),
+    db.select().from(flockHealthLogsTable).orderBy(desc(flockHealthLogsTable.date)).limit(120),
   ]);
-  return { flocks, hatchingCycles: hatchingCycles as any[], tasks, goals: goals as any[], notes };
+  return {
+    flocks,
+    hatchingCycles: hatchingCycles as any[],
+    tasks,
+    goals: goals as any[],
+    notes,
+    productionLogs: productionLogs as any[],
+    healthLogs: healthLogs as any[],
+  };
 }
 
 function getLang(req: Request): "ar" | "sv" {
@@ -168,6 +178,11 @@ router.get("/ai/fingerprint", requireAdmin, async (_req: Request, res: Response)
       completed.reduce((s: number, c: any) => s + (Number(c.eggsHatched) || 0), 0),
       // Sum of eggsSet
       rawData.hatchingCycles.reduce((s: number, c: any) => s + (Number(c.eggsSet) || 0), 0),
+      // Production log changes
+      rawData.productionLogs.length,
+      rawData.productionLogs.reduce((s: number, p: any) => s + (Number(p.eggCount) || 0), 0),
+      // Health log changes
+      rawData.healthLogs.length,
     ].join(":");
 
     // djb2 hash
@@ -289,10 +304,86 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
       return streak;
     })();
 
+    // ── PRODUCTION & HEALTH ANALYSIS ────────────────────────────
+    const prodLogs = raw.productionLogs as any[];
+    const hlthLogs = raw.healthLogs as any[];
+
+    // Group production logs by flock
+    const prodByFlock: Record<number, any[]> = {};
+    for (const p of prodLogs) {
+      if (!prodByFlock[p.flockId]) prodByFlock[p.flockId] = [];
+      prodByFlock[p.flockId].push(p);
+    }
+
+    // Group health logs by flock
+    const healthByFlock: Record<number, any[]> = {};
+    for (const h of hlthLogs) {
+      if (!healthByFlock[h.flockId]) healthByFlock[h.flockId] = [];
+      healthByFlock[h.flockId].push(h);
+    }
+
+    // Per-flock production summary
+    const productionByFlock = Object.entries(prodByFlock).map(([flockId, logs]) => {
+      const flock = raw.flocks.find((f: any) => f.id === Number(flockId));
+      const sorted = logs.slice().sort((a: any, b: any) => a.date > b.date ? 1 : -1);
+      const total = logs.reduce((s, l) => s + Number(l.eggCount), 0);
+      const avg = logs.length > 0 ? total / logs.length : 0;
+      // Trend: compare first half vs second half
+      const mid = Math.floor(sorted.length / 2);
+      const firstHalf = sorted.slice(0, mid).reduce((s: number, l: any) => s + Number(l.eggCount), 0) / (mid || 1);
+      const secondHalf = sorted.slice(mid).reduce((s: number, l: any) => s + Number(l.eggCount), 0) / ((sorted.length - mid) || 1);
+      const trend: "up" | "down" | "stable" = secondHalf > firstHalf * 1.05 ? "up" : secondHalf < firstHalf * 0.95 ? "down" : "stable";
+      return {
+        flockId: Number(flockId),
+        flockName: flock?.name ?? `قطيع #${flockId}`,
+        logCount: logs.length,
+        totalEggs: total,
+        avgDaily: Math.round(avg * 10) / 10,
+        trend,
+        latestLog: sorted[sorted.length - 1] ?? null,
+      };
+    });
+
+    // Sick flocks (latest health status = sick/quarantine)
+    const sickFlockIds = new Set<number>();
+    for (const [flockId, logs] of Object.entries(healthByFlock)) {
+      const sorted = logs.slice().sort((a: any, b: any) => a.date > b.date ? 1 : -1);
+      const latest = sorted[sorted.length - 1];
+      if (latest && ["sick", "quarantine"].includes(latest.status)) sickFlockIds.add(Number(flockId));
+    }
+
+    // Health-production correlation: for flocks with both logs, check if sick periods dip production
+    const correlations: { flockName: string; finding: string }[] = [];
+    for (const [flockId, hLogs] of Object.entries(healthByFlock)) {
+      const pLogs = prodByFlock[Number(flockId)] ?? [];
+      if (!pLogs.length) continue;
+      const sickDates = new Set(hLogs.filter((h: any) => ["sick","quarantine"].includes(h.status)).map((h: any) => h.date));
+      if (!sickDates.size) continue;
+      const sickProd = pLogs.filter((p: any) => sickDates.has(p.date)).map((p: any) => Number(p.eggCount));
+      const healthyProd = pLogs.filter((p: any) => !sickDates.has(p.date)).map((p: any) => Number(p.eggCount));
+      if (sickProd.length > 0 && healthyProd.length > 0) {
+        const sickAvg = sickProd.reduce((a, b) => a + b, 0) / sickProd.length;
+        const healthyAvg = healthyProd.reduce((a, b) => a + b, 0) / healthyProd.length;
+        const drop = healthyAvg > 0 ? ((healthyAvg - sickAvg) / healthyAvg) * 100 : 0;
+        const flock = raw.flocks.find((f: any) => f.id === Number(flockId));
+        if (drop > 10) correlations.push({
+          flockName: flock?.name ?? `قطيع #${flockId}`,
+          finding: `انخفاض الإنتاج ${Math.round(drop)}% خلال فترات المرض (${sickAvg.toFixed(0)} بيضة مقابل ${healthyAvg.toFixed(0)} بيضة في اليوم الطبيعي)`,
+        });
+      }
+    }
+
     // ── ALERTS ──────────────────────────────────────────────────
     const alerts: { level: "critical" | "warning" | "info"; message: string; category: string }[] = [];
     if (overdueArr.length > 0) alerts.push({ level: "critical", message: `${overdueArr.length} مهمة متأخرة تحتاج إجراء فوري`, category: "tasks" });
     if (noteStreak === 0) alerts.push({ level: "warning", message: "لم تُسجَّل ملاحظة اليوم — التوثيق اليومي مهم", category: "notes" });
+    for (const fid of sickFlockIds) {
+      const flock = raw.flocks.find((f: any) => f.id === fid);
+      alerts.push({ level: "critical", message: `قطيع ${flock?.name ?? `#${fid}`}: آخر سجل صحي يُشير إلى مرض أو حجر صحي`, category: "flocks" });
+    }
+    for (const prod of productionByFlock) {
+      if (prod.trend === "down" && prod.logCount >= 3) alerts.push({ level: "warning", message: `${prod.flockName}: إنتاج البيض في انخفاض مستمر (متوسط ${prod.avgDaily}/يوم)`, category: "production" });
+    }
     for (const c of cycleDetails) {
       if (c.tempStatus === "bad" && c.temperature != null) alerts.push({ level: "critical", message: `${c.name}: درجة حرارة خارج النطاق (${c.temperature}°C) — مثالي 37.5–37.8°C`, category: "environment" });
       else if (c.tempStatus === "warn" && c.temperature != null) alerts.push({ level: "warning", message: `${c.name}: درجة حرارة على حدود النطاق (${c.temperature}°C)`, category: "environment" });
@@ -342,6 +433,7 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
     healthScore -= alerts.filter(a => a.level === "warning").length * 5;
     if (noteStreak === 0) healthScore -= 5;
     if (precisionSummary?.riskScore > 60) healthScore -= 10;
+    healthScore -= sickFlockIds.size * 8;
     healthScore = Math.max(0, Math.min(100, healthScore));
 
     res.json({
@@ -372,6 +464,18 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
       goals: { total: goalDetails.length, completed: goalDetails.filter((g: any) => g.completed).length, list: goalDetails },
       alerts,
       precision: precisionSummary,
+      production: {
+        totalLogs: prodLogs.length,
+        totalEggs: prodLogs.reduce((s, p) => s + Number(p.eggCount), 0),
+        byFlock: productionByFlock,
+        decliningFlocks: productionByFlock.filter(p => p.trend === "down"),
+      },
+      flockHealth: {
+        totalEvents: hlthLogs.length,
+        sickFlockCount: sickFlockIds.size,
+        sickFlockIds: Array.from(sickFlockIds),
+        correlations,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "فشل المسح الشامل" });
