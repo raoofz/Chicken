@@ -27,7 +27,36 @@ Full-stack poultry farm management system with two web frontends sharing one API
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
-## Intelligence System — Context-Aware 7-Point Analysis (NEW)
+## Finance & Production Intelligence — Professional Redesign (LATEST)
+
+**Location**: `artifacts/poultry-manager/src/pages/finance.tsx`
+**Live polling**: All queries `refetchInterval: 30_000` + `staleTime: 20_000`
+
+### New Architecture
+- **LiveBadge** — pulsing green dot + "X seconds ago / sedan" auto-refresh timer
+- **AnomalyStrip** — pinned alert bar showing critical/warning anomalies at top of page
+- **detectAnomalies()** — 7-rule deterministic engine: loss detection, margin alert, feed concentration, category dominance, zero income, trend decline, excellent performance
+- **computeCostIntel()** — cost per bird/day, revenue per bird, profit per bird, daily burn rate, break-even income, feed/labor ratios, ROI%
+- **computePrediction()** — linear regression from last 6 months of monthly data → next month income/expense/profit forecast with confidence level (low/medium/high)
+- **MetricTile** — compact metric display component with icon, bg, color, trend
+- **Sparkline** — lightweight SVG mini-charts embedded in KPI cards
+- **ComposedChart** — combined bar+line charts for comprehensive monthly view
+
+### Tab Structure (5 tabs)
+1. **الأداء / Prestanda** — Health gauge, profit breakdown, category bars, monthly area chart
+2. **الذكاء المالي / Finansiell intelligens** — 5 sections: Anomaly detection, Cost intelligence, Predictive engine, CFO decision recommendations, Time intelligence chart
+3. **التحليل البياني / Diagram** — ComposedChart, profit area with prediction, donut breakdowns
+4. **المعاملات / Transaktioner** — Search + filter + inline totals footer
+5. **التقارير / Rapporter** — P&L statement, smart alerts, detailed income/expense breakdowns, KPI tiles
+
+### Data Sources
+- `/api/transactions` — all transactions (live polling)
+- `/api/transactions/summary` — monthly aggregates (live polling)
+- `/api/dashboard/summary` — farm production data (totalChickens for cost per unit)
+
+---
+
+## Intelligence System — Context-Aware 7-Point Analysis
 
 **Location**: `artifacts/api-server/src/lib/context-engine.ts` + `intelligence-engine.ts`
 **Frontend**: `artifacts/poultry-manager/src/pages/precision-analysis.tsx`
