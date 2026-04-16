@@ -204,8 +204,8 @@ function evalExternalHumidity(humidity: number): DecisionFactor {
     reasonSv: `Utomhusfuktighet (${v}) extremt låg — kritisk torrhet`,
     impactAr: "ستفقد الفقاسة رطوبتها بسرعة — خطر جفاف البيض وموت الأجنة",
     impactSv: "Kläckmaskinen förlorar fuktighet snabbt — risk för torkning av ägg och embryodöd",
-    adviceAr: "🔴 أضف ماءً فوراً لأوعية الفقاسة، افحص الرطوبة الداخلية الآن، يجب أن تكون 55-60%",
-    adviceSv: "🔴 Tillsätt vatten omedelbart i kläckmaskinens behållare. Kontrollera intern fuktighet nu – bör vara 55-60%",
+    adviceAr: "🔴 أضف ماءً فوراً لأوعية الفقاسة، افحص الرطوبة الداخلية الآن — يجب أن تكون 50-55٪ (أيام 1-18) أو 70-75٪ (أيام 18-21)",
+    adviceSv: "🔴 Tillsätt vatten omedelbart. Kontrollera intern fuktighet nu – bör vara 50-55% (dag 1-18) eller 70-75% (dag 18-21)",
     value: v,
   };
   if (humidity < 40) return {
@@ -219,26 +219,26 @@ function evalExternalHumidity(humidity: number): DecisionFactor {
     adviceSv: "🟡 Kontrollera vattennivån i kläckmaskinen två gånger dagligen och fyll på vid behov",
     value: v,
   };
-  if (humidity <= 70) return {
+  if (humidity <= 65) return {
     id: "ext_humidity", category: "humidity", status: "good", urgency: "low",
     titleAr: "✅ رطوبة خارجية مثالية", titleSv: "✅ Idealisk utomhusfuktighet",
     reasonAr: `الرطوبة الخارجية (${v}) مناسبة`,
     reasonSv: `Utomhusfuktighet (${v}) lämplig`,
-    impactAr: "ظروف الرطوبة مثالية — لا تأثير سلبي على الفقاسة",
-    impactSv: "Idealiska fuktförhållanden — ingen negativ inverkan på kläckmaskinen",
-    adviceAr: "✅ لا إجراء مطلوب — استمر بالمراقبة المعتادة",
-    adviceSv: "✅ Ingen åtgärd krävs — fortsätt vanlig övervakning",
+    impactAr: "ظروف الرطوبة جيدة — يمكن الحفاظ على 50-55٪ في الفقاسة بسهولة",
+    impactSv: "Goda fuktförhållanden — 50-55% i kläckmaskinen lätt att hålla",
+    adviceAr: "✅ لا إجراء مطلوب — تأكد من الحفاظ على 50-55٪ أيام 1-18 و70-75٪ في الهاتشر",
+    adviceSv: "✅ Ingen åtgärd krävs — håll 50-55% dag 1-18 och 70-75% i lockdown-fasen",
     value: v,
   };
-  if (humidity <= 80) return {
+  if (humidity <= 75) return {
     id: "ext_humidity", category: "humidity", status: "warning", urgency: "monitor",
     titleAr: "💦 رطوبة خارجية مرتفعة", titleSv: "💦 Hög utomhusfuktighet",
-    reasonAr: `الرطوبة الخارجية (${v}) مرتفعة`,
-    reasonSv: `Utomhusfuktighet (${v}) hög`,
-    impactAr: "قد ترتفع رطوبة الفقاسة تجاوز 65% مما يزيد خطر نمو البكتيريا والعفن",
-    impactSv: "Kläckmaskinens fuktighet kan överstiga 65% vilket ökar risk för bakterie- och mögelväxt",
-    adviceAr: "🟡 راقب رطوبة الفقاسة بدقة، إذا تجاوزت 65% قلل كمية الماء قليلاً",
-    adviceSv: "🟡 Övervaka kläckmaskinens fuktighet noggrant. Om den överstiger 65%, minska vattenmängden",
+    reasonAr: `الرطوبة الخارجية (${v}) مرتفعة — تأثير على ضبط الفقاسة`,
+    reasonSv: `Utomhusfuktighet (${v}) hög — påverkar inställning av kläckmaskinen`,
+    impactAr: "قد ترتفع رطوبة الفقاسة تجاوز 55٪ — يصعب الحفاظ على الهدف 50-55٪ في أيام 1-18",
+    impactSv: "Kläckmaskinens fuktighet kan överstiga 55% — svårt att hålla 50-55% under dag 1-18",
+    adviceAr: "🟡 قلل الماء في الفقاسة. استهدف 48-50٪ إدخال بدلاً من 52٪. في الهاتشر استمر بـ 70٪",
+    adviceSv: "🟡 Minska vattnet i kläckmaskinen. Sikta 48-50% (dag 1-18), håll 70% i lockdown",
     value: v,
   };
   return {
@@ -328,7 +328,7 @@ function evalIncubatorHumidity(inc: IncubatorState): DecisionFactor | null {
   const isLockdown = inc.status === "hatching";
   const hum = isLockdown ? (inc.lockdownHumidity ?? inc.humidity) : inc.humidity;
   if (hum == null) return null;
-  const ideal = isLockdown ? 65 : 55;
+  const ideal = isLockdown ? 72 : 52;  // days 1-18: 50-55% target; days 18-21: 70-75% target
   const dev = Math.abs(hum - ideal);
   const v = `${hum}%`;
   const name = inc.batchName;

@@ -44,7 +44,7 @@ function HatchingAnalysis({ cycles }: { cycles: any[] }) {
 
   const recommendations: { icon: "warn" | "ok"; text: string }[] = [];
   if (latest.rate < 30) recommendations.push({ icon: "warn", text: "نسبة الفقس أقل من 30٪ — تحقق من جودة البيض ودرجة الحرارة والرطوبة بشكل فوري" });
-  if (latest.rate >= 30 && latest.rate < TARGET) recommendations.push({ icon: "warn", text: `الهدف ${TARGET}٪ — الفجوة ${gapToTarget} نقطة. ركز على استقرار الرطوبة (55-65٪ إدخال، 70-75٪ هاتشر) والتقليب المنتظم` });
+  if (latest.rate >= 30 && latest.rate < TARGET) recommendations.push({ icon: "warn", text: `الهدف ${TARGET}٪ — فجوة ${gapToTarget} نقطة. اضبط: 50-55٪ أيام 1-18، ارفع إلى 70-75٪ في آخر 3 أيام (الهاتشر)، والتقليب كل 4-6 ساعات` });
   if (latest.rate >= TARGET) recommendations.push({ icon: "ok", text: `أنت فوق الهدف (${TARGET}٪). للوصول إلى 80-85٪: تأكد من صحة المولدات، وسلامة البيض قبل الإدخال` });
   if (trend === "down" && delta < -5) recommendations.push({ icon: "warn", text: `انخفضت النسبة ${Math.abs(delta)} نقطة مقارنة بالدفعة السابقة — راجع جودة بيض التفريخ والتهوية` });
   if (trend === "up") recommendations.push({ icon: "ok", text: "مسار تحسن مستمر — استمر بنفس الإجراءات مع توثيق الإعدادات التفصيلية" });

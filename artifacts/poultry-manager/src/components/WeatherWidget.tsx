@@ -46,6 +46,12 @@ interface Alert {
   messageSv: string;
 }
 
+// Incubation targets based on real performance data:
+// Days 1–18  →  50–55% (midpoint 52%)
+// Days 18–21 →  70–75% (midpoint 72%) — CRITICAL for final hatch
+const BASE_HUMID_INCUB   = 52;  // days 1-18
+const BASE_HUMID_LOCKDOWN = 72;  // days 18-21
+
 function calibrateFromCycles(cycles: any[]): CycleSummary {
   const completed = cycles
     .filter(c => c.status === "completed" && c.eggsHatched != null && c.eggsSet > 0)
@@ -60,31 +66,44 @@ function calibrateFromCycles(cycles: any[]): CycleSummary {
   const top = withSettings.slice(0, Math.min(2, withSettings.length));
 
   if (top.length === 0) {
-    return { optimalTemp: 37.5, optimalHumid1: 55, bestRate: 0, cycleCount: completed.length, source: "standard" };
+    return { optimalTemp: 37.5, optimalHumid1: BASE_HUMID_INCUB, bestRate: 0, cycleCount: completed.length, source: "standard" };
   }
 
   const avgTemp = top.reduce((s, c) => s + c.temp!, 0) / top.length;
-  const avgHumid = top.reduce((s, c) => s + c.humidity!, 0) / top.length;
+  // History shows what was USED — we still recommend 52% as target for days 1-18
+  // (user used 55% and got 53%; lower slightly and push lockdown to 72% for improvement)
   const bestRate = Math.round(completed[0].rate * 100);
+  const recordedHumid = Math.round(top.reduce((s, c) => s + c.humidity!, 0) / top.length);
 
   return {
     optimalTemp: Math.round(avgTemp * 10) / 10,
-    optimalHumid1: Math.round(avgHumid),
+    // If recorded humidity > 55, recommend the correct target (52), not what they used
+    optimalHumid1: recordedHumid > 55 ? BASE_HUMID_INCUB : recordedHumid,
     bestRate,
     cycleCount: completed.length,
     source: "history",
   };
 }
 
-function adjustHumidityForOutdoor(baseHumid: number, outdoorHumid: number): number {
-  if (outdoorHumid >= 80) return Math.max(44, baseHumid - Math.round((outdoorHumid - 65) * 0.35));
-  if (outdoorHumid >= 70) return Math.max(48, baseHumid - Math.round((outdoorHumid - 65) * 0.25));
-  if (outdoorHumid <= 30) return Math.min(62, baseHumid + Math.round((35 - outdoorHumid) * 0.25));
-  if (outdoorHumid <= 40) return Math.min(60, baseHumid + Math.round((40 - outdoorHumid) * 0.15));
+// Adjust incubation phase humidity (days 1-18) for outdoor conditions
+function adjustIncubHumidForOutdoor(baseHumid: number, outdoorHumid: number): number {
+  if (outdoorHumid >= 80) return Math.max(42, baseHumid - Math.round((outdoorHumid - 65) * 0.35));
+  if (outdoorHumid >= 70) return Math.max(46, baseHumid - Math.round((outdoorHumid - 65) * 0.25));
+  if (outdoorHumid <= 30) return Math.min(58, baseHumid + Math.round((35 - outdoorHumid) * 0.25));
+  if (outdoorHumid <= 40) return Math.min(56, baseHumid + Math.round((40 - outdoorHumid) * 0.15));
   return baseHumid;
 }
 
-function buildAlerts(weather: WeatherData, calibrated: CycleSummary, adjustedHumid: number): Alert[] {
+// Adjust lockdown phase humidity (days 18-21) for outdoor conditions
+// More conservative — lockdown moisture is critical for final hatch
+function adjustLockdownHumidForOutdoor(outdoorHumid: number): number {
+  if (outdoorHumid >= 80) return 68; // very humid outside — slightly lower lockdown target
+  if (outdoorHumid >= 72) return 70; // aim for lower end of 70-75 range
+  if (outdoorHumid <= 30) return 74; // very dry outside — push to upper end
+  return BASE_HUMID_LOCKDOWN;        // 72 in normal conditions
+}
+
+function buildAlerts(weather: WeatherData, calibrated: CycleSummary, adjustedIncub: number, adjustedLockdown: number): Alert[] {
   const alerts: Alert[] = [];
   const outdoorH = weather.humidity;
   const outdoorT = weather.temperature;
@@ -96,13 +115,13 @@ function buildAlerts(weather: WeatherData, calibrated: CycleSummary, adjustedHum
   }
 
   if (outdoorH >= 80) {
-    alerts.push({ level: "warning", messageAr: `💦 رطوبة خارجية مرتفعة جداً (${outdoorH}٪) — قلل الماء بشكل ملحوظ. استهدف ${adjustedHumid}٪ داخل الفقاسة (بدلاً من ${calibrated.optimalHumid1}٪)`, messageSv: `💦 Mycket hög utomhusfuktighet (${outdoorH}%) — minska vattnet kraftigt, sikta på ${adjustedHumid}% inuti` });
+    alerts.push({ level: "warning", messageAr: `💦 رطوبة خارجية مرتفعة جداً (${outdoorH}٪) — قلل الماء بشكل ملحوظ. استهدف ${adjustedIncub}٪ (أيام 1-18) و${adjustedLockdown}٪ (أيام 18-21)`, messageSv: `💦 Mycket hög utomhusfuktighet (${outdoorH}%) — minska vattnet kraftigt: sikta ${adjustedIncub}% (dag 1-18) och ${adjustedLockdown}% (dag 18-21)` });
   } else if (outdoorH >= 70) {
-    alerts.push({ level: "warning", messageAr: `💧 رطوبة خارجية مرتفعة (${outdoorH}٪) — خفف الماء في الفقاسة. اضبط على ${adjustedHumid}٪ بدلاً من ${calibrated.optimalHumid1}٪`, messageSv: `💧 Hög utomhusfuktighet (${outdoorH}%) — minska vattnet lite, sikta på ${adjustedHumid}% inuti` });
+    alerts.push({ level: "warning", messageAr: `💧 رطوبة خارجية مرتفعة (${outdoorH}٪) — خفف الماء. استهدف ${adjustedIncub}٪ في الإدخال و${adjustedLockdown}٪ في الهاتشر`, messageSv: `💧 Hög utomhusfuktighet (${outdoorH}%) — minska vattnet: ${adjustedIncub}% (inkubation) och ${adjustedLockdown}% (lockdown)` });
   } else if (outdoorH <= 30) {
-    alerts.push({ level: "warning", messageAr: `🏜️ رطوبة خارجية منخفضة جداً (${outdoorH}٪) — أضف ماء إضافياً. استهدف ${adjustedHumid}٪ داخل الفقاسة`, messageSv: `🏜️ Mycket låg utomhusfuktighet (${outdoorH}%) — lägg till mer vatten, sikta på ${adjustedHumid}%` });
+    alerts.push({ level: "warning", messageAr: `🏜️ رطوبة خارجية منخفضة جداً (${outdoorH}٪) — أضف ماء أكثر. استهدف ${adjustedIncub}٪ إدخال و${adjustedLockdown}٪ هاتشر`, messageSv: `🏜️ Mycket låg utomhusfuktighet (${outdoorH}%) — tillsätt mer vatten: sikta ${adjustedIncub}% och ${adjustedLockdown}%` });
   } else if (outdoorH <= 40) {
-    alerts.push({ level: "info", messageAr: `💧 رطوبة منخفضة قليلاً (${outdoorH}٪) — راقب مستوى الماء. استهدف ${adjustedHumid}٪ داخلياً`, messageSv: `💧 Något låg utomhusfuktighet (${outdoorH}%) — håll koll på vattennivån` });
+    alerts.push({ level: "info", messageAr: `💧 رطوبة منخفضة قليلاً (${outdoorH}٪) — راقب مستوى الماء. استهدف ${adjustedIncub}٪ إدخال، ${adjustedLockdown}٪ هاتشر`, messageSv: `💧 Något låg utomhusfuktighet (${outdoorH}%) — håll koll på vattennivån` });
   }
 
   if (weather.windSpeed > 10) {
@@ -111,7 +130,7 @@ function buildAlerts(weather: WeatherData, calibrated: CycleSummary, adjustedHum
 
   if (alerts.length === 0) {
     if (calibrated.source === "history" && calibrated.bestRate < 60) {
-      alerts.push({ level: "info", messageAr: `📊 الطقس مناسب — لكن بيانات مزرعتك تُظهر أفضل نسبة فقس ${calibrated.bestRate}٪. الهدف 75٪ يتطلب ضبطاً دقيقاً للرطوبة والتقليب`, messageSv: `📊 Vädret lämpligt — din bästa kläckningsgrad är ${calibrated.bestRate}%, mål 75% kräver fin-justering` });
+      alerts.push({ level: "info", messageAr: `📊 الطقس مناسب — أفضل نسبة مزرعتك ${calibrated.bestRate}٪. لتجاوز 75٪: ارفع رطوبة الهاتشر (أيام 18-21) إلى ${adjustedLockdown}٪ وحافظ على التقليب المنتظم`, messageSv: `📊 Vädret lämpligt — bästa kläckgrad ${calibrated.bestRate}%. Höj lockdown-fuktigheten till ${adjustedLockdown}% för att nå 75%+` });
     } else {
       alerts.push({ level: "ok", messageAr: "✅ الطقس مناسب — ظروف الفقاسة ضمن النطاق الجيد", messageSv: "✅ Vädret är lämpligt — kläckförhållandena inom goda gränser" });
     }
@@ -184,10 +203,12 @@ export function WeatherWidget() {
   const wDesc = weather ? (WEATHER_CODES[weather.weatherCode] ?? { ar: "غير معروف", sv: "Okänt", icon: "🌡️" }) : null;
 
   const calibrated = calibrateFromCycles(cycles);
-  const adjustedHumid1 = weather ? adjustHumidityForOutdoor(calibrated.optimalHumid1, weather.humidity) : calibrated.optimalHumid1;
-  const adjustedHumid2 = weather ? adjustHumidityForOutdoor(calibrated.optimalHumid1 + 12, weather.humidity) : calibrated.optimalHumid1 + 12;
-  const humidChanged = adjustedHumid1 !== calibrated.optimalHumid1;
-  const alerts = weather ? buildAlerts(weather, calibrated, adjustedHumid1) : [];
+  const adjustedHumid1 = weather ? adjustIncubHumidForOutdoor(calibrated.optimalHumid1, weather.humidity) : calibrated.optimalHumid1;
+  const adjustedHumid2 = weather ? adjustLockdownHumidForOutdoor(weather.humidity) : BASE_HUMID_LOCKDOWN;
+  const incubChanged   = adjustedHumid1 !== calibrated.optimalHumid1;
+  const lockdownChanged = adjustedHumid2 !== BASE_HUMID_LOCKDOWN;
+  const humidChanged   = incubChanged || lockdownChanged;
+  const alerts = weather ? buildAlerts(weather, calibrated, adjustedHumid1, adjustedHumid2) : [];
 
   return (
     <Card className="border-none shadow-sm overflow-hidden">
@@ -278,17 +299,17 @@ export function WeatherWidget() {
                   <div className="font-bold text-amber-700">{calibrated.optimalTemp}°C</div>
                   <div className="text-muted-foreground">{t("weather.incub.temp")}</div>
                 </div>
-                <div className={cn("text-center rounded p-1.5", humidChanged ? "bg-amber-100 border border-amber-300" : "bg-white dark:bg-black/20")}>
-                  <div className={cn("font-bold", humidChanged ? "text-amber-700" : "text-blue-600")}>
+                <div className={cn("text-center rounded p-1.5", incubChanged ? "bg-amber-100 border border-amber-300" : "bg-white dark:bg-black/20")}>
+                  <div className={cn("font-bold", incubChanged ? "text-amber-700" : "text-blue-600")}>
                     {adjustedHumid1}%
-                    {humidChanged && <span className="block text-[8px] line-through opacity-50">{calibrated.optimalHumid1}%</span>}
+                    {incubChanged && <span className="block text-[8px] line-through opacity-50">{calibrated.optimalHumid1}%</span>}
                   </div>
                   <div className="text-muted-foreground">{t("weather.incub.humid1")}</div>
                 </div>
-                <div className={cn("text-center rounded p-1.5", humidChanged ? "bg-amber-100 border border-amber-300" : "bg-white dark:bg-black/20")}>
-                  <div className={cn("font-bold", humidChanged ? "text-amber-700" : "text-blue-600")}>
+                <div className={cn("text-center rounded p-1.5", lockdownChanged ? "bg-amber-100 border border-amber-300" : "bg-emerald-50 border border-emerald-200")}>
+                  <div className={cn("font-bold", lockdownChanged ? "text-amber-700" : "text-emerald-700")}>
                     {adjustedHumid2}%
-                    {humidChanged && <span className="block text-[8px] line-through opacity-50">{calibrated.optimalHumid1 + 12}%</span>}
+                    {lockdownChanged && <span className="block text-[8px] line-through opacity-50">{BASE_HUMID_LOCKDOWN}%</span>}
                   </div>
                   <div className="text-muted-foreground">{t("weather.incub.humid2")}</div>
                 </div>

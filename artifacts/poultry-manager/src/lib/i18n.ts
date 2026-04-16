@@ -219,7 +219,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "hatching.phase2.label": { ar: "إقفال (18–21):", sv: "Låsning (18–21):" },
   "hatching.transferDate": { ar: "تاريخ نقل البيض (اليوم 18)", sv: "Överföringsdatum (Dag 18)" },
   "hatching.transferTime": { ar: "ساعة ودقيقة النقل", sv: "Överföringstid" },
-  "hatching.phase2.recommend": { ar: "الموصى به: 37.0–37.5°م، رطوبة 65–75%", sv: "Rekommenderat: 37,0–37,5°C, fuktighet 65–75%" },
+  "hatching.phase2.recommend": { ar: "الموصى به: 37.0–37.5°م، رطوبة 70–75% (حرج للفقس — لا تخفضها)", sv: "Rekommenderat: 37,0–37,5°C, fuktighet 70–75% (kritiskt för kläckning)" },
   "hatching.results": { ar: "نتائج الفقس", sv: "Kläckningsresultat" },
   "hatching.expectedDate": { ar: "تاريخ الفقس المتوقع", sv: "Förväntat kläckningsdatum" },
   "hatching.actualDate": { ar: "تاريخ الفقس الفعلي", sv: "Faktiskt kläckningsdatum" },
@@ -237,7 +237,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "hatching.egg": { ar: "بيضة", sv: "ägg" },
   "hatching.hatched": { ar: "فقست", sv: "kläckta" },
   "hatching.legend.incubation": { ar: "اليوم 1–18: تحضين — 37.5–38°م / رطوبة 50–60%", sv: "Dag 1–18: Inkubation — 37,5–38°C / fuktighet 50–60%" },
-  "hatching.legend.lockdown": { ar: "اليوم 18–21: إقفال — 37.0–37.5°م / رطوبة 65–75%", sv: "Dag 18–21: Låsning — 37,0–37,5°C / fuktighet 65–75%" },
+  "hatching.legend.lockdown": { ar: "اليوم 18–21: إقفال — 37.0–37.5°م / رطوبة 70–75% (حرج)", sv: "Dag 18–21: Låsning — 37,0–37,5°C / fuktighet 70–75% (kritiskt)" },
   "hatching.additionalNotes": { ar: "ملاحظات إضافية", sv: "Ytterligare anteckningar" },
   "hatching.optionalNotes": { ar: "ملاحظات اختيارية...", sv: "Valfria anteckningar..." },
 
