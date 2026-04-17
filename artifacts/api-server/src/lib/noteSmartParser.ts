@@ -1,20 +1,10 @@
 /**
  * noteSmartParser.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Analyzes Arabic/Swedish farm notes and extracts structured actions.
- * Uses farmDomains.ts as the Single Source of Truth for category classification.
- *
- * Priority order for overlapping patterns:
- *   1. Hatching cycle (egg-setting verbs + quantity)
- *   2. Hatching result (hatched/emerged verbs)
- *   3. Expense (purchase/payment verbs)
- *   4. Income (sale verbs)
- *   5. Flock (arrival verbs + bird count)
- *   6. Task (reminder/obligation keywords)
+ * Analyzes Arabic farm notes and extracts structured data.
+ * Fully bilingual: generates names/descriptions in Arabic or Swedish.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-
-import { classifyExpenseCategory, classifyIncomeCategory, getCategoryLabel } from "./farmDomains.js";
 
 type Lang = "ar" | "sv";
 
@@ -42,6 +32,17 @@ const L = {
     percent:        "%",
     nodata:         "لم يُكتشف بيانات منظمة — تم حفظ الملاحظة فقط.",
     detected:       (n: number) => `تم اكتشاف وإضافة ${n} عنصر`,
+    cats: {
+      feed:         "علف",
+      medicine:     "أدوية",
+      electricity:  "كهرباء",
+      labor:        "عمالة",
+      maintenance:  "صيانة",
+      equipment:    "معدات",
+      other:        "أخرى",
+      chick_sale:   "بيع كتاكيت",
+      egg_sale:     "بيع بيض",
+    },
     breed:          "محلي",
     purpose:        "meat",
   },
@@ -67,6 +68,17 @@ const L = {
     percent:        "%",
     nodata:         "Inga strukturerade data hittades — anteckning sparad.",
     detected:       (n: number) => `${n} element identifierade och sparade`,
+    cats: {
+      feed:         "Foder",
+      medicine:     "Medicin",
+      electricity:  "El",
+      labor:        "Arbetskraft",
+      maintenance:  "Underhåll",
+      equipment:    "Utrustning",
+      other:        "Övrigt",
+      chick_sale:   "Kycklingförsäljning",
+      egg_sale:     "Äggförsäljning",
+    },
     breed:          "Lokal",
     purpose:        "meat",
   },
@@ -87,7 +99,7 @@ function numNear(text: string, keyword: RegExp, range = 60): number | null {
   return nums.length ? nums[0] : null;
 }
 
-// ── Extract a date from Arabic/Swedish text ────────────────────────────────
+// ── Extract a date from Arabic text ───────────────────────────────────────
 function extractDate(text: string): string | null {
   const norm = normalizeNums(text);
   const patterns = [
@@ -132,6 +144,30 @@ function extractAmount(text: string): number | null {
   return null;
 }
 
+// ── Detect expense category ────────────────────────────────────────────────
+function detectExpenseCategory(text: string): string {
+  const map: Array<[RegExp, string]> = [
+    [/علف|غذاء|اكل|طعام|سمسم|ذرة|قمح|حبوب/i, "feed"],
+    [/دواء|دوا|مضاد|تطعيم|لقاح|مرض|بيطر|علاج/i, "medicine"],
+    [/كهرباء|طاقة|شمسي|بطاري|فاتورة كهرب/i, "electricity"],
+    [/عامل|راتب|اجر|اجور|يد عامل/i, "labor"],
+    [/صيانة|اصلاح|تصليح|قطعة|شبك|سقف/i, "maintenance"],
+    [/معدة|ادات|آلة|ماكينة|جهاز|مضخة|مروحة/i, "equipment"],
+  ];
+  for (const [pattern, cat] of map) {
+    if (pattern.test(text)) return cat;
+  }
+  return "other";
+}
+
+// ── Detect income category ─────────────────────────────────────────────────
+function detectIncomeCategory(text: string): string {
+  if (/كتكوت|فرخ|صوص|دجاج صغير/i.test(text)) return "chick_sale";
+  if (/بيض|بيضة/i.test(text)) return "egg_sale";
+  if (/دجاج|فروج|دجاجة/i.test(text)) return "chick_sale";
+  return "other";
+}
+
 // ── Extract chicken count ──────────────────────────────────────────────────
 function extractChickenCount(text: string): number | null {
   const norm = normalizeNums(text);
@@ -139,7 +175,6 @@ function extractChickenCount(text: string): number | null {
     /(\d+)\s*(?:كتكوت|فرخ|صوص|رأس|دجاج(?:ة)?)/i,
     /(?:كتكوت|فرخ|صوص|رأس|دجاج(?:ة)?)\s*(\d+)/i,
     /(\d+)\s*طير/i,
-    /(\d+)\s*kyckling(?:ar)?/i,
   ];
   for (const p of patterns) {
     const m = norm.match(p);
@@ -154,8 +189,6 @@ function extractEggCount(text: string): number | null {
   const patterns = [
     /(\d+)\s*(?:بيضة|بيضه|بيض)/i,
     /(?:بيضة|بيضه|بيض)\s*(\d+)/i,
-    /(\d+)\s*ägg/i,
-    /ägg\s*(\d+)/i,
   ];
   for (const p of patterns) {
     const m = norm.match(p);
@@ -190,7 +223,6 @@ function extractHumidity(text: string): number | null {
     /رطوب[ةه]\s*[:=]?\s*(\d{1,3}(?:\.\d+)?)\s*%?/i,
     /(\d{1,3})\s*%\s*رطوب/i,
     /humid\s*[:=]?\s*(\d{1,3})/i,
-    /fuktighet\s*[:=]?\s*(\d{1,3})/i,
   ];
   for (const p of patterns) {
     const m = norm.match(p);
@@ -209,7 +241,6 @@ function extractAgeDays(text: string): number | null {
     /عمر[هها]?\s*(\d+)\s*(?:يوم|يومًا|يوما)/i,
     /(\d+)\s*يوم\s*(?:عمر)?/i,
     /عمر\s*يوم/i,
-    /(\d+)\s*dag(?:ar)?\s*gammal/i,
   ];
   for (const p of patterns) {
     const m = norm.match(p);
@@ -221,7 +252,7 @@ function extractAgeDays(text: string): number | null {
   return null;
 }
 
-// ── Format amount ─────────────────────────────────────────────────────────
+// ── Format amount with thousands separator ────────────────────────────────
 function fmtAmt(n: number, lang: Lang): string {
   return lang === "ar"
     ? `${n.toLocaleString("ar-IQ")} ${L.ar.dinar}`
@@ -229,7 +260,7 @@ function fmtAmt(n: number, lang: Lang): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Public types
+// Main parser
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ExtractedAction {
@@ -245,38 +276,27 @@ export interface ParseResult {
   inputText: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main parser
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function parseNote(text: string, date: string, lang: Lang = "ar"): ParseResult {
   const l = L[lang];
   const actions: ExtractedAction[] = [];
   const t = text.trim();
 
-  // ── GUARD: egg-purchase intent (شراء بيض) MUST NOT be parsed as hatching cycle ──
-  // "اشترينا بيض" = buying eggs as a purchase, not setting them in incubator.
-  // Hatching cycle requires explicit "placing into incubator" verbs.
-  const isEggPurchase =
-    /شراء\s*بيض|اشتري(?:نا|ت)\s*بيض|شرينا\s*بيض|köpte?\s*ägg|inköp\s*(?:av\s*)?ägg/i.test(t);
-
-  // ── 1. HATCHING CYCLE — setting eggs in incubator ─────────────────────────
+  // ── 1. HATCHING CYCLE — setting eggs ────────────────────────────────────
   const isSettingEggs =
-    !isEggPurchase &&  // explicitly exclude egg purchases
-    /وضعنا|حطينا|وضعت|ادخلنا|ادخلت|وضع|نضع|lade\s+in|satte\s+in|placerade/i.test(t) &&
-    /بيض|بيضة|بيضه|ägg/i.test(t);
-
+    /وضعنا|حطينا|وضعت|ادخلنا|ادخلت|وضع|نضع/.test(t) && /بيض|بيضة|بيضه/.test(t);
   if (isSettingEggs) {
     const eggsSet = extractEggCount(t);
-    const temp    = extractTemperature(t);
+    const temp = extractTemperature(t);
     const humidity = extractHumidity(t);
     const startDate = extractDate(t) ?? date;
     if (eggsSet && eggsSet > 0) {
       const sd = new Date(startDate);
       const expectedHatch = new Date(sd.getTime() + 21 * 86400000).toISOString().split("T")[0];
-      const lockdown      = new Date(sd.getTime() + 18 * 86400000).toISOString().split("T")[0];
+      const lockdown    = new Date(sd.getTime() + 18 * 86400000).toISOString().split("T")[0];
 
-      const desc = `${l.hatchingCycle}: ${eggsSet} ${l.egg}${temp ? ` — ${l.temp} ${temp}°C` : ""}${humidity ? ` — ${l.humid} ${humidity}%` : ""} — ${l.dateLabel}: ${startDate}`;
+      const desc = lang === "ar"
+        ? `${l.hatchingCycle}: ${eggsSet} ${l.egg}${temp ? ` — ${l.temp} ${temp}°C` : ""}${humidity ? ` — ${l.humid} ${humidity}%` : ""} — ${l.dateLabel}: ${startDate}`
+        : `${l.hatchingCycle}: ${eggsSet} ${l.egg}${temp ? ` — ${l.temp} ${temp}°C` : ""}${humidity ? ` — ${l.humid} ${humidity}%` : ""} — ${l.dateLabel}: ${startDate}`;
 
       actions.push({
         type: "hatching_cycle",
@@ -297,16 +317,17 @@ export function parseNote(text: string, date: string, lang: Lang = "ar"): ParseR
     }
   }
 
-  // ── 2. HATCHING RESULT — eggs hatched/emerged ─────────────────────────────
+  // ── 2. HATCHING RESULT — eggs hatched ────────────────────────────────────
   const isHatchResult =
-    /فقسنا|فقس|خرج|طلع|حصلنا(?:\s+على)?|kläckte|kläcktes|kläckning/i.test(t) &&
-    /بيض|بيضة|كتكوت|فرخ|صوص|ägg|kyckling/i.test(t);
-
+    /فقسنا|فقس|خرج|طلع|حصلنا(?:\s+على)?/.test(t) &&
+    /بيض|بيضة|كتكوت|فرخ|صوص/.test(t);
   if (isHatchResult && !isSettingEggs) {
     const hatched = extractChickenCount(t) ?? extractEggCount(t);
-    const set     = numNear(t, /من\s+\d+|وضعنا\s+\d+/i) ?? extractEggCount(t);
+    const set = numNear(t, /من\s+\d+|وضعنا\s+\d+/i) ?? extractEggCount(t);
     if (hatched && hatched > 0) {
-      const desc = `${l.hatchResult}: ${hatched} ${l.chick}${set ? ` ${l.from} ${set} ${l.egg} (${Math.round((hatched / set) * 100)}${l.percent})` : ""}`;
+      const desc = lang === "ar"
+        ? `${l.hatchResult}: ${hatched} ${l.chick}${set ? ` ${l.from} ${set} ${l.egg} (${Math.round((hatched / set) * 100)}${l.percent})` : ""}`
+        : `${l.hatchResult}: ${hatched} ${l.chick}${set ? ` ${l.from} ${set} ${l.egg} (${Math.round((hatched / set) * 100)}${l.percent})` : ""}`;
       actions.push({
         type: "hatching_result",
         confidence: 0.82,
@@ -317,30 +338,26 @@ export function parseNote(text: string, date: string, lang: Lang = "ar"): ParseR
   }
 
   // ── 3. FINANCIAL — EXPENSE ────────────────────────────────────────────────
-  // Trigger: purchase/payment verbs, OR explicit "egg purchase" context
   const isExpense =
-    /اشتر(?:ينا|يت|ينا)|دفع(?:نا|ت)|صرف(?:نا|ت)|شرين|مصروف|شرينا|köpte?|betalade?|utgift/i.test(t) ||
-    isEggPurchase;
-
+    /اشتر(?:ينا|يت|ينا)|دفع(?:نا|ت)|صرف(?:نا|ت)|شرين|مصروف|شرينا/.test(t);
   if (isExpense) {
-    const amount   = extractAmount(t);
-    const category = classifyExpenseCategory(t);  // uses farmDomains SSOT
-    const qty      = extractChickenCount(t);
+    const amount = extractAmount(t);
+    const category = detectExpenseCategory(t);
+    const qty = extractChickenCount(t);
     if (amount && amount > 0) {
-      const catLabel = getCategoryLabel(category, lang);
       actions.push({
         type: "transaction",
         confidence: 0.9,
-        description: `${l.expense}: ${fmtAmt(amount, lang)} — ${catLabel}`,
+        description: `${l.expense}: ${fmtAmt(amount, lang)} — ${l.category}: ${l.cats[category as keyof typeof l.cats] ?? l.cats.other}`,
         data: {
-          type:        "expense",
+          type: "expense",
           date,
           category,
           description: t.substring(0, 120),
           amount,
-          quantity:    qty ?? null,
-          unit:        null,
-          notes:       null,
+          quantity: qty ?? null,
+          unit: null,
+          notes: null,
         },
       });
     }
@@ -348,65 +365,61 @@ export function parseNote(text: string, date: string, lang: Lang = "ar"): ParseR
 
   // ── 4. FINANCIAL — INCOME ─────────────────────────────────────────────────
   const isIncome =
-    /بعنا|بعت|بعيت|اشتر(?:ى|وا)\s*منا|باعوا|دخل|ربح|sålde?|inkomst|intäkt/i.test(t) && !isExpense;
-
+    /بعنا|بعت|بعيت|اشتر(?:ى|وا) منا|باعوا|دخل|ربح/.test(t) && !isExpense;
   if (isIncome) {
-    const amount   = extractAmount(t);
-    const category = classifyIncomeCategory(t);  // uses farmDomains SSOT
-    const qty      = extractChickenCount(t);
+    const amount = extractAmount(t);
+    const category = detectIncomeCategory(t);
+    const qty = extractChickenCount(t);
     if (amount && amount > 0) {
-      const catLabel = getCategoryLabel(category, lang);
       actions.push({
         type: "transaction",
         confidence: 0.88,
-        description: `${l.income}: ${fmtAmt(amount, lang)} — ${catLabel}`,
+        description: `${l.income}: ${fmtAmt(amount, lang)} — ${l.cats[category as keyof typeof l.cats] ?? l.cats.other}`,
         data: {
-          type:        "income",
+          type: "income",
           date,
           category,
           description: t.substring(0, 120),
           amount,
-          quantity:    qty ?? null,
-          unit:        qty ? l.chick : null,
-          notes:       null,
+          quantity: qty ?? null,
+          unit: qty ? l.chick : null,
+          notes: null,
         },
       });
     }
   }
 
-  // ── 5. FLOCK — new birds arriving ─────────────────────────────────────────
-  // Exclude egg-purchase context (buying eggs ≠ receiving a flock)
+  // ── 5. FLOCK — new birds ──────────────────────────────────────────────────
   const isNewFlock =
-    !isEggPurchase &&
-    /وصل(?:نا|ت)?|جاء(?:نا|ت)?|اشتر(?:ينا|يت)(?!\s*(?:علف|بيض))|fick\s+in|anlände|köpte\s+kyckling/i.test(t) &&
-    /كتكوت|فرخ|صوص|دجاج(?:ة)?|kyckling/i.test(t);
-
+    /وصل(?:نا|ت)?|جاء(?:نا|ت)?|اشتر(?:ينا|يت)(?!\s*علف)/.test(t) &&
+    /كتكوت|فرخ|صوص|دجاج(?:ة)?/.test(t);
   if (isNewFlock) {
-    const count   = extractChickenCount(t);
+    const count = extractChickenCount(t);
     const ageDays = extractAgeDays(t);
     if (count && count > 0) {
-      const desc = `${l.newFlock}: ${count} ${l.chick}${ageDays != null ? ` — ${l.age} ${ageDays} ${l.day}` : ""}`;
+      const desc = lang === "ar"
+        ? `${l.newFlock}: ${count} ${l.chick}${ageDays != null ? ` — ${l.age} ${ageDays} ${l.day}` : ""}`
+        : `${l.newFlock}: ${count} ${l.chick}${ageDays != null ? ` — ${l.age} ${ageDays} ${l.day}` : ""}`;
       actions.push({
         type: "flock",
         confidence: 0.85,
         description: desc,
         data: {
-          name:    `${l.flockPrefix} ${date}`,
-          breed:   l.breed,
+          name: `${l.flockPrefix} ${date}`,
+          breed: l.breed,
           count,
           ageDays: ageDays ?? 1,
           purpose: l.purpose,
-          notes:   t.substring(0, 200),
+          notes: t.substring(0, 200),
         },
       });
     }
   }
 
-  // ── 6. TASK — action items / reminders ────────────────────────────────────
+  // ── 6. TASK — action items ────────────────────────────────────────────────
   const isTask =
-    /يجب|لازم|ضروري|اذكر|لا تنسَ?ى?|تذكير|فحص|غدًا|غدا|الاسبوع|قريب|måste|kom\s+ihåg|glöm\s+inte|kontrollera|imorgon/i.test(t) &&
+    /يجب|لازم|ضروري|اذكر|لا تنسَ?ى?|تذكير|فحص|غدًا|غدا|الاسبوع|قريب/.test(t) &&
     t.length > 10;
-
   if (isTask) {
     const taskTitle = t
       .replace(/^(?:يجب|لازم|ضروري|لا تنسى?|اذكر)\s*/i, "")
@@ -414,33 +427,37 @@ export function parseNote(text: string, date: string, lang: Lang = "ar"): ParseR
       .trim()
       .substring(0, 80);
 
-    const isNextWeek = /الاسبوع|هذا الاسبوع|nästa\s+vecka/i.test(t);
-    const isUrgent   = /عاجل|فوري|حرج|brådskande|kritiskt/i.test(t);
-
-    const refDate = new Date();
-    const dueOffset = isNextWeek ? 7 : 1;
-    refDate.setDate(refDate.getDate() + dueOffset);
-    const dueDate = refDate.toISOString().split("T")[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isNextWeek = /الاسبوع|هذا الاسبوع/.test(t);
+    const nextWeek = new Date();
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    const dueDate = isNextWeek
+      ? nextWeek.toISOString().split("T")[0]
+      : tomorrow.toISOString().split("T")[0];
 
     actions.push({
       type: "task",
       confidence: 0.75,
       description: `${l.newTask}: ${taskTitle}`,
       data: {
-        title:       taskTitle,
+        title: taskTitle,
         description: t.substring(0, 300),
-        category:    "health",
-        priority:    isUrgent ? "high" : "medium",
-        completed:   false,
+        category: "health",
+        priority: /عاجل|فوري|حرج/.test(t) ? "critical" : "medium",
+        completed: false,
         dueDate,
       },
     });
   }
 
-  // ── Summary ───────────────────────────────────────────────────────────────
-  const summary = actions.length === 0
-    ? l.nodata
-    : l.detected(actions.length);
+  // ── Summary ──────────────────────────────────────────────────────────────
+  let summary: string;
+  if (actions.length === 0) {
+    summary = l.nodata;
+  } else {
+    summary = l.detected(actions.length);
+  }
 
   return { actions, summary, inputText: t };
 }

@@ -1,8 +1,5 @@
-import { useMemo, useEffect, useState, useRef } from "react";
-import {
-  useGetDashboardSummary, getGetDashboardSummaryQueryKey,
-} from "@workspace/api-client-react";
-import IntelligenceHub from "@/components/IntelligenceHub";
+import { useMemo, useEffect, useState } from "react";
+import { useGetDashboardSummary, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,14 +12,12 @@ import {
   AlertCircle, Info, Target, Bird, Egg, CheckSquare, Zap, ShieldAlert,
   ShieldCheck, Shield, ArrowUp, ArrowDown, Activity, Lightbulb,
   BarChart3, DollarSign, Percent, ArrowLeft, ArrowRight, Clock,
-  Calendar, ChevronRight, Flame, Timer, Lock, Thermometer, Droplets,
-  Wifi, WifiOff, RefreshCw,
+  Calendar, ChevronRight,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
-import { apiFetch } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -594,469 +589,7 @@ function DecisionCard({ decision, lang, isRtl }: { decision: Decision; lang: str
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-// ─── Live Hatching Monitor — Real-Time SSE ────────────────────────────────────
-
-const INCUBATION_PHASE_DAYS = 18;   // Day 1-18: Incubation
-const TOTAL_INCUBATION_DAYS = 21;   // Day 18-21: Lockdown/Hatching; >21: Delayed
-const MS_PER_DAY  = 86_400_000;
-const MS_PER_HOUR =  3_600_000;
-const MS_PER_MIN  =     60_000;
-
-type HatchPhase = "incubation" | "lockdown" | "delayed";
-
-interface ActiveCycle {
-  id: number;
-  batchName: string;
-  eggsSet: number;
-  eggsHatched: number | null;
-  startDate: string;
-  setTime: string | null;
-  status: string;
-  temperature: number | null;
-  humidity: number | null;
-  lockdownTemperature: number | null;
-  lockdownHumidity: number | null;
-  expectedHatchDate: string;
-  isActive: boolean;
-}
-
-interface PhaseInfo {
-  phase:         HatchPhase;
-  phaseProgress: number;    // 0-100 within the current phase
-  totalProgress: number;    // 0-100 of the full 21 days
-  elapsedDays:   number;    // whole days elapsed
-  elapsedHours:  number;    // hours within the current day
-  elapsedMins:   number;    // minutes within the current hour
-  daysLeft:      number;
-  hoursLeft:     number;
-  minsLeft:      number;
-  overdueHours:  number;    // hours past day 21 (0 when not delayed)
-  hatchDate:     Date;
-}
-
-function computePhaseInfo(cycle: ActiveCycle, nowMs: number): PhaseInfo {
-  const startMs   = new Date(`${cycle.startDate}T${cycle.setTime ?? "00:00"}:00`).getTime();
-  const elapsedMs = Math.max(0, nowMs - startMs);
-  const hatchDate = new Date(startMs + TOTAL_INCUBATION_DAYS * MS_PER_DAY);
-  const msLeft    = Math.max(0, hatchDate.getTime() - nowMs);
-
-  const elapsedDays  = elapsedMs / MS_PER_DAY;
-  const elapsedHours = Math.floor((elapsedMs % MS_PER_DAY) / MS_PER_HOUR);
-  const elapsedMins  = Math.floor((elapsedMs % MS_PER_HOUR) / MS_PER_MIN);
-  const totalProgress = Math.min((elapsedMs / (TOTAL_INCUBATION_DAYS * MS_PER_DAY)) * 100, 100);
-
-  let phase: HatchPhase;
-  let phaseProgress: number;
-
-  if (elapsedDays >= TOTAL_INCUBATION_DAYS) {
-    phase = "delayed";
-    phaseProgress = 100;
-  } else if (elapsedDays >= INCUBATION_PHASE_DAYS) {
-    phase = "lockdown";
-    phaseProgress = ((elapsedDays - INCUBATION_PHASE_DAYS) /
-                     (TOTAL_INCUBATION_DAYS - INCUBATION_PHASE_DAYS)) * 100;
-  } else {
-    phase = "incubation";
-    phaseProgress = (elapsedDays / INCUBATION_PHASE_DAYS) * 100;
-  }
-
-  const overdueMs    = Math.max(0, elapsedMs - TOTAL_INCUBATION_DAYS * MS_PER_DAY);
-  const overdueHours = Math.floor(overdueMs / MS_PER_HOUR);
-
-  return {
-    phase, phaseProgress, totalProgress,
-    elapsedDays:  Math.floor(elapsedDays),
-    elapsedHours, elapsedMins,
-    daysLeft:  Math.floor(msLeft / MS_PER_DAY),
-    hoursLeft: Math.floor((msLeft % MS_PER_DAY) / MS_PER_HOUR),
-    minsLeft:  Math.floor((msLeft % MS_PER_HOUR) / MS_PER_MIN),
-    overdueHours, hatchDate,
-  };
-}
-
-const PHASE_STYLE: Record<HatchPhase, {
-  bg: string; border: string; accent: string; barFrom: string; barTo: string;
-  labelAr: string; labelSv: string; descAr: string; descSv: string;
-}> = {
-  incubation: {
-    bg: "bg-blue-50 dark:bg-blue-950/30", border: "border-blue-200 dark:border-blue-800",
-    accent: "#3b82f6", barFrom: "#93c5fd", barTo: "#3b82f6",
-    labelAr: "الحضانة", labelSv: "Inkubation",
-    descAr: "اليوم ١ – ١٨", descSv: "Dag 1–18",
-  },
-  lockdown: {
-    bg: "bg-amber-50 dark:bg-amber-950/30", border: "border-amber-200 dark:border-amber-800",
-    accent: "#f59e0b", barFrom: "#fcd34d", barTo: "#10b981",
-    labelAr: "مرحلة التفقيس", labelSv: "Kläckningsfas",
-    descAr: "اليوم ١٨ – ٢١ · لا تفتح الحاضنة!", descSv: "Dag 18–21 · Öppna inte kuvösen!",
-  },
-  delayed: {
-    bg: "bg-red-50 dark:bg-red-950/30", border: "border-red-200 dark:border-red-800",
-    accent: "#ef4444", barFrom: "#fca5a5", barTo: "#ef4444",
-    labelAr: "تأخر في الفقس", labelSv: "Försenad kläckning",
-    descAr: "تجاوز اليوم ٢١", descSv: "Passerade dag 21",
-  },
-};
-
-type ConnMode = "connecting" | "sse" | "poll";
-
-function LiveHatchingMonitor({ lang }: { lang: string }) {
-  const ar   = lang === "ar";
-
-  const clockOffsetRef  = useRef(0);
-  const sseErrorsRef    = useRef(0);
-  const [now,      setNow]      = useState(Date.now());
-  const [cycles,   setCycles]   = useState<ActiveCycle[]>([]);
-  const [loaded,   setLoaded]   = useState(false);
-  const [connMode, setConnMode] = useState<ConnMode>("connecting");
-
-  // ── Per-minute clock tick (uses server-synced offset) ─────────────────────
-  useEffect(() => {
-    const tick = () => setNow(Date.now() + clockOffsetRef.current);
-    tick();
-    const id = setInterval(tick, MS_PER_MIN);
-    return () => clearInterval(id);
-  }, []);
-
-  // ── SSE connection + fallback polling ─────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    let es: EventSource | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    function applyData(serverTime: number, data: ActiveCycle[]) {
-      if (cancelled) return;
-      clockOffsetRef.current = serverTime - Date.now();
-      setCycles(data);
-      setLoaded(true);
-    }
-
-    async function pollFallback() {
-      try {
-        const data = await apiFetch<ActiveCycle[]>("/api/dashboard/active-cycles");
-        applyData(Date.now(), data ?? []);
-      } catch { /* silent */ }
-    }
-
-    function startPolling() {
-      if (cancelled) return;
-      setConnMode("poll");
-      pollFallback();
-      pollTimer = setInterval(pollFallback, 30_000);
-    }
-
-    function connect() {
-      if (cancelled) return;
-      try {
-        es = new EventSource(`${base}api/hatching/live-stream`, { withCredentials: true });
-        es.onopen = () => {
-          if (!cancelled) { sseErrorsRef.current = 0; setConnMode("sse"); }
-        };
-        es.onmessage = (ev) => {
-          try {
-            const p = JSON.parse(ev.data) as { serverTime: number; cycles: ActiveCycle[] };
-            applyData(p.serverTime, p.cycles);
-            if (!cancelled) setConnMode("sse");
-          } catch { /* malformed packet */ }
-        };
-        es.onerror = () => {
-          es?.close(); es = null;
-          sseErrorsRef.current++;
-          if (sseErrorsRef.current >= 3) {
-            startPolling();
-          } else if (!cancelled) {
-            setTimeout(connect, 5_000);
-          }
-        };
-      } catch {
-        startPolling();
-      }
-    }
-
-    connect();
-    return () => {
-      cancelled = true;
-      es?.close();
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  }, []);
-
-  // ── Loading skeleton ───────────────────────────────────────────────────────
-  if (!loaded) {
-    return (
-      <Card className="border-border/50 shadow-sm overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-amber-400 to-emerald-400 animate-pulse" />
-        <CardContent className="pt-5 pb-5 flex items-center gap-3">
-          <Egg className="w-5 h-5 text-blue-500 animate-pulse shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-64" />
-          </div>
-          <Skeleton className="h-8 w-20 rounded-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // ── Empty state ────────────────────────────────────────────────────────────
-  if (cycles.length === 0) {
-    return (
-      <Card className="border-dashed border-border/70 shadow-sm">
-        <CardContent className="pt-4 pb-4 flex items-center gap-3 text-muted-foreground">
-          <Egg className="w-5 h-5 shrink-0 opacity-50" />
-          <span className="text-sm">
-            {ar ? "لا توجد دورة تفقيس نشطة حالياً" : "Ingen aktiv kläckningscykel för tillfället"}
-          </span>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {/* ── Connection badge ── */}
-      <div className="flex items-center justify-between px-0.5">
-        <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <div className="relative">
-            <Egg className="w-4 h-4 text-blue-600" />
-            {connMode === "sse" && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            )}
-          </div>
-          {ar ? "مراقب التفقيس المباشر" : "Live Kläckningsövervakare"}
-        </h2>
-        <div className="flex items-center gap-1.5 text-[11px] font-medium">
-          {connMode === "sse"  && <><Wifi className="w-3 h-3 text-emerald-500" /><span className="text-emerald-600 dark:text-emerald-400">{ar ? "مباشر" : "Live"}</span></>}
-          {connMode === "poll" && <><RefreshCw className="w-3 h-3 text-amber-500" /><span className="text-amber-600 dark:text-amber-400">{ar ? "تحديث دوري" : "Polling"}</span></>}
-          {connMode === "connecting" && <><WifiOff className="w-3 h-3 text-muted-foreground animate-pulse" /><span className="text-muted-foreground">{ar ? "جاري الاتصال…" : "Ansluter…"}</span></>}
-        </div>
-      </div>
-
-      {/* ── Cycle cards ── */}
-      {cycles.map(cycle => {
-        const info  = computePhaseInfo(cycle, now);
-        const style = PHASE_STYLE[info.phase];
-
-        // Decide which temp/humidity to show based on phase
-        const tempToShow = info.phase === "lockdown"
-          ? (cycle.lockdownTemperature ?? cycle.temperature)
-          : cycle.temperature;
-        const humToShow = info.phase === "lockdown"
-          ? (cycle.lockdownHumidity ?? cycle.humidity)
-          : cycle.humidity;
-
-        return (
-          <Card
-            key={cycle.id}
-            className={`overflow-hidden border ${style.border} ${style.bg} shadow-sm transition-all duration-500`}
-          >
-            {/* Phase color strip */}
-            <div
-              className="h-1.5 w-full"
-              style={{ background: `linear-gradient(90deg, ${style.barFrom}, ${style.barTo})` }}
-            />
-
-            <CardContent className="pt-4 pb-4 space-y-4">
-
-              {/* ── Row 1: name + phase badge ─────────────────────────────── */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-bold text-foreground text-base leading-tight truncate">
-                    {cycle.batchName || (ar ? `دورة #${cycle.id}` : `Cykel #${cycle.id}`)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                    <Egg className="w-3 h-3 shrink-0" />
-                    {cycle.eggsSet} {ar ? "بيضة في الحاضنة" : "ägg i kuvösen"}
-                  </p>
-                </div>
-                <div
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold shrink-0 border"
-                  style={{
-                    background: style.accent + "18",
-                    color: style.accent,
-                    borderColor: style.accent + "44",
-                  }}
-                >
-                  {info.phase === "incubation" && <Egg className="w-3.5 h-3.5" />}
-                  {info.phase === "lockdown"   && <Zap className="w-3.5 h-3.5" />}
-                  {info.phase === "delayed"    && <AlertTriangle className="w-3.5 h-3.5" />}
-                  {ar ? style.labelAr : style.labelSv}
-                </div>
-              </div>
-
-              {/* ── Row 2: Elapsed time (Day · Hour · Minute) ─────────────── */}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {/* Day */}
-                <div className="rounded-xl py-2.5 bg-background/60 border border-border/40">
-                  <div className="text-2xl font-black leading-none" style={{ color: style.accent }}>
-                    {info.elapsedDays + 1}
-                    <span className="text-sm font-normal text-muted-foreground">/{TOTAL_INCUBATION_DAYS}</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                    {ar ? "اليوم الحالي" : "Aktuell dag"}
-                  </p>
-                </div>
-
-                {/* Hour */}
-                <div className="rounded-xl py-2.5 bg-background/60 border border-border/40">
-                  <div className="text-2xl font-black leading-none text-foreground">
-                    {String(info.elapsedHours).padStart(2, "0")}
-                    <span className="text-sm font-normal text-muted-foreground">h</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                    {ar ? "الساعة" : "Timme"}
-                  </p>
-                </div>
-
-                {/* Minute */}
-                <div className="rounded-xl py-2.5 bg-background/60 border border-border/40">
-                  <div className="text-2xl font-black leading-none text-foreground">
-                    {String(info.elapsedMins).padStart(2, "0")}
-                    <span className="text-sm font-normal text-muted-foreground">m</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                    {ar ? "الدقيقة" : "Minut"}
-                  </p>
-                </div>
-              </div>
-
-              {/* ── Row 3: Phase progress bar ─────────────────────────────── */}
-              <div>
-                {/* Phase label + % */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-semibold" style={{ color: style.accent }}>
-                    {ar ? style.descAr : style.descSv}
-                  </span>
-                  <span className="text-[11px] font-bold" style={{ color: style.accent }}>
-                    {Math.round(info.phaseProgress)}%
-                  </span>
-                </div>
-                {/* Per-phase progress */}
-                <div className="w-full h-3 rounded-full bg-background/60 border border-border/30 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${info.phaseProgress}%`,
-                      background: `linear-gradient(90deg, ${style.barFrom}, ${style.barTo})`,
-                      boxShadow: `0 0 8px ${style.accent}55`,
-                    }}
-                  />
-                </div>
-                {/* Overall 21-day mini bar */}
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {ar ? "الإجمالي:" : "Totalt:"}
-                  </span>
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${info.totalProgress}%`,
-                        background: `linear-gradient(90deg, #3b82f6 0%, #f59e0b 86%, #10b981 100%)`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                    {Math.round(info.totalProgress)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* ── Row 4: Countdown + Hatch date ─────────────────────────── */}
-              {info.phase !== "delayed" ? (
-                <div className="flex items-center justify-between text-sm border-t border-border/30 pt-3">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Timer className="w-3.5 h-3.5" />
-                    <span className="text-xs">{ar ? "المتبقي للفقس:" : "Återstår till kläckning:"}</span>
-                  </div>
-                  <span className="font-bold text-foreground text-sm">
-                    {info.daysLeft > 0
-                      ? `${info.daysLeft}${ar ? "ي " : "d "}${info.hoursLeft}${ar ? "س" : "h"}`
-                      : `${info.hoursLeft}${ar ? "س " : "h "}${info.minsLeft}${ar ? "د" : "m"}`
-                    }
-                  </span>
-                </div>
-              ) : (
-                /* ── Delayed alert ── */
-                <div className="border border-red-200 dark:border-red-800 rounded-xl p-3 bg-red-50 dark:bg-red-950/40 space-y-2">
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-sm">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    {ar
-                      ? `تأخر الفقس بمقدار ${info.overdueHours} ساعة`
-                      : `Kläckning försenad med ${info.overdueHours} timmar`
-                    }
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      ar ? "تحقق من درجة الحرارة — يجب أن تكون ٣٧–٣٨°م" : "Kontrollera temperaturen — bör vara 37–38°C",
-                      ar ? "رفع الرطوبة إلى ٧٠–٧٥٪ إذا لم يبدأ الفقس" : "Höj luftfuktigheten till 70–75% om kläckning inte startat",
-                      ar ? "انتظر ٢٤–٤٨ ساعة إضافية قبل الحكم على الفشل" : "Vänta 24–48 timmar till innan du bedömer misslyckande",
-                      ar ? "سجّل تاريخ الفقس الفعلي عند بدء خروج الصيصان" : "Registrera faktiskt kläckningsdatum när kycklingar börjar kläckas",
-                    ].map((tip, i) => (
-                      <div key={i} className="flex items-start gap-1.5 text-[11px] text-red-800 dark:text-red-300">
-                        <CheckCircle2 className="w-3 h-3 mt-0.5 shrink-0 text-red-500" />
-                        {tip}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Row 5: Environment (temp + humidity) ──────────────────── */}
-              {(tempToShow != null || humToShow != null) && (
-                <div className="flex items-center gap-4 pt-1 border-t border-border/30 text-xs text-muted-foreground">
-                  {tempToShow != null && (
-                    <span className="flex items-center gap-1.5">
-                      <Thermometer className="w-3.5 h-3.5 text-orange-500" />
-                      <span className="font-semibold text-foreground">{tempToShow}°C</span>
-                      <span>{ar ? "حرارة" : "temp"}</span>
-                    </span>
-                  )}
-                  {humToShow != null && (
-                    <span className="flex items-center gap-1.5">
-                      <Droplets className="w-3.5 h-3.5 text-blue-500" />
-                      <span className="font-semibold text-foreground">{humToShow}%</span>
-                      <span>{ar ? "رطوبة" : "fukt"}</span>
-                    </span>
-                  )}
-                  {/* Phase-specific target hint */}
-                  {info.phase === "lockdown" && (
-                    <span className="ms-auto text-amber-600 dark:text-amber-400 font-medium">
-                      {ar ? "⚠️ لا تفتح الحاضنة!" : "⚠️ Öppna inte kuvösen!"}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* ── Row 6: Expected hatch date ────────────────────────────── */}
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/20">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  {ar ? "موعد التفقيس المتوقع" : "Beräknad kläckning"}
-                </span>
-                <span className="font-semibold text-foreground">
-                  {info.hatchDate.toLocaleDateString(ar ? "ar-IQ" : "sv-SE", {
-                    weekday: "short", month: "short", day: "numeric",
-                  })}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-
-      {/* ── Footer: last-updated note ── */}
-      <p className="text-[10px] text-muted-foreground/50 flex items-center justify-end gap-1 px-0.5">
-        <Clock className="w-3 h-3" />
-        {ar
-          ? "يتحدث كل دقيقة · بيانات الحاضنة من الخادم مباشرة"
-          : "Uppdateras varje minut · data direkt från server"
-        }
-      </p>
-    </div>
-  );
-}
-
+const BASE = import.meta.env.BASE_URL;
 
 export default function Dashboard() {
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary({
@@ -1073,12 +606,12 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchFinancial() {
       try {
-        const [txData, sumData] = await Promise.all([
-          apiFetch("/api/transactions?limit=500"),
-          apiFetch("/api/transactions/summary"),
+        const [txRes, sumRes] = await Promise.all([
+          fetch(`${BASE}api/transactions?limit=500`),
+          fetch(`${BASE}api/transactions/summary`),
         ]);
-        setTransactions(txData ?? []);
-        setMonthlyRows(sumData ?? []);
+        if (txRes.ok) setTransactions(await txRes.json());
+        if (sumRes.ok) setMonthlyRows(await sumRes.json());
       } catch (_) { /* silent */ }
       setDataLoading(false);
     }
@@ -1126,8 +659,6 @@ export default function Dashboard() {
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
-        {/* Show hatching monitor even while intelligence is loading */}
-        <LiveHatchingMonitor lang={lang} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>)}
         </div>
@@ -1191,12 +722,6 @@ export default function Dashboard() {
           {lang === "ar" ? "يحلل · يقرر · يتنبأ" : "Analyserar · Beslutar · Förutsäger"}
         </Badge>
       </div>
-
-      {/* ── Intelligence Hub — Cross-module alerts ───────────────────────── */}
-      <IntelligenceHub />
-
-      {/* ── Live Hatching Monitor — TOP PRIORITY ───────────────────────────── */}
-      <LiveHatchingMonitor lang={lang} />
 
       {/* ── Intelligence Score + Pillars ────────────────────────────────────── */}
       <Card className="border-border/50 shadow-sm overflow-hidden">
@@ -1477,7 +1002,7 @@ export default function Dashboard() {
               label: lang === "ar" ? "بيض في التفقيس" : "Ägg i kläckning",
               val: summary!.totalEggsIncubating,
               sub: `${summary!.activeHatchingCycles} ${lang === "ar" ? "دورة نشطة" : "aktiva cykler"}` },
-            { href: "/operations", icon: CheckSquare, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-900/20",
+            { href: "/tasks", icon: CheckSquare, color: "text-blue-600", bg: "bg-blue-100 dark:bg-blue-900/20",
               label: lang === "ar" ? "مهام اليوم" : "Dagens uppgifter",
               val: `${summary!.tasksCompletedToday}/${summary!.tasksDueToday}`,
               sub: lang === "ar" ? "أُنجزت اليوم" : "slutförda idag" },

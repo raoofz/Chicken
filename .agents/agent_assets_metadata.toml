@@ -2,7 +2,13 @@ uploads = []
 generated = []
 
 [[outputs]]
-id = "mgICz0zGGqB4dMk40-yuY"
-uri = "file://poultry-manager-backup.tar.gz"
+id = "yLU4hdhQc2UJRyUUbWHau"
+uri = "file://downloads/poultry-farm-full-backup.tar.gz"
 type = "unspecified"
-title = "مدير المزرعة — النسخة الكاملة مع قاعدة البيانات"
+title = "النسخة الكاملة (الكود + قاعدة البيانات)"
+
+[[outputs]]
+id = "1rHQL-CUq-axpQHkp1pub"
+uri = "file://downloads/poultry-farm-project.tar.gz"
+type = "unspecified"
+title = "كود التطبيق فقط"

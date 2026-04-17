@@ -87,40 +87,6 @@ export async function runMigrations() {
       )
     `);
 
-    // Fix 5: Chickens AI Engine — flock_events table (event timeline)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS flock_events (
-        id           SERIAL PRIMARY KEY,
-        flock_id     INTEGER NOT NULL,
-        event_type   TEXT NOT NULL,
-        subtype      TEXT NOT NULL DEFAULT '',
-        severity     TEXT NOT NULL DEFAULT 'medium',
-        payload      JSONB NOT NULL DEFAULT '{}',
-        confidence   INTEGER NOT NULL DEFAULT 50,
-        created_at   TIMESTAMP NOT NULL DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_flock_events_flock_id ON flock_events (flock_id);
-      CREATE INDEX IF NOT EXISTS idx_flock_events_created_at ON flock_events (created_at DESC);
-    `);
-
-    // Fix 6: Chickens AI Engine — intelligence scores in flocks table
-    const intelligenceCols = [
-      { col: "health_score",       def: "INTEGER" },
-      { col: "risk_score",         def: "INTEGER" },
-      { col: "performance_index",  def: "INTEGER" },
-      { col: "last_analyzed_at",   def: "TIMESTAMP" },
-    ];
-    for (const { col, def } of intelligenceCols) {
-      const { rows } = await client.query(`
-        SELECT column_name FROM information_schema.columns
-        WHERE table_name = 'flocks' AND column_name = $1
-      `, [col]);
-      if (rows.length === 0) {
-        await client.query(`ALTER TABLE flocks ADD COLUMN "${col}" ${def}`);
-        logger.info(`Migration: added flocks.${col}`);
-      }
-    }
-
     logger.info("Migrations complete");
   } catch (err) {
     logger.error({ err }, "Migration failed");

@@ -24,13 +24,13 @@ import {
   ShieldPlus, ArrowLeft, ArrowRight,
 } from "lucide-react";
 import { ExplainTip } from "@/components/ExplainTip";
-import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const REFRESH_INTERVAL = 5_000; // 5 ثوانٍ
 const LIVE_TICK        = 1_000; // عداد الوقت كل ثانية
 
@@ -87,6 +87,13 @@ function monthLabel(ym: string, ar: boolean): string {
   const arNames = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
   const svNames = ["Jan","Feb","Mar","Apr","Maj","Jun","Jul","Aug","Sep","Okt","Nov","Dec"];
   return ar ? arNames[m] : svNames[m];
+}
+
+// ─── API Helper ───────────────────────────────────────────────────────────────
+async function apiFetch(path: string, opts?: RequestInit) {
+  const r = await fetch(`${BASE}${path}`, { credentials: "include", ...opts });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "خطأ");
+  return r.status === 204 ? null : r.json();
 }
 
 // ─── Live Data Types ──────────────────────────────────────────────────────────

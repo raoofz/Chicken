@@ -21,17 +21,21 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
-import { apiFetch, apiPost, apiDelete } from "@/lib/api";
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 async function fetchNotes() {
-  return apiFetch("/api/notes?limit=100");
+  const r = await fetch("/api/notes?limit=100", { credentials: "include" });
+  if (!r.ok) throw new Error("fetch_error");
+  return r.json();
 }
 async function createNote(data: { content: string; date: string; category: string }) {
-  return apiPost("/api/notes", data);
+  const r = await fetch("/api/notes", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+  if (!r.ok) throw new Error("add_error");
+  return r.json();
 }
 async function deleteNote(id: number) {
-  return apiDelete(`/api/notes/${id}`);
+  const r = await fetch(`/api/notes/${id}`, { method: "DELETE", credentials: "include" });
+  if (!r.ok) throw new Error("delete_error");
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -152,13 +156,19 @@ export default function Notes() {
         setSmartLoading(true);
         setSmartResult(null);
         try {
-          const data = await apiPost<{ totalSaved?: number }>("/api/ai/smart-analyze",
-            { text: pending.content, date: pending.date, lang }
-          );
-          if ((data?.totalSaved ?? 0) > 0) {
-            setSmartResult(data);
-            qc.invalidateQueries({ queryKey: ["transactions"] });
-            qc.invalidateQueries({ queryKey: ["transactions-summary"] });
+          const r = await fetch("/api/ai/smart-analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text: pending.content, date: pending.date, lang }),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.totalSaved > 0) {
+              setSmartResult(data);
+              qc.invalidateQueries({ queryKey: ["transactions"] });
+              qc.invalidateQueries({ queryKey: ["transactions-summary"] });
+            }
           }
         } catch { /* silent */ }
         finally { setSmartLoading(false); }

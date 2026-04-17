@@ -2,92 +2,31 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <title>مدير المزرعة</title>
 
-    <!-- viewport-fit=cover: safe areas for iPhone notch/Dynamic Island -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
-    />
-
-    <title>مدير المزرعة الذكي</title>
-
-    <!-- ── Favicon ──────────────────────────────────────────────────────── -->
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.svg" />
 
-    <!-- ── PWA: Apple iOS ────────────────────────────────────────────────── -->
+    <!-- PWA - Apple iOS support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="مزرعة AI" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-title" content="مدير المزرعة" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.svg" />
 
-    <!-- ── PWA: Android / General ────────────────────────────────────────── -->
+    <!-- PWA - Android/General -->
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#B85C2A" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0f172a"  media="(prefers-color-scheme: dark)" />
-    <meta name="application-name" content="مزرعة AI" />
+    <meta name="theme-color" content="#B85C2A" />
+    <meta name="application-name" content="مدير المزرعة" />
     <meta name="msapplication-TileColor" content="#B85C2A" />
 
-    <!-- ── SEO / Open Graph ──────────────────────────────────────────────── -->
-    <meta name="description" content="نظام إدارة الدواجن والتفقيس بتقنية الذكاء الاصطناعي" />
-    <meta property="og:title"       content="مدير المزرعة الذكي" />
-    <meta property="og:description" content="نظام إدارة الدواجن والتفقيس الذكي" />
-    <meta property="og:image"       content="/opengraph.jpg" />
-    <meta property="og:type"        content="website" />
+    <!-- SEO / Description -->
+    <meta name="description" content="نظام إدارة الدواجن والتفقيس الذكي" />
 
-    <!-- ── Arabic Fonts ──────────────────────────────────────────────────── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Cairo:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- ── Critical Inline Styles (prevent FOUC, safe areas, perf) ───────── -->
-    <style>
-      /* CSS custom properties for safe areas — referenced throughout app */
-      :root {
-        --safe-top:    env(safe-area-inset-top,    0px);
-        --safe-bottom: env(safe-area-inset-bottom, 0px);
-        --safe-left:   env(safe-area-inset-left,   0px);
-        --safe-right:  env(safe-area-inset-right,  0px);
-      }
-
-      /* Prevent flash of white background */
-      html { background-color: #F7F0E6; }
-      html.dark { background-color: #0f172a; }
-
-      /* iOS momentum scrolling on scrollable containers */
-      body { -webkit-overflow-scrolling: touch; overflow-x: hidden; }
-
-      /* Hardware acceleration: use GPU compositing layer */
-      #root { position: relative; min-height: 100dvh; overflow-x: hidden; }
-
-      /* Remove tap highlight (Android/iOS) */
-      * { -webkit-tap-highlight-color: transparent; }
-
-      /* Lite Mode (low-end devices): disable all transitions */
-      html.lite-mode *, html.reduce-motion * {
-        animation-duration:  0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior:     auto !important;
-      }
-
-      /* Loading spinner before React mounts */
-      #root:empty::after {
-        content: "";
-        display: block;
-        width: 36px;
-        height: 36px;
-        margin: 45vh auto 0;
-        border: 4px solid rgba(184, 92, 42, 0.2);
-        border-top-color: #B85C2A;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <!-- Arabic Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

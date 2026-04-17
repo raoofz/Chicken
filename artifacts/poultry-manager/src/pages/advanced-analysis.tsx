@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { apiPost } from "@/lib/api";
 
 type Module = "predict" | "decision" | null;
 
@@ -400,8 +399,14 @@ export default function AdvancedAnalysis() {
       decision: "/api/ai/decision",
     };
     try {
-      const data = await apiPost<{ result: any }>(endpointMap[mod], { lang: "ar" });
-      setResult(data?.result);
+      const res = await fetch(endpointMap[mod], {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: "ar" }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? t("adv.error.analysis"));
+      const data = await res.json();
+      setResult(data.result);
     } catch (e: any) {
       toast({ title: t("adv.error"), description: e.message, variant: "destructive" });
       setModule(null);

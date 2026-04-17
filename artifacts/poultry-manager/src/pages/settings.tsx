@@ -6,23 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Lock, User, Shield, LogOut, Pencil, Check, X } from "lucide-react";
-import { apiPost, apiPut } from "@/lib/api";
+import { Lock, User, Shield, LogOut } from "lucide-react";
 
 export default function Settings() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const { t, dir } = useLanguage();
   const { toast } = useToast();
-
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [pwLoading, setPwLoading] = useState(false);
-
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [editName, setEditName] = useState(user?.name ?? "");
-  const [editUsername, setEditUsername] = useState(user?.username ?? "");
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +27,19 @@ export default function Settings() {
       toast({ title: t("settings.passwordTooShort"), variant: "destructive" });
       return;
     }
-    setPwLoading(true);
+    setLoading(true);
     try {
-      await apiPost("/api/auth/change-password", { currentPassword, newPassword });
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error || t("settings.passwordError"), variant: "destructive" });
+        return;
+      }
       toast({ title: t("settings.passwordChanged") });
       setCurrentPassword("");
       setNewPassword("");
@@ -44,35 +47,8 @@ export default function Settings() {
     } catch {
       toast({ title: t("settings.connectionError"), variant: "destructive" });
     } finally {
-      setPwLoading(false);
+      setLoading(false);
     }
-  };
-
-  const handleUpdateProfile = async () => {
-    if (!editName.trim() && !editUsername.trim()) return;
-    setProfileLoading(true);
-    try {
-      await apiPut("/api/auth/profile", { name: editName.trim(), username: editUsername.trim() });
-      await refreshUser();
-      toast({ title: "تم تحديث المعلومات بنجاح" });
-      setEditingProfile(false);
-    } catch {
-      toast({ title: t("settings.connectionError"), variant: "destructive" });
-    } finally {
-      setProfileLoading(false);
-    }
-  };
-
-  const startEditing = () => {
-    setEditName(user?.name ?? "");
-    setEditUsername(user?.username ?? "");
-    setEditingProfile(true);
-  };
-
-  const cancelEditing = () => {
-    setEditName(user?.name ?? "");
-    setEditUsername(user?.username ?? "");
-    setEditingProfile(false);
   };
 
   return (
@@ -81,73 +57,27 @@ export default function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="w-5 h-5 text-primary" />
-              {t("settings.accountInfo")}
-            </div>
-            {!editingProfile && (
-              <Button variant="ghost" size="sm" onClick={startEditing} className="gap-1">
-                <Pencil className="w-4 h-4" />
-                تعديل
-              </Button>
-            )}
+          <CardTitle className="flex items-center gap-2">
+            <User className="w-5 h-5 text-primary" />
+            {t("settings.accountInfo")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {editingProfile ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>الاسم الكامل</Label>
-                <Input
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  placeholder="الاسم الكامل"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>اسم المستخدم (بالإنجليزية)</Label>
-                <Input
-                  value={editUsername}
-                  onChange={e => setEditUsername(e.target.value)}
-                  placeholder="username"
-                  dir="ltr"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1 gap-2"
-                  onClick={handleUpdateProfile}
-                  disabled={profileLoading}
-                >
-                  <Check className="w-4 h-4" />
-                  {profileLoading ? "جاري الحفظ..." : "حفظ"}
-                </Button>
-                <Button variant="outline" className="flex-1 gap-2" onClick={cancelEditing}>
-                  <X className="w-4 h-4" />
-                  إلغاء
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between py-2 border-b">
-                <span className="text-muted-foreground">{t("settings.name")}</span>
-                <span className="font-semibold">{user?.name}</span>
-              </div>
-              <div className="flex items-center justify-between py-2 border-b">
-                <span className="text-muted-foreground">{t("settings.username")}</span>
-                <span className="font-semibold">{user?.username}</span>
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <span className="text-muted-foreground">{t("settings.role")}</span>
-                <span className="flex items-center gap-1.5">
-                  <Shield className="w-4 h-4 text-primary" />
-                  <span className="font-semibold">{user?.role === "admin" ? t("role.admin") : t("role.worker")}</span>
-                </span>
-              </div>
-            </>
-          )}
+          <div className="flex items-center justify-between py-2 border-b">
+            <span className="text-muted-foreground">{t("settings.name")}</span>
+            <span className="font-semibold">{user?.name}</span>
+          </div>
+          <div className="flex items-center justify-between py-2 border-b">
+            <span className="text-muted-foreground">{t("settings.username")}</span>
+            <span className="font-semibold">{user?.username}</span>
+          </div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-muted-foreground">{t("settings.role")}</span>
+            <span className="flex items-center gap-1.5">
+              <Shield className="w-4 h-4 text-primary" />
+              <span className="font-semibold">{user?.role === "admin" ? t("role.admin") : t("role.worker")}</span>
+            </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -172,8 +102,8 @@ export default function Settings() {
               <Label htmlFor="confirm">{t("settings.confirmPassword")}</Label>
               <Input id="confirm" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder={t("settings.confirmPassword.placeholder")} required />
             </div>
-            <Button type="submit" className="w-full" disabled={pwLoading}>
-              {pwLoading ? t("settings.changing") : t("settings.changeBtn")}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? t("settings.changing") : t("settings.changeBtn")}
             </Button>
           </form>
         </CardContent>

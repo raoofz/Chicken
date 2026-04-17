@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { apiPost } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,8 +46,18 @@ export default function DailyPlanPage() {
   const fetchPlan = async () => {
     setLoading(true);
     try {
-      const data = await apiPost<{ plan: PlanSlot[] }>("/api/ai/daily-plan", { lang });
-      setPlan(data?.plan ?? []);
+      const res = await fetch("/api/ai/daily-plan", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error ?? t("plan.error"));
+      }
+      const data = await res.json();
+      setPlan(data.plan);
       setCheckedSlots(new Set());
     } catch (err: any) {
       toast({ title: t("adv.error"), description: err.message, variant: "destructive" });

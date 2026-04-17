@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
-import { apiFetch, apiPost, apiDelete } from "@/lib/api";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,24 +39,34 @@ const IMAGE_CAT_KEYS = ["all","general","health","production","feeding","incubat
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchImages(): Promise<NoteImage[]> {
-  return apiFetch<NoteImage[]>("/api/notes/images");
+  const r = await fetch("/api/notes/images", { credentials: "include" });
+  if (!r.ok) throw new Error("fetch_error");
+  return r.json();
 }
 async function deleteImage(id: number) {
-  return apiDelete(`/api/notes/images/${id}`);
+  const r = await fetch(`/api/notes/images/${id}`, { method: "DELETE", credentials: "include" });
+  if (!r.ok) throw new Error("delete_error");
 }
 async function reanalyzeImage(id: number) {
-  return apiPost(`/api/notes/images/${id}/analyze`, {});
+  const r = await fetch(`/api/notes/images/${id}/analyze`, { method: "POST", credentials: "include" });
+  if (!r.ok) throw new Error("analyze_error");
+  return r.json();
 }
 async function uploadFarmPhoto(file: File, date: string, category: string, errUrlMsg: string, errFileMsg: string, errSaveMsg: string): Promise<{ id: number }> {
-  const { uploadURL, objectPath } = await apiPost<{ uploadURL: string; objectPath: string }>(
-    "/api/notes/images/upload-url",
-    { contentType: file.type, name: file.name }
-  );
+  const urlRes = await fetch("/api/notes/images/upload-url", {
+    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+    body: JSON.stringify({ contentType: file.type, name: file.name }),
+  });
+  if (!urlRes.ok) { const e = await urlRes.json().catch(() => ({})); throw new Error(e.error ?? errUrlMsg); }
+  const { uploadURL, objectPath } = await urlRes.json();
   const uploadRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
   if (!uploadRes.ok) throw new Error(errFileMsg);
-  return apiPost<{ id: number }>("/api/notes/images/save", {
-    objectPath, originalName: file.name, mimeType: file.type, date, category, caption: "",
+  const saveRes = await fetch("/api/notes/images/save", {
+    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+    body: JSON.stringify({ objectPath, originalName: file.name, mimeType: file.type, date, category, caption: "" }),
   });
+  if (!saveRes.ok) { const e = await saveRes.json().catch(() => ({})); throw new Error(e.error ?? errSaveMsg); }
+  return saveRes.json();
 }
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────

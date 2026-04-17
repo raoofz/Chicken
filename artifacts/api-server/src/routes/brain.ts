@@ -1,7 +1,6 @@
-import { Router, type Request, type Response } from "express";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, flockProductionLogsTable, flockHealthLogsTable } from "@workspace/db";
-import { sql, desc } from "drizzle-orm";
-import { runBrainOrchestrator } from "../lib/brain-orchestrator.js";
+import { Router } from "express";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -42,8 +41,6 @@ router.get("/brain/state", async (req, res) => {
       topRecords,
       feedDailyAvg,
       weekRows,
-      productionRows,
-      healthRows,
     ] = await Promise.all([
 
       // ── 1. Full financial summary ─────────────────────────────────────────
@@ -263,12 +260,6 @@ router.get("/brain/state", async (req, res) => {
       // ── 13. Top records ──────────────────────────────────────────────────
       db.execute(sql`
         SELECT
-          (SELECT description FROM transactions WHERE type='expense' ORDER BY amount DESC LIMIT 1) AS top_expense_desc,
-          (SELECT amount       FROM transactions WHERE type='expense' ORDER BY amount DESC LIMIT 1) AS top_expense_amt,
-          (SELECT description  FROM transactions WHERE type='income'  ORDER BY amount DESC LIMIT 1) AS top_income_desc,
-          (SELECT amount       FROM transactions WHERE type='income'  ORDER BY amount DESC LIMIT 1) AS top_income_amt,
-          (SELECT COUNT(*)     FROM transactions WHERE date::date = CURRENT_DATE)                   AS today_tx_count,
-          (SELECT COUNT(*)     FROM transactions)                                                   AS all_time_count
       `),
 
       // ── 14. Feed daily average (last 30 days) ────────────────────────────
@@ -296,43 +287,6 @@ router.get("/brain/state", async (req, res) => {
         GROUP BY gs.d
         ORDER BY gs.d ASC
       `),
-
-      // ── 16. Flock production summary (last 30 days) ───────────────────────
-      db.execute(sql`
-        SELECT
-          fp.flock_id,
-          f.name                                            AS flock_name,
-          COUNT(fp.id)                                      AS log_count,
-          COALESCE(SUM(fp.egg_count), 0)                   AS total_eggs_30d,
-          COALESCE(ROUND(AVG(fp.egg_count)::numeric, 1), 0) AS avg_daily_eggs,
-          MAX(fp.egg_count)                                 AS max_daily_eggs,
-          MIN(fp.egg_count)                                 AS min_daily_eggs,
-          MAX(fp.date)                                      AS last_log_date
-        FROM flock_production_logs fp
-        JOIN flocks f ON f.id = fp.flock_id
-        WHERE fp.date >= CURRENT_DATE - 29
-        GROUP BY fp.flock_id, f.name
-        ORDER BY total_eggs_30d DESC
-      `),
-
-      // ── 17. Flock health events (last 30 days) ────────────────────────────
-      db.execute(sql`
-        SELECT
-          fh.flock_id,
-          f.name                                                                AS flock_name,
-          COUNT(fh.id)                                                          AS event_count,
-          COUNT(CASE WHEN fh.status IN ('sick','quarantine') THEN 1 END)       AS sick_events,
-          COUNT(CASE WHEN fh.status = 'healthy' THEN 1 END)                   AS healthy_events,
-          COUNT(CASE WHEN fh.status = 'recovering' THEN 1 END)                AS recovering_events,
-          MAX(fh.date)                                                          AS last_health_date,
-          (SELECT fh2.status FROM flock_health_logs fh2
-           WHERE fh2.flock_id = fh.flock_id ORDER BY fh2.date DESC LIMIT 1)  AS latest_status
-        FROM flock_health_logs fh
-        JOIN flocks f ON f.id = fh.flock_id
-        WHERE fh.date >= CURRENT_DATE - 29
-        GROUP BY fh.flock_id, f.name
-        ORDER BY sick_events DESC
-      `),
     ]);
 
     const fin = (financial.rows[0] ?? {}) as any;
@@ -341,10 +295,6 @@ router.get("/brain/state", async (req, res) => {
     const top = (topRecords.rows[0] ?? {}) as any;
     const fdAvg = (feedDailyAvg.rows[0] ?? {}) as any;
     const streak = Number((dailyStreak.rows[0] as any)?.streak_days ?? 0);
-    const prodList = productionRows.rows as any[];
-    const healthList = healthRows.rows as any[];
-    const sickFlocks = healthList.filter(r => r.latest_status && ["sick", "quarantine"].includes(r.latest_status)).length;
-    const totalEggs30d = prodList.reduce((s, r) => s + Number(r.total_eggs_30d ?? 0), 0);
 
     // Compute derived metrics
     const totalIncome  = Number(fin.total_income);
@@ -368,7 +318,6 @@ router.get("/brain/state", async (req, res) => {
     if (streak >= 30) score = Math.min(100, score + 5);
     const overdueCount = (tasksRows.rows as any[]).filter(t => t.status_computed === "overdue").length;
     if (overdueCount > 3) score = Math.max(0, score - 10);
-    if (sickFlocks > 0)   score = Math.max(0, score - (sickFlocks * 8));
 
     const state = {
       timestamp: new Date().toISOString(),
@@ -421,19 +370,6 @@ router.get("/brain/state", async (req, res) => {
         done:    (goalsRows.rows as any[]).filter(g => g.status_computed === "done"),
       },
       notes: notesRows.rows,
-      production: {
-        summary: prodList,
-        total_eggs_30d: totalEggs30d,
-        flock_count: prodList.length,
-        top_producer: prodList[0] ?? null,
-      },
-      flockHealth: {
-        events: healthList,
-        sick_flocks: sickFlocks,
-        flock_count: healthList.length,
-        critical_flocks: healthList.filter(r => r.latest_status === "quarantine"),
-        recovering_flocks: healthList.filter(r => r.latest_status === "recovering"),
-      },
     };
 
     stateCache = { ts: Date.now(), data: state };
@@ -442,199 +378,6 @@ router.get("/brain/state", async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// ─── /api/brain/stream  ───────────────────────────────────────────────────────
-// Server-Sent Events: pushes brain state diffs every 8 seconds
-// Client detects when data changed via lightweight hash comparison
-router.get("/brain/stream", (req, res) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
-
-  let lastHash = "";
-  let closed = false;
-
-  const sendPing = () => {
-    if (closed) return;
-    res.write(": ping\n\n");
-  };
-
-  const sendState = async () => {
-    if (closed) return;
-    try {
-      // Lightweight hash: fetch counts + latest timestamps only
-      const snap = await db.execute(sql`
-        SELECT
-          (SELECT COUNT(*) FROM transactions)            AS tx_count,
-          (SELECT MAX(created_at) FROM transactions)    AS tx_last,
-          (SELECT COUNT(*) FROM flocks)                 AS flock_count,
-          (SELECT COUNT(*) FROM hatching_cycles)        AS cycle_count,
-          (SELECT COUNT(*) FROM tasks)                  AS task_count,
-          (SELECT COUNT(*) FROM daily_notes)            AS note_count,
-          (SELECT COUNT(*) FROM flock_production_logs)  AS prod_count,
-          (SELECT COUNT(*) FROM flock_health_logs)      AS health_count
-      `);
-      const row = snap.rows[0] as any;
-      const hash = [
-        row.tx_count, row.tx_last,
-        row.flock_count, row.cycle_count,
-        row.task_count, row.note_count,
-        row.prod_count, row.health_count,
-      ].join(":");
-
-      if (hash !== lastHash) {
-        lastHash = hash;
-        stateCache = null; // invalidate so next /brain/state fetch is fresh
-        res.write(`event: change\ndata: ${JSON.stringify({ hash, ts: Date.now() })}\n\n`);
-      } else {
-        res.write(`event: tick\ndata: ${JSON.stringify({ hash, ts: Date.now() })}\n\n`);
-      }
-    } catch {
-      // silently continue on transient DB errors
-    }
-  };
-
-  // Send initial state immediately
-  sendState();
-
-  const interval = setInterval(sendState, 8_000);
-  const pingInterval = setInterval(sendPing, 25_000);
-
-  req.on("close", () => {
-    closed = true;
-    clearInterval(interval);
-    clearInterval(pingInterval);
-  });
-});
-
-// ─── Shared Data Fetcher for Orchestrator ─────────────────────────────────────
-async function fetchUnifiedFarmData() {
-  const [flocks, hatchingCycles, tasks, goals, notes, productionLogs, healthLogs] = await Promise.all([
-    db.select().from(flocksTable),
-    db.select().from(hatchingCyclesTable),
-    db.select().from(tasksTable),
-    db.select().from(goalsTable),
-    db.select().from(dailyNotesTable).orderBy(desc(dailyNotesTable.date)).limit(60),
-    db.select().from(flockProductionLogsTable).orderBy(desc(flockProductionLogsTable.date)).limit(180),
-    db.select().from(flockHealthLogsTable).orderBy(desc(flockHealthLogsTable.date)).limit(120),
-  ]);
-  return { flocks, hatchingCycles: hatchingCycles as any[], tasks, goals: goals as any[], notes, productionLogs: productionLogs as any[], healthLogs: healthLogs as any[] };
-}
-
-// ─── Analysis cache (1 minute — analysis is expensive) ────────────────────────
-let analyzeCache: { ts: number; data: any; hash: string } | null = null;
-const ANALYZE_TTL = 60_000;
-
-// ─── SSE: connected clients for /brain/analyze-stream ─────────────────────────
-const analyzeClients = new Set<Response>();
-
-function broadcastAnalysis(data: any) {
-  const payload = `event: analysis\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of analyzeClients) {
-    try { client.write(payload); } catch { analyzeClients.delete(client); }
-  }
-}
-
-// ─── /api/brain/analyze  ──────────────────────────────────────────────────────
-// Full orchestrated AI analysis — combines all engines, returns BrainOutput
-router.get("/brain/analyze", async (req: Request, res: Response) => {
-  const force = req.query.force === "1";
-  const lang = (req.query.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
-
-  // Serve cache if fresh
-  if (!force && analyzeCache && Date.now() - analyzeCache.ts < ANALYZE_TTL) {
-    res.setHeader("X-Cache", "HIT");
-    res.json(analyzeCache.data);
-    return;
-  }
-
-  try {
-    const rawData = await fetchUnifiedFarmData();
-    const result = await runBrainOrchestrator(rawData, lang);
-    analyzeCache = { ts: Date.now(), data: result, hash: result.generatedAt };
-    res.setHeader("X-Cache", "MISS");
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message ?? "فشل التحليل الموحد" });
-  }
-});
-
-// ─── /api/brain/analyze-stream  ───────────────────────────────────────────────
-// Real-time SSE: pushes full BrainOutput whenever farm data changes
-// Also pushes immediately on connect so client has initial state
-router.get("/brain/analyze-stream", async (req: Request, res: Response) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.flushHeaders();
-
-  let lastHash = "";
-  let closed = false;
-
-  analyzeClients.add(res);
-
-  // Send last known analysis immediately if available
-  if (analyzeCache) {
-    res.write(`event: analysis\ndata: ${JSON.stringify(analyzeCache.data)}\n\n`);
-    lastHash = analyzeCache.hash;
-  }
-
-  const checkAndPush = async () => {
-    if (closed) return;
-    try {
-      // Quick fingerprint check (counts only — very cheap)
-      const snap = await db.execute(sql`
-        SELECT
-          (SELECT COUNT(*) FROM transactions)            AS tx_count,
-          (SELECT MAX(created_at) FROM transactions)    AS tx_last,
-          (SELECT COUNT(*) FROM flocks)                 AS flock_count,
-          (SELECT COUNT(*) FROM hatching_cycles)        AS cycle_count,
-          (SELECT COUNT(*) FROM tasks)                  AS task_count,
-          (SELECT COUNT(*) FROM flock_production_logs)  AS prod_count,
-          (SELECT COUNT(*) FROM flock_health_logs)      AS health_count
-      `);
-      const row = snap.rows[0] as any;
-      const hash = [row.tx_count, row.tx_last, row.flock_count, row.cycle_count, row.task_count, row.prod_count, row.health_count].join(":");
-
-      if (hash !== lastHash) {
-        lastHash = hash;
-        stateCache = null; // invalidate brain/state cache too
-        analyzeCache = null; // force fresh analysis
-
-        // Run full orchestration
-        const rawData = await fetchUnifiedFarmData();
-        const lang = (req.query.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
-        const result = await runBrainOrchestrator(rawData, lang);
-        analyzeCache = { ts: Date.now(), data: result, hash: result.generatedAt };
-        broadcastAnalysis(result);
-        lastHash = hash;
-      } else {
-        // No change — send tick so client knows system is alive
-        if (!closed) res.write(`event: tick\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
-      }
-    } catch {
-      /* silently continue */
-    }
-  };
-
-  // Initial check
-  await checkAndPush();
-
-  const interval = setInterval(checkAndPush, 10_000); // check every 10s
-  const pingInterval = setInterval(() => {
-    if (!closed) res.write(": ping\n\n");
-  }, 25_000);
-
-  req.on("close", () => {
-    closed = true;
-    clearInterval(interval);
-    clearInterval(pingInterval);
-    analyzeClients.delete(res);
-  });
 });
 
 // ─── /api/brain/audit  ────────────────────────────────────────────────────────

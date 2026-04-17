@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiFetch } from "@/lib/api";
 
+const BASE = import.meta.env.BASE_URL;
 const REFRESH_INTERVAL   = 5_000;
 const AUDIT_INTERVAL     = 3_600_000; // 1 hour
 const DECISION_INTERVAL  = 30_000;   // 30 seconds — weather + incubation live check
@@ -35,6 +35,13 @@ function relDate(d: string, ar: boolean) {
   if (diff === 0) return ar ? "اليوم" : "Idag";
   if (diff === 1) return ar ? "أمس" : "Igår";
   return ar ? `منذ ${diff} أيام` : `${diff} dagar sedan`;
+}
+
+// ─── API fetch ────────────────────────────────────────────────────────────────
+async function apiFetch(path: string) {
+  const r = await fetch(`${BASE}${path}`, { credentials: "include" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
 }
 
 // ─── Category labels ──────────────────────────────────────────────────────────
@@ -232,7 +239,7 @@ export default function BrainPage() {
   // ── Fetch state ────────────────────────────────────────────────────────────
   const fetchState = useCallback(async (silent = false) => {
     try {
-      const data = await apiFetch("/api/brain/state");
+      const data = await apiFetch("api/brain/state");
       setState(data);
       setLastFetch(Date.now());
       setLoadingState(false);
@@ -245,7 +252,7 @@ export default function BrainPage() {
   const fetchAudit = useCallback(async (manual = false) => {
     setLoadingAudit(true);
     try {
-      const path = manual ? "/api/brain/audit?force=1" : "/api/brain/audit";
+      const path = manual ? "api/brain/audit?force=1" : "api/brain/audit";
       const data = await apiFetch(path);
       setAudit(data);
       if (manual) toast({ title: ar ? "✅ تم التدقيق" : "✅ Granskning klar" });
@@ -257,7 +264,7 @@ export default function BrainPage() {
   const fetchDecision = useCallback(async () => {
     setLoadingDecision(true);
     try {
-      const data = await apiFetch("/api/ai/decision");
+      const data = await apiFetch("api/ai/decision");
       setDecision(data);
     } catch {}
     setLoadingDecision(false);
