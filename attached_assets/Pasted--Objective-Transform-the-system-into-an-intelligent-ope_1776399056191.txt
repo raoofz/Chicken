@@ -1,0 +1,143 @@
+🎯 Objective
+
+Transform the system into an intelligent operational management engine where:
+
+Managers write daily notes at night
+The system analyzes and understands the intent
+Automatically converts notes into:
+actionable tasks
+warnings
+alerts
+Workers see clear, prioritized instructions the next day
+🧠 1. Smart Notes → Intelligent Actions (Core Feature)
+Requirement:
+
+Manager writes free-text notes like:
+
+“انتبهوا على العلف اليوم لأنه قليل”
+“في دجاج مريض تابعوه”
+“نظفوا المكان جيداً”
+
+System MUST:
+Analyze the text
+Understand meaning (not just keywords)
+Extract:
+Type	Example
+Task	Clean area
+Warning	Low feed
+Alert	Sick chickens
+Output:
+
+Convert into structured data:
+
+{
+  type: "TASK" | "WARNING" | "ALERT",
+  priority: "LOW" | "MEDIUM" | "HIGH",
+  message: "...",
+  relatedModule: "feed | health | environment"
+}
+⚙️ 2. AI Interpretation Engine
+
+📁 core/ai/noteInterpreter.ts
+
+Required:
+Natural language parsing
+Context detection
+Multi-intent extraction (note may contain multiple tasks)
+Behavior:
+One note → multiple outputs
+Detect urgency
+Detect topic automatically
+🔔 3. Worker Notification System
+Requirement:
+
+When workers open the app:
+
+MUST see:
+📢 Alerts (red — critical)
+⚠️ Warnings (yellow)
+✅ Tasks (normal)
+Display Rules:
+Sorted by priority
+Clearly written
+Easy to understand
+📅 4. Daily Workflow System
+Flow:
+Night (Manager):
+writes notes
+System:
+analyzes + converts
+Morning (Worker):
+sees dashboard with:
+tasks
+alerts
+warnings
+🧠 5. Context-Aware Intelligence (Important)
+
+System must:
+
+understand farm context
+link notes with real data
+Example:
+
+If manager writes:
+
+“العلف قليل”
+
+AND system data shows:
+
+feed dropping
+
+👉 system must:
+
+raise priority
+mark as HIGH alert
+🔄 6. Continuous Learning Behavior
+
+System should:
+
+improve interpretation over time
+store patterns
+refine outputs
+📊 7. Smart UI Integration
+Required:
+
+Dedicated section on homepage:
+
+“Today’s Instructions”
+
+Must include:
+clear tasks
+highlighted alerts
+completion tracking
+⚡ 8. Real-Time Updates
+If manager adds note:
+👉 workers see it instantly
+🔒 9. Safety Rules
+No false critical alerts
+No duplicate tasks
+No confusion in messages
+🚫 10. Strict Constraints
+Forbidden:
+simple keyword matching only
+static notes display
+unclear instructions
+Required:
+real interpretation
+structured output
+intelligent prioritization
+💣 Final Goal
+
+The system must behave like:
+
+🧠 “An intelligent assistant that understands manager intent and translates it into clear operational actions for workers”
+
+🔥 النتيجة بعد التنفيذ
+
+سيصبح لديك:
+
+✅ مدير يكتب بحرية
+✅ النظام يفهمه
+✅ العمال يستلمون أوامر واضحة
+✅ لا يوجد سوء فهم
+✅ نظام ذكي فعلاً

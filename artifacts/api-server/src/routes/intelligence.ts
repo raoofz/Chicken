@@ -12,8 +12,8 @@
  */
 import { Router, type Request, type Response } from "express";
 import { createHash } from "crypto";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, flockHealthLogsTable, flockProductionLogsTable } from "@workspace/db";
-import { desc, sql } from "drizzle-orm";
+import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, flockHealthLogsTable, flockProductionLogsTable, dailyNotesTable, feedRecordsTable } from "@workspace/db";
+import { desc, sql, gte, eq } from "drizzle-orm";
 import { logPrediction, autoResolveFromCycles, computeAccuracyMetrics } from "../lib/self-monitor";
 
 const router = Router();
@@ -588,5 +588,262 @@ router.get("/intelligence/diagnostics", async (req: Request, res: Response) => {
 export function invalidateIntelligenceCache() {
   cache = null;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DAILY INSTRUCTIONS ENGINE — Smart Notes → Structured Worker Instructions
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface DailyInstruction {
+  id: string;
+  type: "ALERT" | "WARNING" | "TASK";
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  messageAr: string;
+  messageSv: string;
+  relatedModule: "feed" | "health" | "environment" | "hatching" | "operations" | "finance" | "general";
+  sourceNoteId: number;
+  dataConfirmed: boolean;
+  dataContextAr?: string;
+  dataContextSv?: string;
+}
+
+interface NoteContext {
+  hasSickFlocks: boolean;
+  hasNoRecentFeed: boolean;
+  hasActiveHatching: boolean;
+}
+
+// ── Arabic/Swedish NLP Pattern Groups ─────────────────────────────────────────
+const P_HEALTH_ALERT   = /مريض|مريضة|نفوق|مات|ميت|ميته|تعب|مرضت|وباء|أوبئة|معدي|يموت|يموتون|ضعيف|نافق/i;
+const P_HEALTH_MED     = /علاج|دواء|تطعيم|لقاح|حقن|فيتامين|حقنة/i;
+const P_FEED_LOW       = /(علف|العلف|طعام|أكل).{0,20}(قليل|ناقص|خلص|ينتهي|ينقص|مافيه|انتهى|نفذ|يكفي|يكفيش)/i;
+const P_WATER_LOW      = /(ماء|ماي|مية|شرب|الماء).{0,15}(قليل|ناقص|خلص|ينتهي|مافيه|نفذ)/i;
+const P_FEED_GEN       = /\bعلف\b|\bطعام\b|\bأكل\b|سقاية|التغذية/i;
+const P_CLEAN          = /نظف|نظفوا|نظافة|كنس|مسح|تنظيف|تعقيم|تطهير|كنسوا|رتبوا/i;
+const P_SMELL          = /رائحة|روائح|نتن|نتانة|زفر/i;
+const P_TEMP           = /حرارة|برد|بارد|حار|مكيف|دفاية|درجة الحرارة|تدفئة|تهوية|التهوية/i;
+const P_HATCH_PROBLEM  = /(بيض|تفقيس|حاضنة|الحاضنة).{0,25}(مشكلة|خطأ|غلط|تلف|فشل|لا يعمل)/i;
+const P_HATCH_TASK     = /(بيض|تفقيس|فراخ|حاضنة).{0,25}(تابع|تابعوا|تأكد|افحص|راقب|شوف|فحص|تحقق)/i;
+const P_HATCH_GEN      = /تفقيس|حاضنة|فقس|فرخ|الحضانة/i;
+const P_URGENCY        = /انتبه|انتبهوا|مهم|جداً|جدا|فوراً|فورا|سريع|عاجل|لازم|ضروري|يجب|احذر|خطير|بسرعة/i;
+
+function priorityBoost(base: "HIGH" | "MEDIUM" | "LOW", urgent: boolean, dataConfirmed: boolean): "HIGH" | "MEDIUM" | "LOW" {
+  if (urgent || dataConfirmed) {
+    return base === "LOW" ? "MEDIUM" : "HIGH";
+  }
+  return base;
+}
+
+function interpretNote(content: string, noteId: number, ctx: NoteContext): DailyInstruction[] {
+  const text = content.trim();
+  const urgent = P_URGENCY.test(text);
+  const results: DailyInstruction[] = [];
+  let idx = 0;
+  const mkId = () => `note-${noteId}-${idx++}`;
+
+  // ── Health — Alert ──────────────────────────────────────────────────────────
+  if (P_HEALTH_ALERT.test(text)) {
+    const dataConfirmed = ctx.hasSickFlocks;
+    let msgAr = "متابعة حالة صحة القطعان بشكل فوري";
+    if (/نفوق|مات|ميت|نافق/.test(text)) msgAr = "نفوق في القطعان — فحص واستقصاء فوري مطلوب";
+    else if (/مريض|مريضة|تعب/.test(text)) msgAr = "يوجد دجاج مريض — تتبعه وعزله عن الباقين";
+    else if (/وباء|معدي/.test(text)) msgAr = "تحذير: خطر مرض معدٍ — عزل فوري وإبلاغ البيطري";
+    results.push({
+      id: mkId(), type: "ALERT",
+      priority: priorityBoost("MEDIUM", urgent, dataConfirmed),
+      messageAr: msgAr,
+      messageSv: "Sjuka fåglar rapporterade — kontrollera hälsostatus omedelbart",
+      relatedModule: "health", sourceNoteId: noteId, dataConfirmed,
+      dataContextAr: dataConfirmed ? "مؤكد: يوجد قطعان مريضة مسجّلة في النظام" : undefined,
+      dataContextSv: dataConfirmed ? "Bekräftat: sjuka flockar registrerade i systemet" : undefined,
+    });
+  }
+
+  // ── Health — Medicine ───────────────────────────────────────────────────────
+  if (P_HEALTH_MED.test(text) && !P_HEALTH_ALERT.test(text)) {
+    results.push({
+      id: mkId(), type: "TASK",
+      priority: priorityBoost("MEDIUM", urgent, false),
+      messageAr: "إعطاء العلاج والأدوية للقطعان حسب تعليمات المدير",
+      messageSv: "Ge medicin och behandling till flockarna enligt instruktioner",
+      relatedModule: "health", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Feed — Low (specific) ───────────────────────────────────────────────────
+  if (P_FEED_LOW.test(text)) {
+    const dataConfirmed = ctx.hasNoRecentFeed;
+    results.push({
+      id: mkId(), type: "WARNING",
+      priority: priorityBoost("MEDIUM", urgent, dataConfirmed),
+      messageAr: "كمية العلف قليلة — يجب التزود بالعلف قريباً",
+      messageSv: "Foderförrådet är lågt — beställ mer foder snart",
+      relatedModule: "feed", sourceNoteId: noteId, dataConfirmed,
+      dataContextAr: dataConfirmed ? "مؤكد: لا يوجد شراء علف خلال آخر 7 أيام" : undefined,
+      dataContextSv: dataConfirmed ? "Bekräftat: inget foderinköp de senaste 7 dagarna" : undefined,
+    });
+  }
+
+  // ── Water — Low ─────────────────────────────────────────────────────────────
+  if (P_WATER_LOW.test(text)) {
+    results.push({
+      id: mkId(), type: "WARNING",
+      priority: priorityBoost("MEDIUM", urgent, false),
+      messageAr: "مستوى الماء منخفض — تأكد من توفر الماء النظيف للدجاج",
+      messageSv: "Låg vattennivå — se till att rent vatten finns tillgängligt",
+      relatedModule: "feed", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Feed — General (only if no specific feed alert already) ────────────────
+  if (P_FEED_GEN.test(text) && !P_FEED_LOW.test(text) && !P_WATER_LOW.test(text) && !P_HEALTH_ALERT.test(text)) {
+    results.push({
+      id: mkId(), type: "TASK",
+      priority: priorityBoost("LOW", urgent, false),
+      messageAr: "متابعة توزيع العلف والتأكد من كفايته لجميع القطعان",
+      messageSv: "Kontrollera och distribuera foder till alla flockar",
+      relatedModule: "feed", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Cleaning ─────────────────────────────────────────────────────────────────
+  if (P_CLEAN.test(text)) {
+    results.push({
+      id: mkId(), type: "TASK",
+      priority: priorityBoost("LOW", urgent, false),
+      messageAr: "تنظيف المكان وتعقيمه جيداً كما طلب المدير",
+      messageSv: "Rengör och desinficera utrymmet noggrant",
+      relatedModule: "environment", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Smell ────────────────────────────────────────────────────────────────────
+  if (P_SMELL.test(text)) {
+    results.push({
+      id: mkId(), type: "WARNING",
+      priority: priorityBoost("MEDIUM", urgent, false),
+      messageAr: "رائحة غير مقبولة في المزرعة — تهوية وتنظيف فوري مطلوب",
+      messageSv: "Dålig lukt rapporterad — ventilera och rengör omedelbart",
+      relatedModule: "environment", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Temperature / Ventilation ────────────────────────────────────────────────
+  if (P_TEMP.test(text)) {
+    results.push({
+      id: mkId(), type: "WARNING",
+      priority: priorityBoost("MEDIUM", urgent, false),
+      messageAr: "مراقبة درجة الحرارة والتهوية — ضبطها ضمن المعدل الطبيعي",
+      messageSv: "Övervaka temperatur och ventilation — justera till normala nivåer",
+      relatedModule: "environment", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  // ── Hatching — Problem ───────────────────────────────────────────────────────
+  if (P_HATCH_PROBLEM.test(text)) {
+    results.push({
+      id: mkId(), type: "ALERT",
+      priority: "HIGH",
+      messageAr: "مشكلة في التفقيس — فحص الحاضنة فوراً",
+      messageSv: "Problem med kläckning — kontrollera kläckningsenhet omedelbart",
+      relatedModule: "hatching", sourceNoteId: noteId, dataConfirmed: ctx.hasActiveHatching,
+      dataContextAr: ctx.hasActiveHatching ? "مؤكد: يوجد دورات تفقيس نشطة حالياً" : undefined,
+      dataContextSv: ctx.hasActiveHatching ? "Bekräftat: aktiva kläckningscyklar pågår" : undefined,
+    });
+  } else if (P_HATCH_TASK.test(text) || P_HATCH_GEN.test(text)) {
+    results.push({
+      id: mkId(), type: "TASK",
+      priority: priorityBoost("LOW", urgent, ctx.hasActiveHatching),
+      messageAr: "متابعة ومراقبة دورة التفقيس والتحقق من إعدادات الحاضنة",
+      messageSv: "Följ upp och övervaka kläckningscykeln — kontrollera inställningar",
+      relatedModule: "hatching", sourceNoteId: noteId, dataConfirmed: ctx.hasActiveHatching,
+      dataContextAr: ctx.hasActiveHatching ? "مؤكد: يوجد دورات تفقيس نشطة حالياً" : undefined,
+      dataContextSv: ctx.hasActiveHatching ? "Bekräftat: aktiva kläckningscyklar pågår" : undefined,
+    });
+  }
+
+  // ── Fallback: no pattern matched → show note as general task ────────────────
+  if (results.length === 0) {
+    const truncated = text.length > 120 ? text.slice(0, 120) + "…" : text;
+    results.push({
+      id: mkId(), type: "TASK",
+      priority: urgent ? "HIGH" : "LOW",
+      messageAr: truncated,
+      messageSv: "Kontrollera dagens notering från chefen",
+      relatedModule: "general", sourceNoteId: noteId, dataConfirmed: false,
+    });
+  }
+
+  return results;
+}
+
+// GET /api/intelligence/daily-instructions
+// Returns structured worker instructions derived from manager's daily notes
+router.get("/intelligence/daily-instructions", async (_req, res) => {
+  try {
+    const yesterday = daysAgo(1); // include yesterday's notes for morning shift
+
+    const [notes, sickFlocks, recentFeed, activeHatching] = await Promise.all([
+      db.select().from(dailyNotesTable)
+        .where(gte(dailyNotesTable.date, yesterday))
+        .orderBy(desc(dailyNotesTable.createdAt))
+        .limit(20),
+      db.select().from(flockHealthLogsTable)
+        .where(sql`${flockHealthLogsTable.date} >= ${daysAgo(3)} AND ${flockHealthLogsTable.status} IN ('sick','quarantine')`)
+        .limit(5),
+      db.select().from(feedRecordsTable)
+        .where(gte(feedRecordsTable.date, daysAgo(7)))
+        .limit(5),
+      db.select().from(hatchingCyclesTable)
+        .where(eq(hatchingCyclesTable.status, "active"))
+        .limit(5),
+    ]);
+
+    const ctx: NoteContext = {
+      hasSickFlocks: sickFlocks.length > 0,
+      hasNoRecentFeed: recentFeed.length === 0,
+      hasActiveHatching: activeHatching.length > 0,
+    };
+
+    // Interpret all notes
+    const all: DailyInstruction[] = [];
+    for (const note of notes) {
+      all.push(...interpretNote(note.content, note.id, ctx));
+    }
+
+    // Deduplicate: keep only the highest-priority item per type+module combo
+    const seen = new Map<string, DailyInstruction>();
+    const priorityRank = (p: string) => p === "HIGH" ? 0 : p === "MEDIUM" ? 1 : 2;
+    for (const inst of all) {
+      const key = `${inst.type}-${inst.relatedModule}`;
+      const existing = seen.get(key);
+      if (!existing || priorityRank(inst.priority) < priorityRank(existing.priority)) {
+        seen.set(key, inst);
+      }
+    }
+    const deduped = [...seen.values()];
+
+    // Sort: ALERT first, then WARNING, then TASK; within each group by priority
+    const typeRank = (t: string) => t === "ALERT" ? 0 : t === "WARNING" ? 1 : 2;
+    deduped.sort((a, b) => {
+      const td = typeRank(a.type) - typeRank(b.type);
+      return td !== 0 ? td : priorityRank(a.priority) - priorityRank(b.priority);
+    });
+
+    res.json({
+      success: true,
+      date: daysAgo(0),
+      items: deduped,
+      meta: {
+        noteCount: notes.length,
+        alertCount:   deduped.filter(i => i.type === "ALERT").length,
+        warningCount: deduped.filter(i => i.type === "WARNING").length,
+        taskCount:    deduped.filter(i => i.type === "TASK").length,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
 
 export default router;
