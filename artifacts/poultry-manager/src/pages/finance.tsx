@@ -216,6 +216,27 @@ function computeMetrics(txs: Tx[], flocks: Flock[], period: Period): FinMetrics 
 }
 
 interface MonthRow { month: string; monthAr: string; income: number; expense: number; profit: number; cumulative: number; }
+
+// ── Server-side Financial Engine response types ───────────────────────────────
+interface ServerMonth {
+  month: string; monthAr: string; totalIncome: number; totalExpense: number;
+  netProfit: number; explanation: string[];
+  incomeByCategory: Record<string, number>; expenseByCategory: Record<string, number>;
+}
+interface ServerFinanceAnalysis {
+  months: ServerMonth[];
+  bestMonth:  ServerMonth | null;
+  worstMonth: ServerMonth | null;
+  allMonthsInLoss: boolean; noDataYet: boolean;
+  profitableStreak: number; lossStreak: number;
+  summary: { totalIncome: number; totalExpense: number; netProfit: number; profitableMonthsCount: number; lossMonthsCount: number; totalMonths: number; };
+}
+
+/** Map server response → client MonthRow (used for BestWorstCard & modal) */
+function serverToMonthRow(m: ServerMonth): MonthRow {
+  return { month: m.month.slice(5), monthAr: m.monthAr, income: m.totalIncome, expense: m.totalExpense, profit: m.netProfit, cumulative: 0 };
+}
+
 function computeMonthly(txs: Tx[]): MonthRow[] {
   const map: Record<string, { income: number; expense: number }> = {};
   txs.forEach(t => {
@@ -1034,7 +1055,16 @@ export default function Finance() {
   const OPTS = { refetchInterval: 30_000, staleTime: 20_000 };
   const { data: allTxs = [], isFetching } = useQuery<Tx[]>({ queryKey: ["transactions"], queryFn: () => apiFetch("/api/transactions"), ...OPTS });
   const { data: flocks = [] }             = useQuery<Flock[]>({ queryKey: ["flocks"], queryFn: () => apiFetch("/api/flocks"), ...OPTS });
-  const refetch = () => { qc.invalidateQueries({ queryKey: ["transactions"] }); };
+  // ── Central Financial Engine (server-side authoritative source) ─────────────
+  const { data: finAnalysis } = useQuery<ServerFinanceAnalysis>({
+    queryKey: ["finance-monthly-analysis"],
+    queryFn:  () => apiFetch("/api/finance/monthly-analysis"),
+    ...OPTS,
+  });
+  const refetch = () => {
+    qc.invalidateQueries({ queryKey: ["transactions"] });
+    qc.invalidateQueries({ queryKey: ["finance-monthly-analysis"] });
+  };
 
   // ── Period filter ──────────────────────────────────────────────────────────
   const periodTxs = useMemo(() => { const r = getPeriodRange(period); if (!r) return allTxs; return allTxs.filter(t => t.date >= r.start && t.date <= r.end); }, [allTxs, period]);
@@ -1045,9 +1075,25 @@ export default function Finance() {
   const prev    = useMemo(() => computeMetrics(prevTxs, flocks, period),   [prevTxs, flocks, period]);
   const monthly = useMemo(() => computeMonthly(allTxs), [allTxs]);
   const adv     = useMemo(() => computeAdvanced(allTxs, monthly), [allTxs, monthly]);
+
+  // ── advFinal: merge server-side authoritative best/worst with local EMA/Z-score ─
+  // Server is SINGLE SOURCE OF TRUTH for bestMonth/worstMonth/allMonthsInLoss
+  // Rule: bestMonth is ONLY set when netProfit > 0 (enforced server-side)
+  const advFinal = useMemo((): typeof adv => {
+    if (!finAnalysis) return adv;
+    return {
+      ...adv,
+      bestMonth:        finAnalysis.bestMonth  ? serverToMonthRow(finAnalysis.bestMonth)  : null,
+      worstMonth:       finAnalysis.worstMonth ? serverToMonthRow(finAnalysis.worstMonth) : null,
+      allMonthsInLoss:  finAnalysis.allMonthsInLoss,
+      profitableStreak: finAnalysis.profitableStreak,
+      lossStreak:       finAnalysis.lossStreak,
+    };
+  }, [adv, finAnalysis]);
+
   const feed    = useMemo(() => computeFeedMetrics(allTxs, flocks, periodTxs, getPeriodDays(period)), [allTxs, flocks, periodTxs, period]);
   const alerts  = useMemo(() => detectAlerts(m, periodTxs.length), [m, periodTxs.length]);
-  const recs    = useMemo(() => generateRecommendations(m, adv, monthly), [m, adv, monthly]);
+  const recs    = useMemo(() => generateRecommendations(m, advFinal, monthly), [m, advFinal, monthly]);
 
   // ── Delta helpers (period vs previous period) ──────────────────────────────
   const delta = (cur: number, prv: number) => prv === 0 ? null : ((cur - prv) / Math.abs(prv)) * 100;
@@ -1186,7 +1232,7 @@ export default function Finance() {
             </div>
 
             {/* Best/Worst Month */}
-            <BestWorstCard adv={adv} monthly={monthly} ar={ar} lang={lang} />
+            <BestWorstCard adv={advFinal} monthly={monthly} ar={ar} lang={lang} />
 
             {/* Monthly Chart — with cumulative P&L line */}
             <Card className="border-none shadow-sm">

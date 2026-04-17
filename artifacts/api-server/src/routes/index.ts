@@ -19,6 +19,7 @@ import validationRouter from "./validation";
 import hatchingStreamRouter from "./hatchingStream";
 import feedIntelligenceRouter from "./feed-intelligence";
 import flockIntelligenceRouter from "./flock-intelligence";
+import financialEngineRouter from "./financial-engine";
 
 const router: IRouter = Router();
 
@@ -87,5 +88,6 @@ router.use(validationRouter);   // /validate/integrity + /dev/* protected inside
 router.use(hatchingStreamRouter);
 router.use(feedIntelligenceRouter);
 router.use(flockIntelligenceRouter);
+router.use(financialEngineRouter);
 
 export default router;
