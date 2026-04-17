@@ -252,7 +252,7 @@ export default function FeedIntelligence() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Wheat className="h-6 w-6 text-amber-500" />
-            <h1 className="text-xl font-bold">استخبارات العلف والإنتاج</h1>
+            <h1 className="text-xl font-bold">حاسبة العلف والإنتاج</h1>
             <Badge variant="outline" className="text-xs">Enterprise AI</Badge>
           </div>
           <p className="text-sm text-muted-foreground">

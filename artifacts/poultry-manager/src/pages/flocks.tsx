@@ -630,7 +630,7 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
                   {/* Score header */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-semibold text-sm">{ar ? "استخبارات العلف" : "Foderintelligens"}</p>
+                      <p className="font-semibold text-sm">{ar ? "حاسبة العلف" : "Foderkalkylator"}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {ar ? "تحليل كفاءة العلف والتكلفة بناءً على سلالة القطيع وعمره" : "Analyserar fodereffektivitet och kostnad baserat på flockens ras och ålder"}
                       </p>
@@ -764,8 +764,8 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
                     <div className="bg-muted/30 rounded-lg p-3 text-xs text-muted-foreground text-center">
                       <Wheat className="w-5 h-5 mx-auto mb-1 opacity-40" />
                       {ar
-                        ? "سجّل مشتريات العلف من صفحة استخبارات العلف لرؤية التكاليف الفعلية"
-                        : "Registrera foderköp i Foderintelligens för att se faktiska kostnader"}
+                        ? "سجّل مشتريات العلف من صفحة حاسبة العلف لرؤية التكاليف الفعلية"
+                        : "Registrera foderköp i Foderkalkylator för att se faktiska kostnader"}
                     </div>
                   )}
                 </>
@@ -822,7 +822,7 @@ function FeedMiniStrip({ fa, ar }: { fa: FlockFeedAnalysis; ar: boolean }) {
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1" style={{ color: scoreColor }}>
           <Wheat className="w-2.5 h-2.5" />
-          <span className="text-[9px] font-semibold">{ar ? "استخبارات العلف" : "Foderintelligens"}</span>
+          <span className="text-[9px] font-semibold">{ar ? "حاسبة العلف" : "Foderkalkylator"}</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[9px] font-bold font-mono" style={{ color: scoreColor }}>{score}/100</span>
@@ -1248,7 +1248,7 @@ export default function Flocks() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-              {ar ? "استخبارات العلف مفعّلة" : "Foderintelligens aktiv"}
+              {ar ? "حاسبة العلف مفعّلة" : "Foderkalkylator aktiv"}
             </p>
             <p className="text-[11px] text-amber-700/70 dark:text-amber-400/70 mt-0.5">
               {ar
