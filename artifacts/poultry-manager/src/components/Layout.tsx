@@ -165,7 +165,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 bg-card border-b border-border flex items-center px-4 gap-3 md:hidden sticky top-0 z-10 shadow-sm">
+        <header className="h-14 bg-card border-b border-border flex items-center px-4 gap-3 md:hidden sticky top-0 z-10 shadow-sm pt-[env(safe-area-inset-top,0px)]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
           <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-accent transition-colors">
             <Menu className="w-5 h-5" />
           </button>

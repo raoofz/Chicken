@@ -96,6 +96,21 @@ Seven integrated sub-engines:
 - **`.gitignore`**: Added `.env`, `*.sql`, `backups/`, `downloads/`, `uploads/`, `*.log`, `*.pem/key/crt` patterns.
 - **README.md**: Professional documentation with architecture diagram, security model, env vars reference, deployment guide, and API table.
 
+## PWA (Progressive Web App) Layer
+
+The frontend has been upgraded to a full offline-first installable PWA:
+
+- **vite-plugin-pwa** (registerType: autoUpdate, injectRegister: auto) generates `sw.js` + Workbox precache (66 entries, ~1.7 MB).
+- **Workbox strategies:** NetworkFirst for `/api/*` (8s timeout), CacheFirst for Google Fonts (1yr), StaleWhileRevalidate for images, CacheFirst for JS/CSS assets.
+- **Manifest:** Name/short_name in Arabic, theme colors, PNG icons (192×512, solid amber), maskable purpose, nav shortcuts.
+- **Code splitting:** manualChunks — react-vendor, app-core, ui-radix, charts, motion. All heavy pages lazy-loaded except Dashboard.
+- **Device adapter** (`lib/deviceAdapter.ts`): detects iOS/Android/Windows, device memory, connection type; applies CSS classes (`.lite-mode`, `.ios-device`, etc.) before first render.
+- **Hooks:** `usePWAInstall.ts` (beforeinstallprompt), `useOnlineStatus.ts` (online/offline events).
+- **Components:** `OfflineBanner.tsx` (top ribbon when offline), `PWAInstallBanner.tsx` (install prompt card).
+- **Offline page** (`pages/offline.tsx`): shown by Service Worker for navigation requests when offline.
+- **Safe area CSS:** `.safe-bottom`, `.safe-top`, `.pb-safe`, `.pt-safe` utilities; Layout mobile header uses `env(safe-area-inset-top)`.
+- **index.html:** viewport-fit=cover, dark/light theme-color meta, FOUC-prevention inline script, pre-React loading spinner.
+
 ## External Dependencies
 
 - **Database:** PostgreSQL (with Drizzle ORM).

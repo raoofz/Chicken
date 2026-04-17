@@ -160,6 +160,34 @@
   }
 }
 
+/* ── PWA / Mobile Performance Layer ─────────────────────────────────────── */
+
+/* Safe area utilities — used in Layout bottom nav */
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px); }
+.safe-top    { padding-top:    max(env(safe-area-inset-top,    0px), 0px); }
+.pb-safe     { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+.pt-safe     { padding-top:    calc(0px + env(safe-area-inset-top,    0px)); }
+
+/* min touch target ≥ 44px for main action buttons (not icon-only) */
+/* Apply .touch-target class to primary buttons in mobile nav */
+.touch-target { min-height: 44px; min-width: 44px; }
+
+/* Scrollbar hidden utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* iOS-specific: momentum scrolling on scrollable containers */
+.ios-scroll { -webkit-overflow-scrolling: touch; overflow-y: auto; }
+
+/* Hardware-accelerated transforms (prefer over top/left) */
+.hw-accelerate { transform: translateZ(0); will-change: transform; }
+
+/* Offline visual indicator */
+.offline-dimmed { opacity: 0.6; pointer-events: none; filter: grayscale(30%); }
+
 @layer utilities {
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
