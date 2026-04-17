@@ -87,8 +87,8 @@ router.post("/auth/change-password", async (req, res) => {
     res.status(400).json({ error: "بيانات غير صحيحة" });
     return;
   }
-  if (newPassword.length < 4) {
-    res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 4 أحرف على الأقل" });
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل" });
     return;
   }
   if (newPassword.length > 128) {

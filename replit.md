@@ -49,6 +49,20 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - **Brain Orchestrator Feed Integration:** The Brain Orchestrator (`/brain/analyze`) now runs `runFeedCostEngine` in parallel with all other engines, contributing feed-specific insights (efficiency score, cost ratio, per-flock warnings, missing-records alert) to the unified decision output.
 - **Operations Center Consolidated (`/operations`):** The `/notes` page is no longer a separate nav item. Daily Notes are now embedded as a 5th tab ("الملاحظات") inside the Operations Center alongside Overview, Tasks, Activity Log, and System tabs. The notes tab supports adding notes with AI smart-analyze extraction, color-coded categories, and delete. The KPI strip now shows 4 cards (tasks, overdue, today's activities, total notes). The "ملاحظة جديدة" button is always visible in the header.
 
+## Security & Production Hardening
+
+- **Session Secret**: `SESSION_SECRET` env var required; app exits in production if missing. Dev fallback logs a warning.
+- **Seed Passwords**: Hardcoded "1234" removed. Now uses `ADMIN_PASSWORD` / `WORKER_PASSWORD` env vars with dev fallbacks that log warnings. Production refuses to seed with weak/missing passwords.
+- **Password Min Length**: Changed from 4 to 8 characters in `change-password` route.
+- **bcrypt Salt Rounds**: 12 (increased from 10) for new seeds.
+- **fuser -k**: Removed. Port-in-use now fails fast with a clear error message.
+- **RBAC**: `requireAuth` + `requireRole("admin")` exported from `routes/index.ts`. Admin checks added inline to `/validate/integrity`, `/dev/seed-transactions`, `/dev/seed-transactions DELETE`.
+- **Helmet CSP**: Enabled in production with strict directives; disabled only in development.
+- **CORS**: Configurable via `ALLOWED_ORIGINS` env var (comma-separated); falls back to `true` in development for Replit proxy.
+- **Error responses**: All error responses include `success: false` field. No stack traces ever exposed.
+- **`.gitignore`**: Added `.env`, `*.sql`, `backups/`, `downloads/`, `uploads/`, `*.log`, `*.pem/key/crt` patterns.
+- **README.md**: Professional documentation with architecture diagram, security model, env vars reference, deployment guide, and API table.
+
 ## External Dependencies
 
 - **Database:** PostgreSQL (with Drizzle ORM).

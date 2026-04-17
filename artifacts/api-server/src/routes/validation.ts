@@ -30,8 +30,12 @@ router.get("/server-time", (_req, res) => {
   });
 });
 
-// ─── Data Integrity Audit ─────────────────────────────────────────────────────
-router.get("/validate/integrity", async (_req, res) => {
+// ─── Data Integrity Audit (admin only) ────────────────────────────────────────
+router.get("/validate/integrity", async (req, res) => {
+  if ((req as any).session?.role !== "admin") {
+    res.status(403).json({ success: false, error: "هذه العملية مقتصرة على المديرين" });
+    return;
+  }
   const startMs = Date.now();
   const issues: Array<{ severity: "critical" | "warning"; check: string; detail: string }> = [];
 
@@ -213,6 +217,10 @@ router.get("/validate/integrity", async (_req, res) => {
 const STRESS_ROLLBACK = Symbol("STRESS_TEST_DRY_RUN_ROLLBACK");
 
 router.post("/dev/seed-transactions", async (req, res) => {
+  if ((req as any).session?.role !== "admin") {
+    res.status(403).json({ success: false, error: "هذه العملية مقتصرة على المديرين" });
+    return;
+  }
   if (process.env.NODE_ENV === "production") {
     res.status(403).json({ error: "Not available in production" });
     return;
@@ -302,7 +310,11 @@ router.post("/dev/seed-transactions", async (req, res) => {
 });
 
 // Purge any legacy seed data written before the dry-run mode was introduced
-router.delete("/dev/seed-transactions", async (_req, res) => {
+router.delete("/dev/seed-transactions", async (req, res) => {
+  if ((req as any).session?.role !== "admin") {
+    res.status(403).json({ success: false, error: "هذه العملية مقتصرة على المديرين" });
+    return;
+  }
   if (process.env.NODE_ENV === "production") {
     res.status(403).json({ error: "Not available in production" });
     return;
