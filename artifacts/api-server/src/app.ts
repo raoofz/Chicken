@@ -19,6 +19,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app: Express = express();
 const isProd = process.env.NODE_ENV === "production";
 
+// ── Trust Proxy ───────────────────────────────────────────────────────────────
+// Railway (and most cloud platforms) run behind a reverse proxy.
+// Without this, secure cookies and rate-limiters break silently.
+if (isProd) {
+  app.set("trust proxy", 1);
+}
+
 // ── Session Secret ────────────────────────────────────────────────────────────
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
