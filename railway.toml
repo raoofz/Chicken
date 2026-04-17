@@ -1,0 +1,16 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --no-frozen-lockfile && NODE_ENV=production BASE_PATH=/ pnpm --filter @workspace/poultry-manager build && pnpm --filter @workspace/api-server build && cp -r artifacts/poultry-manager/dist/public artifacts/api-server/dist/public"
+
+[deploy]
+startCommand = "pnpm --filter @workspace/api-server start"
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "مدير المزرعة"
+
+[services.variables]
+NODE_ENV = "production"

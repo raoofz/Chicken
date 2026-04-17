@@ -4,12 +4,17 @@ import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { runMigrations } from "./lib/migrate";
 import { seedUsers } from "./lib/seed";
 import { db, pool } from "@workspace/db";
 import { sql } from "drizzle-orm";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app: Express = express();
 const isProd = process.env.NODE_ENV === "production";
@@ -117,6 +122,29 @@ ensureDbConnection()
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);
+
+// ── Static Frontend (Production only) ────────────────────────────────────────
+// In production, the built frontend sits next to this bundle in the dist tree.
+// Railway build: pnpm build in api-server copies frontend dist here.
+if (isProd) {
+  // Try several candidate paths (monorepo vs flat dist layout)
+  const candidates = [
+    path.resolve(__dirname, "public"),                             // dist/public (copied by build)
+    path.resolve(__dirname, "../../poultry-manager/dist/public"), // monorepo sibling
+    path.resolve(__dirname, "../public"),                         // flat layout
+  ];
+  const staticRoot = candidates.find(p => existsSync(p));
+  if (staticRoot) {
+    logger.info({ staticRoot }, "Serving static frontend files");
+    app.use(express.static(staticRoot, { maxAge: "7d", etag: true }));
+    // SPA fallback — all non-API routes serve index.html
+    app.get(/^(?!\/api).*$/, (_req, res) => {
+      res.sendFile(path.join(staticRoot, "index.html"));
+    });
+  } else {
+    logger.warn("No frontend static files found — only API will be served");
+  }
+}
 
 // ── Global Error Handler ──────────────────────────────────────────────────────
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
