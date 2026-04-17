@@ -100,32 +100,32 @@ const MODULE_LABELS: Record<string, { ar: string; sv: string }> = {
 // Deep explanations for each module type
 const MODULE_DETAIL: Record<string, { ar: string; sv: string }> = {
   finance: {
-    ar: "يُحلّل محرك الذكاء بياناتك المالية الكاملة خلال آخر 30 يوماً. يشمل التحليل: الدخل الإجمالي، المصاريف حسب الفئة، هامش الربح الصافي، ونسبة تكاليف العلف. تُقارَن النتائج بمعايير الصناعة.",
-    sv: "Intelligensmotorn analyserar dina fullständiga finansiella data för de senaste 30 dagarna. Analysen inkluderar: total inkomst, utgifter per kategori, nettovinstmarginal och foderkostnadsandel. Resultaten jämförs med branschstandarder.",
+    ar: "يُحلّل محرك الذكاء بياناتك المالية الكاملة خلال آخر 30 يوماً. يشمل: الدخل الإجمالي، المصاريف حسب الفئة، هامش الربح الصافي، ونسبة تكاليف العلف. كما يقارن هذا الشهر بالشهر الماضي لاكتشاف الاتجاهات. تُقارَن النتائج بمعايير الصناعة.",
+    sv: "Intelligensmotorn analyserar dina fullständiga finansiella data för de senaste 30 dagarna. Inkluderar: total inkomst, utgifter per kategori, nettovinstmarginal och foderkostnadsandel. Jämför även denna månad med förra för att identifiera trender. Resultaten jämförs med branschstandarder.",
   },
   production: {
-    ar: "يتتبع محرك الذكاء إنتاج البيض اليومي لكل قطيع، يكتشف الانخفاضات المفاجئة، ويقارن الأسابيع الأخيرة بالأسابيع السابقة للكشف عن أنماط الأداء.",
-    sv: "Intelligensmotorn spårar daglig äggproduktion per flock, upptäcker plötsliga nedgångar och jämför de senaste veckorna med tidigare perioder för att identifiera prestandamönster.",
+    ar: "يتتبع محرك الذكاء إنتاج البيض اليومي، يكتشف الانخفاضات المفاجئة، ويحسب كثافة الإنتاج (بيضة/طير/أسبوع). يقارن الأسابيع الأخيرة بالسابقة للكشف عن أنماط الأداء ويضرب إنذاراً عند الانخفاض الحاد.",
+    sv: "Intelligensmotorn spårar daglig äggproduktion, upptäcker plötsliga nedgångar och beräknar produktionsdensitet (ägg/fågel/vecka). Jämför de senaste veckorna med tidigare perioder och larmar vid kraftiga nedgångar.",
   },
   health: {
-    ar: "يراقب محرك الذكاء حالة صحة القطعان والسجلات الصحية. يكتشف الأنماط السلبية المتكررة ويربطها بالتغيرات في الإنتاج للكشف المبكر عن الأمراض.",
-    sv: "Intelligensmotorn övervakar flockars hälsostatus och hälsologgar. Identifierar återkommande negativa mönster och korrelerar dem med produktionsförändringar för tidig sjukdomsdetektering.",
+    ar: "يراقب محرك الذكاء حالة صحة القطعان والسجلات الصحية. يكتشف الأنماط السلبية المتكررة ويربطها بالتغيرات في الإنتاج والعلف للكشف المبكر عن الأمراض.",
+    sv: "Intelligensmotorn övervakar flockars hälsostatus och hälsologgar. Identifierar återkommande negativa mönster och korrelerar dem med produktions- och foderförändringar för tidig sjukdomsdetektering.",
   },
   operations: {
     ar: "يقيّم محرك الذكاء معدل إنجاز المهام اليومية والمتأخرة، ويحسب مؤشر الكفاءة التشغيلية للمزرعة بناءً على الأهداف والمهام المنجزة.",
     sv: "Intelligensmotorn utvärderar slutförandegrad för dagliga och försenade uppgifter, och beräknar gårdens operativa effektivitetsindex baserat på mål och slutförda uppgifter.",
   },
   feed: {
-    ar: "يُحلّل محرك الذكاء نسبة تكلفة العلف من إجمالي المصاريف. المعدل المثالي هو 40-50%. أي نسبة تتجاوز 60% تُشير إلى مشكلة في إدارة التغذية أو أسعار المورّدين.",
-    sv: "Intelligensmotorn analyserar foderkostnadens andel av totala utgifter. Optimalt intervall är 40-50%. Värden över 60% indikerar problem med foderhantering eller leverantörspriser.",
+    ar: "يُحلّل محرك الذكاء نسبة تكلفة العلف من إجمالي المصاريف، ويتتبع سجلات الشراء للكشف عن فجوات في التوريد. يقارن كميات العلف أسبوعاً بأسبوع ويُنبّه عند الانخفاض الحاد أو انقطاع التسجيل.",
+    sv: "Intelligensmotorn analyserar foderkostnadens andel av totala utgifter och spårar inköpsrekord för att identifiera leveransbrister. Jämför fodermängder vecka för vecka och larmar vid kraftig nedgång eller registreringsavbrott.",
   },
   hatching: {
-    ar: "يُحلّل محرك الذكاء معدلات التفقيس لآخر 3 دورات مكتملة ويحسب المتوسط. المعيار الصناعي المقبول هو 80% أو أكثر. أقل من 65% يعني مشكلة في الفقاسة.",
-    sv: "Intelligensmotorn analyserar kläckningsgrad för de senaste 3 slutförda cyklerna och beräknar medelvärdet. Branschstandarden är 80% eller mer. Under 65% indikerar problem med ruvaren.",
+    ar: "يُحلّل محرك الذكاء معدلات التفقيس لآخر 3 دورات مكتملة، ويحسب المتوسط مقارنةً بالمعيار الصناعي (80%+). كما يحسب تقدم الدورات النشطة ويُنبّه عند اقتراب موعد الفقس.",
+    sv: "Intelligensmotorn analyserar kläckningsgrad för de senaste 3 slutförda cyklerna och beräknar medelvärdet jämfört med branschstandarden (80%+). Beräknar även framsteg för aktiva cykler och larmar när kläckning närmar sig.",
   },
   correlation: {
-    ar: "هذا تحليل متقاطع متقدم يربط بيانات من أكثر من وحدة في نفس الوقت. يكتشف محرك الذكاء الأنماط المخفية التي لا تظهر عند تحليل كل وحدة بمفردها.",
-    sv: "Detta är avancerad korskorrelationsanalys som kopplar data från mer än en modul samtidigt. Intelligensmotorn identifierar dolda mönster som inte syns vid analys av varje modul separat.",
+    ar: "هذا تحليل متقاطع متقدم يربط بيانات من أكثر من وحدة في آنٍ واحد. يكتشف محرك الذكاء الأنماط المخفية: إنتاج + صحة + علف + مالية + تشغيل — كل شيء مترابط لمنحك صورة شاملة حقيقية.",
+    sv: "Detta är avancerad korskorrelationsanalys som kopplar data från mer än en modul samtidigt. Intelligensmotorn identifierar dolda mönster: produktion + hälsa + foder + ekonomi + drift — allt sammankopplat för en verklig helhetsbild.",
   },
 };
 

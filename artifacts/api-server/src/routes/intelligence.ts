@@ -12,8 +12,8 @@
  */
 import { Router, type Request, type Response } from "express";
 import { createHash } from "crypto";
-import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, flockHealthLogsTable, flockProductionLogsTable } from "@workspace/db";
-import { desc, sql } from "drizzle-orm";
+import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, flockHealthLogsTable, flockProductionLogsTable, transactionsTable, feedRecordsTable } from "@workspace/db";
+import { desc, sql, and, gte, lte, eq } from "drizzle-orm";
 import { logPrediction, autoResolveFromCycles, computeAccuracyMetrics } from "../lib/self-monitor";
 
 const router = Router();
@@ -57,12 +57,25 @@ function daysAgo(n: number): string {
 // ── Main Analysis Engine ───────────────────────────────────────────────────────
 async function runAnalysis(): Promise<IntelligenceReport> {
   const alerts: Alert[] = [];
+  const today = new Date().toISOString().split("T")[0];
   const now30 = daysAgo(30);
+  const now60 = daysAgo(60);
   const now7  = daysAgo(7);
   const now14 = daysAgo(14);
 
+  // Month boundaries for month-over-month comparison
+  const thisMonthStart = new Date();
+  thisMonthStart.setDate(1);
+  const thisMonthStr = thisMonthStart.toISOString().split("T")[0];
+  const lastMonthEnd = new Date(thisMonthStart);
+  lastMonthEnd.setDate(0);
+  const lastMonthEndStr = lastMonthEnd.toISOString().split("T")[0];
+  const lastMonthStart = new Date(lastMonthEnd);
+  lastMonthStart.setDate(1);
+  const lastMonthStartStr = lastMonthStart.toISOString().split("T")[0];
+
   // ── 1. Fetch all data in parallel ────────────────────────────────────────────
-  const [flocks, hatchingCycles, tasks, goals, healthLogs, productionLogs, txRows] = await Promise.all([
+  const [flocks, hatchingCycles, tasks, goals, healthLogs, productionLogs, txRows, txLastMonth, feedRows] = await Promise.all([
     db.select().from(flocksTable),
     db.select().from(hatchingCyclesTable).orderBy(desc(hatchingCyclesTable.startDate)),
     db.select().from(tasksTable),
@@ -79,9 +92,24 @@ async function runAnalysis(): Promise<IntelligenceReport> {
       WHERE date >= ${now30}
       ORDER BY date DESC
     `),
+    // Last month transactions for MoM comparison
+    db.execute(sql`
+      SELECT type, amount::float AS amount, category
+      FROM transactions
+      WHERE date >= ${lastMonthStartStr} AND date <= ${lastMonthEndStr}
+    `),
+    // Feed records last 60 days
+    db.execute(sql`
+      SELECT date, quantity_kg::float AS quantity_kg, price_per_kg::float AS price_per_kg, total_cost::float AS total_cost
+      FROM feed_records
+      WHERE date >= ${now60}
+      ORDER BY date DESC
+    `),
   ]);
 
   const transactions = (txRows.rows ?? []) as Array<{ type: string; category: string; amount: number; date: string }>;
+  const lastMonthTxArr = (txLastMonth.rows ?? []) as Array<{ type: string; amount: number; category: string }>;
+  const feedRecordsArr = (feedRows.rows ?? []) as Array<{ date: string; quantity_kg: number; price_per_kg: number; total_cost: number }>;
   const healthLogsArr = (healthLogs.rows ?? []) as Array<{ id: number; flock_id: number; date: string; status: string; symptoms: string | null; treatment: string | null; notes: string | null }>;
   const productionLogsArr = (productionLogs.rows ?? []) as Array<{ id: number; flock_id: number; date: string; egg_count: number; notes: string | null }>;
 
@@ -90,6 +118,46 @@ async function runAnalysis(): Promise<IntelligenceReport> {
   const totalExpense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const netProfit    = totalIncome - totalExpense;
   const margin       = totalIncome > 0 ? (netProfit / totalIncome) * 100 : null;
+
+  // Month-over-Month comparison
+  const lastMonthIncome  = lastMonthTxArr.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const lastMonthExpense = lastMonthTxArr.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const lastMonthProfit  = lastMonthIncome - lastMonthExpense;
+  const thisMonthTx = transactions.filter(t => t.date >= thisMonthStr);
+  const thisMonthIncome  = thisMonthTx.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const thisMonthExpense = thisMonthTx.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+
+  // Income trend: this month vs last month (if last month had data)
+  if (lastMonthIncome > 0 && thisMonthIncome > 0) {
+    const incomeDelta = ((thisMonthIncome - lastMonthIncome) / lastMonthIncome) * 100;
+    if (incomeDelta < -25) {
+      alerts.push({
+        id: "fin-income-drop",
+        level: "warning",
+        module: "finance",
+        titleAr: `الدخل انخفض ${Math.abs(Math.round(incomeDelta))}% عن الشهر الماضي`,
+        titleSv: `Inkomsten minskade ${Math.abs(Math.round(incomeDelta))}% jämfört med förra månaden`,
+        bodyAr: `هذا الشهر: ${Math.round(thisMonthIncome).toLocaleString()} د.ع — الشهر الماضي: ${Math.round(lastMonthIncome).toLocaleString()} د.ع. تراجع ملحوظ يستوجب التحقيق.`,
+        bodySv: `Denna månad: ${Math.round(thisMonthIncome).toLocaleString()} IQD — Förra månaden: ${Math.round(lastMonthIncome).toLocaleString()} IQD. Märkbar nedgång som kräver undersökning.`,
+        actionAr: "راجع المالية",
+        actionSv: "Granska ekonomi",
+        href: "/finance",
+        metric: { value: Math.round(incomeDelta), unit: "%", change: Math.round(incomeDelta) },
+      });
+    } else if (incomeDelta > 25) {
+      alerts.push({
+        id: "fin-income-rise",
+        level: "good",
+        module: "finance",
+        titleAr: `الدخل ارتفع ${Math.round(incomeDelta)}% عن الشهر الماضي`,
+        titleSv: `Inkomsten ökade ${Math.round(incomeDelta)}% jämfört med förra månaden`,
+        bodyAr: `هذا الشهر: ${Math.round(thisMonthIncome).toLocaleString()} د.ع مقابل ${Math.round(lastMonthIncome).toLocaleString()} د.ع الشهر الماضي. أداء ممتاز!`,
+        bodySv: `Denna månad: ${Math.round(thisMonthIncome).toLocaleString()} IQD mot ${Math.round(lastMonthIncome).toLocaleString()} IQD förra månaden. Utmärkt!`,
+        href: "/finance",
+        metric: { value: Math.round(incomeDelta), unit: "%", change: Math.round(incomeDelta) },
+      });
+    }
+  }
 
   if (totalIncome === 0 && totalExpense === 0) {
     alerts.push({
@@ -289,7 +357,6 @@ async function runAnalysis(): Promise<IntelligenceReport> {
   }
 
   // ── 5. TASKS & OPERATIONS ANALYSIS ───────────────────────────────────────────
-  const today = new Date().toISOString().split("T")[0];
   const overdueTasks  = tasks.filter(t => !t.completed && t.dueDate && t.dueDate < today);
   const todayTasks    = tasks.filter(t => t.dueDate === today);
   const completedToday = todayTasks.filter(t => t.completed);
@@ -369,7 +436,139 @@ async function runAnalysis(): Promise<IntelligenceReport> {
     }
   }
 
-  // ── 7. CROSS-MODULE CORRELATIONS (deep intelligence) ─────────────────────────
+  // ── 7. FEED PURCHASE ANALYSIS ────────────────────────────────────────────────
+  const feedLast30 = feedRecordsArr.filter(r => r.date >= now30);
+  const feedLast7  = feedRecordsArr.filter(r => r.date >= now7);
+
+  // Feed gap: active birds but no feed purchase in 14+ days
+  if (activeFlocks.length > 0 && totalBirds > 0 && feedRecordsArr.length > 0) {
+    const lastFeedDate = feedRecordsArr[0]?.date;
+    if (lastFeedDate && lastFeedDate < now14) {
+      const daysSinceFeed = Math.round((Date.now() - new Date(lastFeedDate).getTime()) / 86_400_000);
+      alerts.push({
+        id: "feed-gap-detected",
+        level: "warning",
+        module: "feed",
+        titleAr: `لم يُسجَّل شراء علف منذ ${daysSinceFeed} يوماً`,
+        titleSv: `Inget foder har registrerats på ${daysSinceFeed} dagar`,
+        bodyAr: `آخر عملية شراء علف كانت ${daysSinceFeed} يوماً. تحقق من المخزون أو أضف سجلات العلف الحديثة.`,
+        bodySv: `Senaste foderköp var för ${daysSinceFeed} dagar sedan. Kontrollera lagret eller lägg till aktuella foderrekord.`,
+        actionAr: "إدارة العلف",
+        actionSv: "Hantera foder",
+        href: "/feed",
+        metric: { value: daysSinceFeed, unit: " يوم" },
+      });
+    }
+  } else if (activeFlocks.length > 0 && totalBirds > 0 && feedRecordsArr.length === 0) {
+    // No feed records at all
+    alerts.push({
+      id: "feed-no-records",
+      level: "info",
+      module: "feed",
+      titleAr: "لا يوجد سجلات علف مسجّلة",
+      titleSv: "Inga foderrekord registrerade",
+      bodyAr: "ابدأ بتسجيل مشتريات العلف لتفعيل التحليل الذكي لتكاليف التغذية.",
+      bodySv: "Börja registrera foderköp för att aktivera smart analys av foderkostnader.",
+      href: "/feed",
+    });
+  }
+
+  // Feed cost rising trend: compare last 7 days feed quantity vs previous 7 days
+  if (feedLast30.length >= 4) {
+    const recent7KG  = feedLast7.reduce((s, r) => s + r.quantity_kg, 0);
+    const prev7Items = feedRecordsArr.filter(r => r.date >= now14 && r.date < now7);
+    const prev7KG    = prev7Items.reduce((s, r) => s + r.quantity_kg, 0);
+    if (prev7KG > 0 && recent7KG < prev7KG * 0.5) {
+      alerts.push({
+        id: "feed-consumption-drop",
+        level: "warning",
+        module: "feed",
+        titleAr: "انخفاض حاد في استهلاك العلف هذا الأسبوع",
+        titleSv: "Kraftig minskning av foderförbrukning denna vecka",
+        bodyAr: `كمية العلف هذا الأسبوع: ${Math.round(recent7KG)} كغ مقابل ${Math.round(prev7KG)} كغ الأسبوع الماضي — قد يشير إلى مشكلة.`,
+        bodySv: `Fodermängd denna vecka: ${Math.round(recent7KG)} kg mot ${Math.round(prev7KG)} kg förra veckan — kan indikera ett problem.`,
+        href: "/feed",
+      });
+    }
+  }
+
+  // ── 8. ACTIVE HATCHING PROGRESS (countdown intelligence) ─────────────────────
+  const incubationDays = 21; // standard chicken incubation
+  for (const cycle of activeCycles.slice(0, 2)) {
+    if (cycle.startDate) {
+      const start = new Date(cycle.startDate);
+      const expectedHatch = new Date(start);
+      expectedHatch.setDate(start.getDate() + incubationDays);
+      const daysLeft = Math.round((expectedHatch.getTime() - Date.now()) / 86_400_000);
+      const progress = Math.round(((incubationDays - daysLeft) / incubationDays) * 100);
+
+      if (daysLeft >= 0 && daysLeft <= 3) {
+        alerts.push({
+          id: `hatching-imminent-${cycle.id}`,
+          level: "critical",
+          module: "hatching",
+          titleAr: `التفقيس قريب جداً — ${daysLeft === 0 ? "اليوم!" : `${daysLeft} أيام`}`,
+          titleSv: `Kläckning nära — ${daysLeft === 0 ? "Idag!" : `${daysLeft} dagar`}`,
+          bodyAr: `دورة "${cycle.name ?? `#${cycle.id}`}" تبلغ ${progress}% من مرحلة الحضانة. تأكد من ضبط الفقاسة على وضع الفقس.`,
+          bodySv: `Cykel "${cycle.name ?? `#${cycle.id}`}" är ${progress}% klar med ruvningsperioden. Se till att ruvaren är inställd för kläckning.`,
+          actionAr: "متابعة التفقيس",
+          actionSv: "Följ upp kläckning",
+          href: "/hatching",
+          metric: { value: daysLeft, unit: " أيام" },
+        });
+      } else if (daysLeft > 3 && daysLeft <= 7) {
+        alerts.push({
+          id: `hatching-upcoming-${cycle.id}`,
+          level: "info",
+          module: "hatching",
+          titleAr: `متوقع تفقيس خلال ${daysLeft} أيام (${progress}%)`,
+          titleSv: `Förväntad kläckning om ${daysLeft} dagar (${progress}%)`,
+          bodyAr: `دورة "${cycle.name ?? `#${cycle.id}`}" في منتصف الطريق. تحقق من درجة الحرارة والرطوبة.`,
+          bodySv: `Cykel "${cycle.name ?? `#${cycle.id}`}" är halvvägs. Kontrollera temperatur och luftfuktighet.`,
+          href: "/hatching",
+          metric: { value: progress, unit: "%" },
+        });
+      }
+    }
+  }
+
+  // ── 9. EGG PRODUCTION DENSITY (efficiency per bird) ──────────────────────────
+  if (totalBirds > 0 && productionLogsArr.length >= 7) {
+    const last7ProdLogs = productionLogsArr.filter(l => l.date >= now7);
+    if (last7ProdLogs.length >= 3) {
+      const weeklyEggs = last7ProdLogs.reduce((s, l) => s + l.egg_count, 0);
+      const eggsPerBird = weeklyEggs / totalBirds;
+
+      if (eggsPerBird < 2) {
+        // Very low: less than 2 eggs/bird/week
+        alerts.push({
+          id: "prod-low-density",
+          level: "warning",
+          module: "production",
+          titleAr: `إنتاج منخفض: ${eggsPerBird.toFixed(1)} بيضة/طير/أسبوع`,
+          titleSv: `Låg produktion: ${eggsPerBird.toFixed(1)} ägg/fågel/vecka`,
+          bodyAr: `مع ${totalBirds} طير، المتوسط الأسبوعي هو ${Math.round(weeklyEggs)} بيضة. المعدل الجيد هو 4-5 بيضة/طير.`,
+          bodySv: `Med ${totalBirds} fåglar är det veckliga genomsnittet ${Math.round(weeklyEggs)} ägg. Bra nivå är 4-5 ägg/fågel.`,
+          href: "/flocks",
+          metric: { value: parseFloat(eggsPerBird.toFixed(1)), unit: " بيضة/طير" },
+        });
+      } else if (eggsPerBird >= 5) {
+        alerts.push({
+          id: "prod-excellent-density",
+          level: "good",
+          module: "production",
+          titleAr: `كثافة إنتاج ممتازة: ${eggsPerBird.toFixed(1)} بيضة/طير/أسبوع`,
+          titleSv: `Utmärkt produktionsdensitet: ${eggsPerBird.toFixed(1)} ägg/fågel/vecka`,
+          bodyAr: `مع ${totalBirds} طير تنتج ${Math.round(weeklyEggs)} بيضة أسبوعياً — أداء فوق المعدل.`,
+          bodySv: `Med ${totalBirds} fåglar producerar du ${Math.round(weeklyEggs)} ägg per vecka — över genomsnittet.`,
+          href: "/flocks",
+          metric: { value: parseFloat(eggsPerBird.toFixed(1)), unit: " بيضة/طير" },
+        });
+      }
+    }
+  }
+
+  // ── 10. CROSS-MODULE CORRELATIONS (deep intelligence) ─────────────────────────
 
   // Correlation A: Egg production drop + sick flocks → disease investigation needed
   const recentEggAvg7d = productionLogsArr.filter(l => l.date >= now7).reduce((s, l, _, a) => s + l.egg_count / a.length, 0);
@@ -437,7 +636,38 @@ async function runAnalysis(): Promise<IntelligenceReport> {
     }
   }
 
-  // ── 8. Sort: critical → warning → correlation → info → good ──────────────────
+  // Correlation E: Feed gap + sick logs → malnutrition risk
+  const lastFeedDate = feedRecordsArr[0]?.date;
+  if (lastFeedDate && lastFeedDate < now14 && recentSickLogs7d.length > 0) {
+    alerts.push({
+      id: "corr-feed-gap-sick",
+      level: "critical",
+      module: "correlation",
+      titleAr: "انقطاع العلف + مشاكل صحية — خطر سوء التغذية",
+      titleSv: "Foderunderskott + hälsoproblem — risk för undernäring",
+      bodyAr: "لم يُسجَّل علف مؤخراً مع وجود سجلات صحية سلبية — سوء التغذية يُضعف مناعة القطيع.",
+      bodySv: "Inget foder registrerat nyligen med negativa hälsologgar — undernäring försämrar flockens immunitet.",
+      actionAr: "راجع العلف والصحة",
+      actionSv: "Granska foder och hälsa",
+      href: "/feed",
+    });
+  }
+
+  // Correlation F: No income + expenses rising (vs last month) → financial spiral
+  if (lastMonthExpense > 0 && thisMonthExpense > lastMonthExpense * 1.3 && thisMonthIncome < thisMonthExpense * 0.5) {
+    alerts.push({
+      id: "corr-expense-spiral",
+      level: "critical",
+      module: "correlation",
+      titleAr: "مصاريف تتصاعد مع دخل منخفض — خطر مالي",
+      titleSv: "Utgifter ökar med låg inkomst — finansiell risk",
+      bodyAr: `المصاريف ارتفعت ${Math.round(((thisMonthExpense - lastMonthExpense) / lastMonthExpense) * 100)}% مقارنة الشهر الماضي بينما الدخل لم يواكب. بحاجة لخطة عاجلة.`,
+      bodySv: `Utgifterna ökade ${Math.round(((thisMonthExpense - lastMonthExpense) / lastMonthExpense) * 100)}% jämfört med förra månaden medan inkomsten inte hängt med. Akut plan krävs.`,
+      href: "/finance",
+    });
+  }
+
+  // ── 11. Sort: critical → warning → correlation → info → good ──────────────────
   const LEVEL_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2, good: 3 };
   alerts.sort((a, b) => {
     const la = LEVEL_ORDER[a.level] ?? 2;
@@ -490,69 +720,67 @@ router.get("/intelligence/alerts", async (req: Request, res: Response) => {
       return;
     }
 
-    // ── Collect raw counts for hashing + data quality ──
-    const rawCounts = await (async () => {
-      const [flocks, txCount, healthCount, prodCount, taskCount, hatchCount] = await Promise.all([
-        db.execute(sql`SELECT COUNT(*) as n FROM flocks`),
-        db.execute(sql`SELECT COUNT(*) as n FROM transactions WHERE date >= ${daysAgo(30)}`),
-        db.execute(sql`SELECT COUNT(*) as n FROM flock_health_logs WHERE date >= ${daysAgo(30)}`),
-        db.execute(sql`SELECT COUNT(*) as n FROM flock_production_logs WHERE date >= ${daysAgo(30)}`),
-        db.execute(sql`SELECT COUNT(*) as n FROM tasks`),
-        db.execute(sql`SELECT COUNT(*) as n FROM hatching_cycles`),
-      ]);
-      return {
-        flocks: Number((flocks.rows[0] as any)?.n ?? 0),
-        transactions: Number((txCount.rows[0] as any)?.n ?? 0),
-        healthLogs: Number((healthCount.rows[0] as any)?.n ?? 0),
-        productionLogs: Number((prodCount.rows[0] as any)?.n ?? 0),
-        tasks: Number((taskCount.rows[0] as any)?.n ?? 0),
-        hatchingCycles: Number((hatchCount.rows[0] as any)?.n ?? 0),
-      };
-    })();
-
-    const inputHash = hashInput(rawCounts);
+    // ── CRITICAL PATH: run the analysis first (must not fail) ──
     const report = await runAnalysis();
     cache = { ts: Date.now(), data: report };
 
-    // ── Log to prediction_logs (non-blocking, best-effort) ──
-    const dataQualityScore = computeDataQualityScore(report, rawCounts);
-    const anomalies = report.alerts
-      .filter(a => a.level === "critical")
-      .map(a => ({ id: a.id, module: a.module, title: a.titleAr }));
+    // ── NON-CRITICAL: AI logging + data quality (fully fault-tolerant) ──
+    // This runs in the background and NEVER blocks or fails the response.
+    setImmediate(async () => {
+      try {
+        const [flocks, txCount, healthCount, prodCount, taskCount, hatchCount] = await Promise.all([
+          db.execute(sql`SELECT COUNT(*) as n FROM flocks`),
+          db.execute(sql`SELECT COUNT(*) as n FROM transactions WHERE date >= ${daysAgo(30)}`),
+          db.execute(sql`SELECT COUNT(*) as n FROM flock_health_logs WHERE date >= ${daysAgo(30)}`),
+          db.execute(sql`SELECT COUNT(*) as n FROM flock_production_logs WHERE date >= ${daysAgo(30)}`),
+          db.execute(sql`SELECT COUNT(*) as n FROM tasks`),
+          db.execute(sql`SELECT COUNT(*) as n FROM hatching_cycles`),
+        ]);
 
-    // Calculate risk score from summary (0-100)
-    const riskScore = Math.min(100,
-      (report.summary.critical * 30) +
-      (report.summary.warning  * 15) +
-      (report.summary.info     * 5)
-    );
+        const rawCounts = {
+          flocks: Number((flocks.rows[0] as any)?.n ?? (flocks.rows[0] as any)?.count ?? 0),
+          transactions: Number((txCount.rows[0] as any)?.n ?? (txCount.rows[0] as any)?.count ?? 0),
+          healthLogs: Number((healthCount.rows[0] as any)?.n ?? (healthCount.rows[0] as any)?.count ?? 0),
+          productionLogs: Number((prodCount.rows[0] as any)?.n ?? (prodCount.rows[0] as any)?.count ?? 0),
+          tasks: Number((taskCount.rows[0] as any)?.n ?? (taskCount.rows[0] as any)?.count ?? 0),
+          hatchingCycles: Number((hatchCount.rows[0] as any)?.n ?? (hatchCount.rows[0] as any)?.count ?? 0),
+        };
 
-    // Determine predicted hatch rate from hatching alerts if available
-    const hatchAlert = report.alerts.find(a => a.module === "hatching" && a.metric?.unit === "%");
-    const predictedHatchRate = hatchAlert?.metric?.value ?? null;
+        const dataQualityScore = computeDataQualityScore(report, rawCounts);
+        const inputHash = hashInput(rawCounts);
+        const riskScore = Math.min(100,
+          (report.summary.critical * 30) +
+          (report.summary.warning  * 15) +
+          (report.summary.info     * 5)
+        );
+        const hatchAlert = report.alerts.find(a => a.module === "hatching" && a.metric?.unit === "%");
+        const anomalies = report.alerts
+          .filter(a => a.level === "critical")
+          .map(a => ({ id: a.id, module: a.module, title: a.titleAr }));
 
-    // Run auto-resolve and log in background (don't await in critical path)
-    Promise.all([
-      logPrediction({
-        engineVersion: "3.0",
-        analysisType: "intelligence-hub",
-        inputHash,
-        predictedHatchRate,
-        predictedRiskScore: riskScore,
-        confidenceScore: Math.min(100, 40 + rawCounts.hatchingCycles * 8),
-        featuresSnapshot: rawCounts as Record<string, unknown>,
-        modelMetrics: {
-          alertsGenerated: report.alerts.length,
-          criticalCount: report.summary.critical,
-          warningCount: report.summary.warning,
+        await logPrediction({
+          engineVersion: "3.0",
+          analysisType: "intelligence-hub",
+          inputHash,
+          predictedHatchRate: hatchAlert?.metric?.value ?? null,
+          predictedRiskScore: riskScore,
+          confidenceScore: Math.min(100, 40 + rawCounts.hatchingCycles * 8),
+          featuresSnapshot: rawCounts as Record<string, unknown>,
+          modelMetrics: {
+            alertsGenerated: report.alerts.length,
+            criticalCount: report.summary.critical,
+            warningCount: report.summary.warning,
+            dataQualityScore,
+          },
           dataQualityScore,
-        },
-        dataQualityScore,
-        anomaliesDetected: anomalies,
-      }).catch(() => {}),
-    ]).catch(() => {});
+          anomaliesDetected: anomalies,
+        });
+      } catch {
+        // Logging failure never surfaces to the user
+      }
+    });
 
-    res.json({ success: true, ...report, cached: false, dataQuality: dataQualityScore });
+    res.json({ success: true, ...report, cached: false });
   } catch (err: any) {
     res.status(500).json({
       success: false,
