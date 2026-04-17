@@ -8,6 +8,7 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import router from "./routes";
+import { responseShape } from "./middlewares/responseShape.js";
 import { logger } from "./lib/logger";
 import { runMigrations } from "./lib/migrate";
 import { seedUsers } from "./lib/seed";
@@ -126,6 +127,11 @@ ensureDbConnection()
   .then(() => runMigrations())
   .then(() => seedUsers())
   .catch(err => logger.error({ err }, "DB init failed"));
+
+// ── API Contract Enforcement ──────────────────────────────────────────────────
+// Wraps every /api JSON response into { success, data } | { success, error }
+// Routes that already set a `success` field are passed through unchanged.
+app.use("/api", responseShape);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);

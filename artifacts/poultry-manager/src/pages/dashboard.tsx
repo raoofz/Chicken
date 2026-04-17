@@ -22,6 +22,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, ReferenceLine, CartesianGrid,
 } from "recharts";
+import { apiFetch } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -593,8 +594,6 @@ function DecisionCard({ decision, lang, isRtl }: { decision: Decision; lang: str
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-const BASE = import.meta.env.BASE_URL;
-
 // ─── Live Hatching Monitor — Real-Time SSE ────────────────────────────────────
 
 const INCUBATION_PHASE_DAYS = 18;   // Day 1-18: Incubation
@@ -703,7 +702,6 @@ type ConnMode = "connecting" | "sse" | "poll";
 
 function LiveHatchingMonitor({ lang }: { lang: string }) {
   const ar   = lang === "ar";
-  const base = import.meta.env.BASE_URL ?? "/";
 
   const clockOffsetRef  = useRef(0);
   const sseErrorsRef    = useRef(0);
@@ -735,11 +733,8 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
 
     async function pollFallback() {
       try {
-        const res = await fetch(`${base}api/dashboard/active-cycles`, { credentials: "include" });
-        if (res.ok) {
-          const data: ActiveCycle[] = await res.json();
-          applyData(Date.now(), data);
-        }
+        const data = await apiFetch<ActiveCycle[]>("/api/dashboard/active-cycles");
+        applyData(Date.now(), data ?? []);
       } catch { /* silent */ }
     }
 
@@ -784,7 +779,7 @@ function LiveHatchingMonitor({ lang }: { lang: string }) {
       es?.close();
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [base]);
+  }, []);
 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (!loaded) {
@@ -1078,12 +1073,12 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchFinancial() {
       try {
-        const [txRes, sumRes] = await Promise.all([
-          fetch(`${BASE}api/transactions?limit=500`),
-          fetch(`${BASE}api/transactions/summary`),
+        const [txData, sumData] = await Promise.all([
+          apiFetch("/api/transactions?limit=500"),
+          apiFetch("/api/transactions/summary"),
         ]);
-        if (txRes.ok) setTransactions(await txRes.json());
-        if (sumRes.ok) setMonthlyRows(await sumRes.json());
+        setTransactions(txData ?? []);
+        setMonthlyRows(sumData ?? []);
       } catch (_) { /* silent */ }
       setDataLoading(false);
     }

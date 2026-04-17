@@ -17,6 +17,7 @@ import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiFetch } from "@/lib/api";
 
 // ── Real-Time Incubation Tracker ────────────────────────────────────────────
 // Updates every 60 seconds.
@@ -25,8 +26,6 @@ import { useLanguage } from "@/contexts/LanguageContext";
 //   All "now" calculations use:  Date.now() + clockOffset
 //   If the server-time fetch fails, offset stays 0 (device time fallback).
 // Formula: Progress = (serverNow - startDateTime) / 21d × 100
-const BASE_URL_TRACKER = import.meta.env.BASE_URL ?? "/";
-
 function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
   const TOTAL_DAYS = 21;
   const clockOffsetRef = useRef(0);    // server - device (ms), updated on mount
@@ -35,9 +34,8 @@ function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
   // Sync clock offset once on mount
   useEffect(() => {
     const before = Date.now();
-    fetch(`${BASE_URL_TRACKER}api/server-time`, { credentials: "include" })
-      .then(r => r.json())
-      .then((d: { timestamp: number }) => {
+    apiFetch<{ timestamp: number }>("/api/server-time")
+      .then((d) => {
         const after = Date.now();
         const rtt = after - before;
         // Estimate server time at response midpoint to minimise RTT error

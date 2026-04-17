@@ -41,14 +41,7 @@ import {
   ArrowRight, X, Eye, Star, Lightbulb, Trophy, TrendingUp as Trend,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ─── API ──────────────────────────────────────────────────────────────────────
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-async function apiFetch(path: string, opts?: RequestInit) {
-  const r = await fetch(`${BASE}${path}`, { credentials: "include", ...opts });
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "Error");
-  return r.status === 204 ? null : r.json();
-}
+import { apiFetch } from "@/lib/api";
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 const EXPENSE_CATS = [

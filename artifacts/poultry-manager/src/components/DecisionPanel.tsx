@@ -9,8 +9,7 @@ import {
   ShieldAlert, ShieldCheck, Shield, Zap, Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { apiFetch } from "@/lib/api";
 const REFRESH_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -165,9 +164,7 @@ export function DecisionPanel() {
     try {
       setLoading(true);
       setError(null);
-      const resp = await fetch(`${BASE}/api/ai/decision`, { credentials: "include" });
-      if (!resp.ok) throw new Error(await resp.text());
-      const data: DecisionReport = await resp.json();
+      const data = await apiFetch<DecisionReport>("/api/ai/decision");
       setReport(data);
       setLastFetch(new Date());
       setSecondsToNext(REFRESH_INTERVAL_MS / 1000);

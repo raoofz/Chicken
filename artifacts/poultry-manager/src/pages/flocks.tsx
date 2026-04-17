@@ -22,6 +22,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
 import FlockIntelligencePanel from "@/components/FlockIntelligencePanel";
+import { apiFetch } from "@/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -121,22 +122,6 @@ interface FeedSummaryResponse {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const BASE = import.meta.env.BASE_URL ?? "/";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}api/${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).error ?? `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
 
 function calcAgeDays(birthDate: string | null, ageDays: number) {
   if (!birthDate) return ageDays;
@@ -380,8 +365,8 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
       setLoadingLogs(true);
       try {
         const [prod, hlth] = await Promise.all([
-          apiFetch<ProductionLog[]>(`flocks/${flock.id}/production-logs`),
-          apiFetch<HealthLog[]>(`flocks/${flock.id}/health-logs`),
+          apiFetch<ProductionLog[]>(`/api/flocks/${flock.id}/production-logs`),
+          apiFetch<HealthLog[]>(`/api/flocks/${flock.id}/health-logs`),
         ]);
         setProdLogs(prod.slice(0, 30));
         setHealthLogs(hlth.slice(0, 20));
@@ -394,11 +379,11 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
   const handleAddProd = async (data: any) => {
     setSavingProd(true);
     try {
-      await apiFetch(`flocks/${flock.id}/production-logs`, { method: "POST", body: JSON.stringify(data) });
+      await apiFetch(`/api/flocks/${flock.id}/production-logs`, { method: "POST", body: JSON.stringify(data) });
       toast({ title: ar ? "تم تسجيل الإنتاج" : "Produktion registrerad" });
       setAddProdOpen(false);
       onRefresh();
-      const logs = await apiFetch<ProductionLog[]>(`flocks/${flock.id}/production-logs`);
+      const logs = await apiFetch<ProductionLog[]>(`/api/flocks/${flock.id}/production-logs`);
       setProdLogs(logs.slice(0, 30));
     } catch (err: any) {
       toast({ title: ar ? "خطأ في الحفظ" : "Fel vid sparning", description: err.message, variant: "destructive" });
@@ -409,11 +394,11 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
   const handleAddHealth = async (data: any) => {
     setSavingHealth(true);
     try {
-      await apiFetch(`flocks/${flock.id}/health-logs`, { method: "POST", body: JSON.stringify(data) });
+      await apiFetch(`/api/flocks/${flock.id}/health-logs`, { method: "POST", body: JSON.stringify(data) });
       toast({ title: ar ? "تم تسجيل الحالة الصحية" : "Hälsohändelse registrerad" });
       setAddHealthOpen(false);
       onRefresh();
-      const logs = await apiFetch<HealthLog[]>(`flocks/${flock.id}/health-logs`);
+      const logs = await apiFetch<HealthLog[]>(`/api/flocks/${flock.id}/health-logs`);
       setHealthLogs(logs.slice(0, 20));
     } catch (err: any) {
       toast({ title: ar ? "خطأ في الحفظ" : "Fel vid sparning", description: err.message, variant: "destructive" });
@@ -1084,9 +1069,9 @@ export default function Flocks() {
   const load = useCallback(async () => {
     try {
       const [f, a, feedSummary] = await Promise.all([
-        apiFetch<Flock[]>("flocks"),
-        apiFetch<Analytics>("flocks/analytics/summary"),
-        apiFetch<FeedSummaryResponse>("feed-intelligence/summary?days=30").catch(() => null),
+        apiFetch<Flock[]>("/api/flocks"),
+        apiFetch<Analytics>("/api/flocks/analytics/summary"),
+        apiFetch<FeedSummaryResponse>("/api/feed-intelligence/summary?days=30").catch(() => null),
       ]);
       setFlocks(f);
       setAnalytics(a);
@@ -1132,7 +1117,7 @@ export default function Flocks() {
   const handleCreate = async (data: any) => {
     setSaving(true);
     try {
-      await apiFetch("flocks", { method: "POST", body: JSON.stringify(data) });
+      await apiFetch("/api/flocks", { method: "POST", body: JSON.stringify(data) });
       toast({ title: ar ? "تمت إضافة المجموعة" : "Flock tillagd" });
       setAddOpen(false);
       await load();
@@ -1146,7 +1131,7 @@ export default function Flocks() {
     if (!editFlock) return;
     setSaving(true);
     try {
-      await apiFetch(`flocks/${editFlock.id}`, { method: "PUT", body: JSON.stringify(data) });
+      await apiFetch(`/api/flocks/${editFlock.id}`, { method: "PUT", body: JSON.stringify(data) });
       toast({ title: ar ? "تم التحديث" : "Uppdaterad" });
       setEditFlock(null);
       await load();
@@ -1159,7 +1144,7 @@ export default function Flocks() {
   const handleDelete = async () => {
     if (deleteId == null) return;
     try {
-      await apiFetch(`flocks/${deleteId}`, { method: "DELETE" });
+      await apiFetch(`/api/flocks/${deleteId}`, { method: "DELETE" });
       toast({ title: ar ? "تم الحذف" : "Borttagen" });
       setDeleteId(null);
       await load();
@@ -1170,7 +1155,7 @@ export default function Flocks() {
 
   const handleAddProd = async (flock: Flock, data: any) => {
     try {
-      await apiFetch(`flocks/${flock.id}/production-logs`, { method: "POST", body: JSON.stringify(data) });
+      await apiFetch(`/api/flocks/${flock.id}/production-logs`, { method: "POST", body: JSON.stringify(data) });
       toast({ title: ar ? "تم تسجيل الإنتاج" : "Produktion registrerad" });
       setProdFlock(null);
       await load();
@@ -1181,7 +1166,7 @@ export default function Flocks() {
 
   const handleAddHealth = async (flock: Flock, data: any) => {
     try {
-      await apiFetch(`flocks/${flock.id}/health-logs`, { method: "POST", body: JSON.stringify(data) });
+      await apiFetch(`/api/flocks/${flock.id}/health-logs`, { method: "POST", body: JSON.stringify(data) });
       toast({ title: ar ? "تم تسجيل الحالة" : "Hälsostatus uppdaterad" });
       setHealthFlock(null);
       await load();

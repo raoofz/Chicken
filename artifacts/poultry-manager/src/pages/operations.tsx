@@ -42,6 +42,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiFetch, apiPost, apiDelete } from "@/lib/api";
 
 // ── Notes API helpers ────────────────────────────────────────────────────────
 const NOTE_CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -57,8 +58,6 @@ const NOTE_CATEGORY_COLORS: Record<string, { bg: string; text: string; border: s
 const NOTE_CAT_KEYS = ["general","health","production","feeding","maintenance","observation","incubator","flock"] as const;
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const BASE_URL = import.meta.env.BASE_URL ?? "/";
-
 const TASK_CATEGORIES = ["feeding", "health", "hatching", "cleaning", "observation", "other"] as const;
 const ACTIVITY_CATEGORIES = TASK_CATEGORIES;
 
@@ -123,20 +122,15 @@ function CreateActivityForm({
     if (!form.title.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}api/activity-logs`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          title:       form.title.trim(),
-          description: form.description.trim() || null,
-          category:    form.category,
-          date:        form.date,
-          taskId:      form.taskId ? Number(form.taskId) : null,
-        }),
-        credentials: "include",
+      await apiPost("/api/activity-logs", {
+        title:       form.title.trim(),
+        description: form.description.trim() || null,
+        category:    form.category,
+        date:        form.date,
+        taskId:      form.taskId ? Number(form.taskId) : null,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      if (false) {
+        const err = {} as any;
         throw new Error(err.error ?? ar ? "خطأ في الحفظ" : "Fel vid sparning");
       }
       toast({ title: ar ? "✅ تم تسجيل النشاط" : "✅ Aktivitet registrerad" });
@@ -370,24 +364,12 @@ export default function OperationsPage() {
 
   const { data: notes = [], isLoading: notesLoading } = useQuery({
     queryKey: ["notes"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE_URL}api/notes`, { credentials: "include" });
-      if (!r.ok) throw new Error("notes fetch failed");
-      return r.json();
-    },
+    queryFn: () => apiFetch("/api/notes"),
   });
 
   const addNoteMutation = useMutation({
-    mutationFn: async (data: { content: string; date: string; category: string }) => {
-      const r = await fetch(`${BASE_URL}api/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(data),
-      });
-      if (!r.ok) throw new Error("create note failed");
-      return r.json();
-    },
+    mutationFn: (data: { content: string; date: string; category: string }) =>
+      apiPost("/api/notes", data),
     onSuccess: async () => {
       qc.invalidateQueries({ queryKey: ["notes"] });
       toast({ title: ar ? "تمت إضافة الملاحظة" : "Anteckning sparad" });
@@ -399,19 +381,13 @@ export default function OperationsPage() {
         setSmartLoading(true);
         setSmartResult(null);
         try {
-          const r = await fetch(`${BASE_URL}api/ai/smart-analyze`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ text: pending.content, date: pending.date, lang }),
-          });
-          if (r.ok) {
-            const data = await r.json();
-            if (data.totalSaved > 0) {
-              setSmartResult(data);
-              qc.invalidateQueries({ queryKey: ["transactions"] });
-              qc.invalidateQueries({ queryKey: ["transactions-summary"] });
-            }
+          const data = await apiPost<{ totalSaved?: number }>("/api/ai/smart-analyze",
+            { text: pending.content, date: pending.date, lang }
+          );
+          if ((data?.totalSaved ?? 0) > 0) {
+            setSmartResult(data);
+            qc.invalidateQueries({ queryKey: ["transactions"] });
+            qc.invalidateQueries({ queryKey: ["transactions-summary"] });
           }
         } catch { /* silent */ }
         finally { setSmartLoading(false); }
@@ -421,10 +397,7 @@ export default function OperationsPage() {
   });
 
   const delNoteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const r = await fetch(`${BASE_URL}api/notes/${id}`, { method: "DELETE", credentials: "include" });
-      if (!r.ok && r.status !== 204) throw new Error("delete note failed");
-    },
+    mutationFn: (id: number) => apiDelete(`/api/notes/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes"] });
       toast({ title: ar ? "تم حذف الملاحظة" : "Anteckning raderad" });
@@ -467,9 +440,7 @@ export default function OperationsPage() {
   async function runIntegrityCheck() {
     setIntegrityLoading(true);
     try {
-      const r = await fetch(`${BASE_URL}api/validate/integrity`, { credentials: "include" });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "فشل الفحص");
+      const data = await apiFetch("/api/validate/integrity");
       setIntegrityResult(data);
     } catch (err: any) {
       toast({ title: err?.message ?? (ar ? "فشل الفحص" : "Kontroll misslyckades"), variant: "destructive" });
@@ -482,14 +453,7 @@ export default function OperationsPage() {
     setSeedLoading(true);
     setSeedResult(null);
     try {
-      const r = await fetch(`${BASE_URL}api/dev/seed-transactions`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count: seedCount }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error ?? "فشل الاختبار");
+      const data = await apiPost<SeedResult>("/api/dev/seed-transactions", { count: seedCount });
       setSeedResult(data);
       refresh();
     } catch (err: any) {
@@ -501,13 +465,8 @@ export default function OperationsPage() {
 
   async function purgeSeedData() {
     try {
-      const r = await fetch(`${BASE_URL}api/dev/seed-transactions`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
-      toast({ title: ar ? `تم حذف ${data.deleted} سجل اختباري` : `${data.deleted} testposter borttagna` });
+      const data = await apiDelete<{ deleted: number }>("/api/dev/seed-transactions");
+      toast({ title: ar ? `تم حذف ${data?.deleted} سجل اختباري` : `${data?.deleted} testposter borttagna` });
       setSeedResult(null);
       refresh();
     } catch (err: any) {
@@ -559,11 +518,7 @@ export default function OperationsPage() {
 
   async function deleteLog(id: number) {
     try {
-      const res = await fetch(`${BASE_URL}api/activity-logs/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok && res.status !== 204) throw new Error("delete failed");
+      await apiDelete(`/api/activity-logs/${id}`);
       refresh();
     } catch (err: any) {
       toast({ title: err?.message ?? (ar ? "فشل الحذف" : "Misslyckades"), variant: "destructive" });

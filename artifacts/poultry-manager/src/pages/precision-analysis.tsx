@@ -4,6 +4,7 @@
  */
 import { useState, useCallback, useRef } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiFetch, apiPost } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import {
   Brain, RefreshCw, Loader2, AlertTriangle, AlertCircle,
@@ -82,10 +83,6 @@ interface IntelligenceResponse {
   context: FarmContext;
   report: IntelligenceReport;
 }
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 // ─── Sub-Components ───────────────────────────────────────────────────────────
 
@@ -236,15 +233,10 @@ export default function PrecisionAnalysis() {
     setShowFeedbackForm(null);
 
     try {
-      const res = await fetch(`${BASE}/api/ai/intelligence?lang=${lang}&window=7`, {
-        credentials: "include",
-        signal: abortRef.current.signal,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "unknown" }));
-        throw new Error(err.error ?? `HTTP ${res.status}`);
-      }
-      const json = await res.json();
+      const json = await apiFetch<{ report: IntelligenceReport; context: FarmContext }>(
+        `/api/ai/intelligence?lang=${lang}&window=7`,
+        { signal: abortRef.current.signal }
+      );
       setData(json);
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -258,10 +250,8 @@ export default function PrecisionAnalysis() {
   const sendFeedback = useCallback(async (accepted: boolean) => {
     setFeedbackLoading(true);
     try {
-      await fetch(`${BASE}/api/ai/intelligence/feedback`, {
-        method: "POST", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accepted, comment: feedbackComment, reportDate: data?.report.generatedAt }),
+      await apiPost("/api/ai/intelligence/feedback", {
+        accepted, comment: feedbackComment, reportDate: data?.report.generatedAt,
       });
       setFeedbackSent(accepted ? "accepted" : "rejected");
       setShowFeedbackForm(null);

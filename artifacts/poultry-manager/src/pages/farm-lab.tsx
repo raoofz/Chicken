@@ -20,13 +20,7 @@ import {
 } from "lucide-react";
 import { ExplainTip } from "@/components/ExplainTip";
 import { cn } from "@/lib/utils";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-async function apiFetch(path: string) {
-  const r = await fetch(`${BASE}${path}`, { credentials: "include" });
-  if (!r.ok) throw new Error("Error");
-  return r.json();
-}
+import { apiFetch } from "@/lib/api";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type TabKey = "scan" | "plans" | "advisor";

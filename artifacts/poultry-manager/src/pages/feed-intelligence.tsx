@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,14 +96,6 @@ interface BreedBenchmark {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-async function apiFetch(path: string) {
-  const res = await fetch(`${BASE}/api${path}`, { credentials: "include" });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
 
 function severityColor(s: string) {
   return {
@@ -195,8 +188,8 @@ export default function FeedIntelligence() {
     setLoading(true); setError(null);
     try {
       const [s, b] = await Promise.all([
-        apiFetch(`/feed-intelligence/summary?days=${period}`),
-        apiFetch("/feed-intelligence/benchmarks"),
+        apiFetch(`/api/feed-intelligence/summary?days=${period}`),
+        apiFetch("/api/feed-intelligence/benchmarks"),
       ]);
       setSummary(s);
       setBenchmarks(b);

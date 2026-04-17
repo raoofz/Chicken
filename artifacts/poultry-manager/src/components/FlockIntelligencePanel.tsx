@@ -11,6 +11,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,21 +89,6 @@ interface Props {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const BASE = import.meta.env.BASE_URL ?? "/";
-
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}api/${path}`, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as any).error ?? `HTTP ${res.status}`);
-  }
-  return res.json();
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -210,10 +196,11 @@ export default function FlockIntelligencePanel({ flockId, flockName, ar }: Props
     setResult(null);
     setParseResult(null);
     try {
-      const resp = await apiFetch<{ success: boolean; data: IntelligenceResult }>(
-        `flocks/${flockId}/intelligence/analyze`, { method: "POST" }
+      const resp = await apiFetch<IntelligenceResult>(
+        `/api/flocks/${flockId}/intelligence/analyze`,
+        { method: "POST", headers: { "Content-Type": "application/json" } }
       );
-      setResult(resp.data);
+      setResult(resp);
     } catch (err: any) {
       toast({ title: ar ? "خطأ" : "Fel", description: err.message, variant: "destructive" });
     } finally {
@@ -227,11 +214,11 @@ export default function FlockIntelligencePanel({ flockId, flockName, ar }: Props
     setParsing(true);
     setParseResult(null);
     try {
-      const resp = await apiFetch<{ success: boolean; data: ParseResult }>(
-        `flocks/${flockId}/intelligence/parse-note`,
-        { method: "POST", body: JSON.stringify({ text: noteText }) }
+      const resp = await apiFetch<ParseResult>(
+        `/api/flocks/${flockId}/intelligence/parse-note`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: noteText }) }
       );
-      setParseResult(resp.data);
+      setParseResult(resp);
     } catch (err: any) {
       toast({ title: ar ? "خطأ" : "Fel", description: err.message, variant: "destructive" });
     } finally {
@@ -243,10 +230,10 @@ export default function FlockIntelligencePanel({ flockId, flockName, ar }: Props
   const loadTimeline = useCallback(async () => {
     setLoadingTL(true);
     try {
-      const resp = await apiFetch<{ success: boolean; data: TimelineEvent[] }>(
-        `flocks/${flockId}/intelligence/timeline?limit=20`
+      const resp = await apiFetch<TimelineEvent[]>(
+        `/api/flocks/${flockId}/intelligence/timeline?limit=20`
       );
-      setTimeline(resp.data);
+      setTimeline(resp);
       setShowTimeline(true);
     } catch (err: any) {
       toast({ title: ar ? "خطأ" : "Fel", description: err.message, variant: "destructive" });

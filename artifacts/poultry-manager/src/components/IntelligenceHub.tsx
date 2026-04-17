@@ -8,6 +8,7 @@ import { Link, useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 import {
   AlertTriangle, CheckCircle2, Info, ChevronRight, RefreshCw, Brain,
   XCircle, ChevronDown, ChevronUp, AlertCircle, ExternalLink,
@@ -140,9 +141,7 @@ function useIntelligenceAlerts() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/intelligence/alerts");
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const json = await r.json();
+      const json = await apiFetch("/api/intelligence/alerts");
       setData(json);
     } catch (e: any) {
       setError(e.message);

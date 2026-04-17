@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, User, Shield, LogOut, Pencil, Check, X } from "lucide-react";
+import { apiPost, apiPut } from "@/lib/api";
 
 export default function Settings() {
   const { user, logout, refreshUser } = useAuth();
@@ -35,17 +36,7 @@ export default function Settings() {
     }
     setPwLoading(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: data.error || t("settings.passwordError"), variant: "destructive" });
-        return;
-      }
+      await apiPost("/api/auth/change-password", { currentPassword, newPassword });
       toast({ title: t("settings.passwordChanged") });
       setCurrentPassword("");
       setNewPassword("");
@@ -61,20 +52,7 @@ export default function Settings() {
     if (!editName.trim() && !editUsername.trim()) return;
     setProfileLoading(true);
     try {
-      const res = await fetch("/api/auth/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          name: editName.trim(),
-          username: editUsername.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast({ title: data.error || "خطأ في التحديث", variant: "destructive" });
-        return;
-      }
+      await apiPut("/api/auth/profile", { name: editName.trim(), username: editUsername.trim() });
       await refreshUser();
       toast({ title: "تم تحديث المعلومات بنجاح" });
       setEditingProfile(false);

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { apiPost } from "@/lib/api";
 
 // ─── Types matching the server contract ────────────────────────────────────
 type ActionType = "transaction" | "hatching_cycle" | "hatching_result" | "flock" | "task";
@@ -231,15 +232,7 @@ export default function SmartInputPage() {
     setText("");
     setParsing(true);
     try {
-      const r = await fetch("/api/ai/parse", {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ text: t, lang }),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err?.error ?? `HTTP ${r.status}`);
-      }
-      const parse = (await r.json()) as ParseResponse;
+      const parse = await apiPost<ParseResponse>("/api/ai/parse", { text: t, lang });
       const parsedMsg: ParsedMessage = {
         kind: "parsed",
         id: newId(),
@@ -284,13 +277,9 @@ export default function SmartInputPage() {
 
     updateMsg(id, m => ({ ...m, status: "saving" }));
     try {
-      const r = await fetch("/api/ai/commit", {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ actions: actionsToSend, lang, originalText: target.sourceText }),
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body?.error ?? `HTTP ${r.status}`);
-      const result = body as CommitResponse;
+      const result = await apiPost<CommitResponse>("/api/ai/commit",
+        { actions: actionsToSend, lang, originalText: target.sourceText }
+      );
       updateMsg(id, m => ({ ...m, status: "saved", result }));
       // ░ INVALIDATE EVERYTHING — every dashboard, KPI, decision engine, brain page ░
       await qc.invalidateQueries();

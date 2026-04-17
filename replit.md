@@ -49,6 +49,20 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - **Brain Orchestrator Feed Integration:** The Brain Orchestrator (`/brain/analyze`) now runs `runFeedCostEngine` in parallel with all other engines, contributing feed-specific insights (efficiency score, cost ratio, per-flock warnings, missing-records alert) to the unified decision output.
 - **Operations Center Consolidated (`/operations`):** The `/notes` page is no longer a separate nav item. Daily Notes are now embedded as a 5th tab ("الملاحظات") inside the Operations Center alongside Overview, Tasks, Activity Log, and System tabs. The notes tab supports adding notes with AI smart-analyze extraction, color-coded categories, and delete. The KPI strip now shows 4 cards (tasks, overdue, today's activities, total notes). The "ملاحظة جديدة" button is always visible in the header.
 
+## Stability-First API Architecture
+
+**API Contract (fixed, never changes):** All `/api` responses follow `{ success: boolean, data?: T, error?: string }`.
+- **Backend middleware:** `artifacts/api-server/src/middlewares/responseShape.ts` — auto-wraps all `/api` JSON responses. Already-shaped bodies pass through unchanged.
+- **Shared types:** `artifacts/api-server/src/types/api.ts` — single source of truth for `ApiResponse<T>`.
+- **Frontend central client:** `artifacts/poultry-manager/src/lib/api.ts` — exports `apiFetch`, `apiPost`, `apiPut`, `apiDelete`. Auto-unwraps `.data`, throws on `success: false`, redirects to `/login` on 401. ALL pages use this client — no raw `fetch()` calls to `/api` routes anywhere in the frontend.
+
+**Architecture rules (enforced):**
+1. Single source of truth for types (never duplicate type definitions)
+2. Fixed API contract — no schema drift
+3. Atomic renames only — no multi-file refactors during debugging
+4. One issue at a time
+5. No refactoring during debugging sessions
+
 ## Chickens AI Intelligence Engine (Module 15-21)
 
 An isolated, additive intelligence layer exclusively for the Chickens/Flocks module. Does NOT modify any other module.
