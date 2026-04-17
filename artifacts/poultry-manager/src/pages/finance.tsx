@@ -252,6 +252,7 @@ interface AdvMetrics {
   heatmap: { cat: string; months: Record<string, number> }[];
   movingAvg: { month: string; monthAr: string; ma: number }[];
   bestMonth: MonthRow | null; worstMonth: MonthRow | null;
+  allMonthsInLoss: boolean;
   profitableStreak: number; lossStreak: number;
 }
 
@@ -299,9 +300,11 @@ function computeAdvanced(allTxs: Tx[], monthly: MonthRow[]): AdvMetrics {
 
   const movingAvg = monthly.slice(2).map((m, i) => ({ month: m.month, monthAr: m.monthAr, ma: (monthly[i].profit + monthly[i + 1].profit + m.profit) / 3 }));
 
-  // Best/Worst month
-  const bestMonth  = monthly.length > 0 ? monthly.reduce((a, b) => b.profit > a.profit ? b : a) : null;
+  // Best/Worst month — bestMonth ONLY if profit > 0 (never label a loss as "best")
+  const profitableMonths = monthly.filter(m => m.profit > 0);
+  const bestMonth  = profitableMonths.length > 0 ? profitableMonths.reduce((a, b) => b.profit > a.profit ? b : a) : null;
   const worstMonth = monthly.length > 0 ? monthly.reduce((a, b) => b.profit < a.profit ? b : a) : null;
+  const allMonthsInLoss = monthly.length > 0 && profitableMonths.length === 0;
 
   // Profitable streak (consecutive positive months from last)
   let profitableStreak = 0, lossStreak = 0;
@@ -310,7 +313,7 @@ function computeAdvanced(allTxs: Tx[], monthly: MonthRow[]): AdvMetrics {
     else { if (profitableStreak === 0) lossStreak++; else break; }
   }
 
-  return { emaIncome: emaInc, emaExpense: emaExp, emaProfit, monthZScores, cashRunway, profitVelocity, incomeCV, pred, heatmap, movingAvg, bestMonth, worstMonth, profitableStreak, lossStreak };
+  return { emaIncome: emaInc, emaExpense: emaExp, emaProfit, monthZScores, cashRunway, profitVelocity, incomeCV, pred, heatmap, movingAvg, bestMonth, worstMonth, allMonthsInLoss, profitableStreak, lossStreak };
 }
 
 // ─── Alert Engine ────────────────────────────────────────────────────────────
@@ -577,34 +580,205 @@ function RecommendationsPanel({ recs, ar }: { recs: Rec[]; ar: boolean }) {
   );
 }
 
-// ─── Best/Worst Month Card ────────────────────────────────────────────────────
-function BestWorstCard({ adv, ar, lang }: { adv: AdvMetrics; ar: boolean; lang: string }) {
-  if (!adv.bestMonth && !adv.worstMonth) return null;
+// ─── Month Detail Modal ───────────────────────────────────────────────────────
+function buildMonthExplanation(month: MonthRow, allMonths: MonthRow[], type: "best" | "worst", ar: boolean): string[] {
+  const avg = allMonths.length > 1
+    ? allMonths.filter(m => m.month !== month.month)
+    : allMonths;
+  const avgIncome  = avg.reduce((s, m) => s + m.income, 0) / Math.max(1, avg.length);
+  const avgExpense = avg.reduce((s, m) => s + m.expense, 0) / Math.max(1, avg.length);
+  const reasons: string[] = [];
+
+  if (type === "best") {
+    if (month.income > avgIncome * 1.1)
+      reasons.push(ar ? `📈 الإيرادات أعلى من المتوسط بنسبة ${((month.income / avgIncome - 1) * 100).toFixed(0)}%` : `📈 Intäkterna ${((month.income / avgIncome - 1) * 100).toFixed(0)}% över genomsnittet`);
+    if (month.expense < avgExpense * 0.92)
+      reasons.push(ar ? `💰 المصاريف أقل من المتوسط بنسبة ${((1 - month.expense / avgExpense) * 100).toFixed(0)}%` : `💰 Kostnaderna ${((1 - month.expense / avgExpense) * 100).toFixed(0)}% under genomsnittet`);
+    if (month.profit > 0 && month.expense > 0)
+      reasons.push(ar ? `✅ هامش ربح: ${((month.profit / month.income) * 100).toFixed(1)}%` : `✅ Vinstmarginal: ${((month.profit / month.income) * 100).toFixed(1)}%`);
+    if (reasons.length === 0)
+      reasons.push(ar ? "📊 أفضل توازن بين الإيرادات والمصاريف مقارنةً بالأشهر الأخرى" : "📊 Bästa balansen mellan intäkter och kostnader");
+  } else {
+    if (month.income < avgIncome * 0.9)
+      reasons.push(ar ? `📉 الإيرادات أقل من المتوسط بنسبة ${((1 - month.income / avgIncome) * 100).toFixed(0)}%` : `📉 Intäkterna ${((1 - month.income / avgIncome) * 100).toFixed(0)}% under genomsnittet`);
+    if (month.expense > avgExpense * 1.1)
+      reasons.push(ar ? `🔺 المصاريف أعلى من المتوسط بنسبة ${((month.expense / avgExpense - 1) * 100).toFixed(0)}%` : `🔺 Kostnaderna ${((month.expense / avgExpense - 1) * 100).toFixed(0)}% över genomsnittet`);
+    if (month.profit < 0)
+      reasons.push(ar ? `⛔ خسارة صافية: ${fmtAmount(Math.abs(month.profit), ar ? "ar" : "sv")} دينار` : `⛔ Nettoförlust: ${fmtAmount(Math.abs(month.profit), "sv")}`);
+    if (reasons.length === 0)
+      reasons.push(ar ? "📊 أدنى توازن بين الإيرادات والمصاريف مقارنةً بالأشهر الأخرى" : "📊 Sämsta balansen mellan intäkter och kostnader");
+    reasons.push(ar ? "💡 راجع أكبر بند مصاريف وابحث عن فرص تخفيض التكاليف" : "💡 Granska den största kostnadsposten och leta efter besparingsmöjligheter");
+  }
+  return reasons;
+}
+
+function MonthDetailModal({ month, type, allMonths, ar, lang, onClose }: {
+  month: MonthRow; type: "best" | "worst"; allMonths: MonthRow[]; ar: boolean; lang: string; onClose: () => void;
+}) {
+  const isBest = type === "best";
+  const reasons = buildMonthExplanation(month, allMonths, type, ar);
+  const isLoss = month.profit < 0;
+
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {adv.bestMonth && (
-        <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white shadow-md">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Trophy className="w-3.5 h-3.5 text-yellow-300" />
-            <p className="text-[10px] font-bold text-emerald-100">{ar ? "أفضل شهر" : "Bästa månaden"}</p>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            {isBest ? <Trophy className="w-4 h-4 text-yellow-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
+            {isBest
+              ? (ar ? `أفضل شهر — ${month.monthAr}` : `Bästa månaden — ${month.month}`)
+              : (ar ? `أسوأ شهر — ${month.monthAr}` : `Sämsta månaden — ${month.month}`)}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            {isBest
+              ? (ar ? "تفاصيل الأداء المالي لأفضل شهر" : "Finansiell prestation för bästa månaden")
+              : (ar ? "تحليل الخسائر والأسباب الرئيسية" : "Förlustanalys och huvudorsaker")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {/* Financials */}
+          <div className="rounded-xl border border-border/60 overflow-hidden">
+            <div className="bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              {ar ? "الأرقام المالية" : "Finansiella siffror"}
+            </div>
+            <div className="divide-y divide-border/40">
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-xs text-muted-foreground">{ar ? "إجمالي الإيرادات" : "Totala intäkter"}</span>
+                <span className="text-sm font-bold text-emerald-600">+{fmtAmount(month.income, lang as any)}</span>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-xs text-muted-foreground">{ar ? "إجمالي المصاريف" : "Totala kostnader"}</span>
+                <span className="text-sm font-bold text-red-500">-{fmtAmount(month.expense, lang as any)}</span>
+              </div>
+              <div className={cn("flex items-center justify-between px-3 py-2.5", isLoss ? "bg-red-50 dark:bg-red-950/20" : "bg-emerald-50 dark:bg-emerald-950/20")}>
+                <span className="text-xs font-semibold">{ar ? "صافي الربح / الخسارة" : "Nettoresultat"}</span>
+                <span className={cn("text-sm font-black", isLoss ? "text-red-600" : "text-emerald-600")}>
+                  {isLoss ? "-" : "+"}{fmtAmount(Math.abs(month.profit), lang as any)}
+                </span>
+              </div>
+              {month.income > 0 && (
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <span className="text-xs text-muted-foreground">{ar ? "هامش الربح" : "Vinstmarginal"}</span>
+                  <span className={cn("text-sm font-bold", isLoss ? "text-red-500" : "text-blue-600")}>
+                    {((month.profit / month.income) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          <p className="text-base font-black">{ar ? adv.bestMonth.monthAr : adv.bestMonth.month}</p>
-          <p className="text-sm font-black text-yellow-300">+{fmtAmount(adv.bestMonth.profit, lang as any)}</p>
-          {adv.profitableStreak > 1 && <p className="text-[9px] mt-1 text-emerald-100">🔥 {ar ? `${adv.profitableStreak} شهور مربحة متتالية` : `${adv.profitableStreak} lönsamma månader i rad`}</p>}
+
+          {/* Why section */}
+          <div className="rounded-xl border border-border/60 overflow-hidden">
+            <div className="bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground">
+              {isBest
+                ? (ar ? "لماذا هو الأفضل؟" : "Varför bäst?")
+                : (ar ? "الأسباب الرئيسية" : "Huvudorsaker")}
+            </div>
+            <ul className="divide-y divide-border/40">
+              {reasons.map((r, i) => (
+                <li key={i} className="px-3 py-2 text-xs leading-relaxed">{r}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Suggestion for worst */}
+          {!isBest && (
+            <div className="rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200/60 p-3">
+              <div className="flex items-start gap-2">
+                <Lightbulb className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                  {ar
+                    ? "قارن هذا الشهر مع أفضل شهر لديك وحدّد الفارق في المصاريف والإيرادات لتجنّب تكرار هذه النتائج."
+                    : "Jämför denna månad med din bästa månad och identifiera skillnader i kostnader och intäkter."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Best/Worst Month Card ────────────────────────────────────────────────────
+function BestWorstCard({ adv, monthly, ar, lang }: { adv: AdvMetrics; monthly: MonthRow[]; ar: boolean; lang: string }) {
+  const [detailMonth, setDetailMonth] = useState<{ month: MonthRow; type: "best" | "worst" } | null>(null);
+
+  if (monthly.length === 0) return null;
+
+  return (
+    <>
+      {detailMonth && (
+        <MonthDetailModal
+          month={detailMonth.month}
+          type={detailMonth.type}
+          allMonths={monthly}
+          ar={ar}
+          lang={lang}
+          onClose={() => setDetailMonth(null)}
+        />
+      )}
+
+      {/* All months in loss — show warning */}
+      {adv.allMonthsInLoss && (
+        <div className="rounded-2xl bg-gradient-to-br from-orange-500/90 to-red-600 p-4 text-white shadow-md">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="w-4 h-4 text-yellow-300" />
+            <p className="text-xs font-bold text-orange-100">{ar ? "لا يوجد شهر مربح بعد" : "Ingen lönsam månad ännu"}</p>
+          </div>
+          <p className="text-sm font-semibold">
+            {ar ? "⚠️ جميع الأشهر في خسارة — راجع هيكل التكاليف فوراً" : "⚠️ Alla månader på förlust — granska kostnadsstrukturen"}
+          </p>
+          <p className="text-[10px] mt-1 text-orange-200">
+            {ar ? `إجمالي الخسارة: ${fmtAmount(Math.abs(monthly.reduce((s, m) => s + m.profit, 0)), lang as any)}` : `Total förlust: ${fmtAmount(Math.abs(monthly.reduce((s, m) => s + m.profit, 0)), "sv")}`}
+          </p>
         </div>
       )}
-      {adv.worstMonth && (
-        <div className="rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 p-4 text-white shadow-md">
-          <div className="flex items-center gap-1.5 mb-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-            <p className="text-[10px] font-bold text-slate-300">{ar ? "أسوأ شهر" : "Sämsta månaden"}</p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {adv.bestMonth ? (
+          <button
+            className="rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 p-4 text-white shadow-md text-start cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
+            onClick={() => setDetailMonth({ month: adv.bestMonth!, type: "best" })}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <Trophy className="w-3.5 h-3.5 text-yellow-300" />
+              <p className="text-[10px] font-bold text-emerald-100">{ar ? "أفضل شهر" : "Bästa månaden"}</p>
+              <ArrowRight className="w-3 h-3 text-emerald-200 mr-auto" />
+            </div>
+            <p className="text-base font-black">{ar ? adv.bestMonth.monthAr : adv.bestMonth.month}</p>
+            <p className="text-sm font-black text-yellow-300">+{fmtAmount(adv.bestMonth.profit, lang as any)}</p>
+            {adv.profitableStreak > 1 && <p className="text-[9px] mt-1 text-emerald-100">🔥 {ar ? `${adv.profitableStreak} شهور مربحة` : `${adv.profitableStreak} lönsamma månader`}</p>}
+            <p className="text-[9px] mt-1.5 text-emerald-200 underline underline-offset-2">{ar ? "اضغط للتفاصيل" : "Klicka för detaljer"}</p>
+          </button>
+        ) : (
+          <div className="rounded-2xl bg-muted/60 border border-border/60 p-4 flex flex-col items-start justify-center">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Trophy className="w-3.5 h-3.5 text-muted-foreground/50" />
+              <p className="text-[10px] font-bold text-muted-foreground">{ar ? "أفضل شهر" : "Bästa månaden"}</p>
+            </div>
+            <p className="text-xs font-semibold text-muted-foreground">{ar ? "لا يوجد بعد" : "Ännu inte"}</p>
           </div>
-          <p className="text-base font-black">{ar ? adv.worstMonth.monthAr : adv.worstMonth.month}</p>
-          <p className="text-sm font-black text-red-400">{adv.worstMonth.profit >= 0 ? "+" : ""}{fmtAmount(adv.worstMonth.profit, lang as any)}</p>
-          <p className="text-[9px] mt-1 text-slate-400">{ar ? "اضغط على التحليل لمعرفة السبب" : "Se analys för orsak"}</p>
-        </div>
-      )}
-    </div>
+        )}
+
+        {adv.worstMonth && (
+          <button
+            className="rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 p-4 text-white shadow-md text-start cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
+            onClick={() => setDetailMonth({ month: adv.worstMonth!, type: "worst" })}
+          >
+            <div className="flex items-center gap-1.5 mb-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
+              <p className="text-[10px] font-bold text-slate-300">{ar ? "أسوأ شهر" : "Sämsta månaden"}</p>
+              <ArrowRight className="w-3 h-3 text-slate-400 mr-auto" />
+            </div>
+            <p className="text-base font-black">{ar ? adv.worstMonth.monthAr : adv.worstMonth.month}</p>
+            <p className="text-sm font-black text-red-400">{adv.worstMonth.profit >= 0 ? "+" : ""}{fmtAmount(adv.worstMonth.profit, lang as any)}</p>
+            <p className="text-[9px] mt-1.5 text-slate-400 underline underline-offset-2">{ar ? "اضغط للتفاصيل" : "Klicka för detaljer"}</p>
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1012,7 +1186,7 @@ export default function Finance() {
             </div>
 
             {/* Best/Worst Month */}
-            <BestWorstCard adv={adv} ar={ar} lang={lang} />
+            <BestWorstCard adv={adv} monthly={monthly} ar={ar} lang={lang} />
 
             {/* Monthly Chart — with cumulative P&L line */}
             <Card className="border-none shadow-sm">

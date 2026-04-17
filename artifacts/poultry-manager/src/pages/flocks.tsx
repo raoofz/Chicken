@@ -646,6 +646,57 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
                     </div>
                   </div>
 
+                  {/* ── Cost per Bird — Prominent Card ─────────────────── */}
+                  <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-4 text-white shadow-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-blue-200" />
+                        <p className="text-xs font-bold text-blue-100">{ar ? "تكلفة العلف / طائر" : "Foderkostnad / fågel"}</p>
+                      </div>
+                      {feedAnalysis.feedData.dailyCostPerBird > 0 && (
+                        <span className="text-[9px] bg-white/20 rounded-full px-2 py-0.5 text-blue-100">
+                          {ar ? "محدّث تلقائياً" : "Automatisk uppdatering"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-end gap-3 mb-3">
+                      <div>
+                        <p className="text-3xl font-black leading-none">
+                          {feedAnalysis.feedData.dailyCostPerBird > 0
+                            ? feedAnalysis.feedData.dailyCostPerBird.toFixed(1)
+                            : "—"}
+                        </p>
+                        <p className="text-[10px] text-blue-200 mt-0.5">{ar ? "دينار / طائر / يوم" : "IQD / fågel / dag"}</p>
+                      </div>
+                      {feedAnalysis.feedData.costPerBird > 0 && (
+                        <div className="border-r border-white/30 pr-3 mr-1">
+                          <p className="text-xl font-black leading-none">{feedAnalysis.feedData.costPerBird.toFixed(0)}</p>
+                          <p className="text-[10px] text-blue-200 mt-0.5">{ar ? "دينار / طائر / شهر" : "IQD / fågel / mån"}</p>
+                        </div>
+                      )}
+                    </div>
+                    {/* Formula */}
+                    <div className="bg-white/10 rounded-lg px-3 py-2">
+                      <p className="text-[9px] text-blue-200 font-mono leading-relaxed">
+                        {ar
+                          ? `(علف يومي × سعر العلف) ÷ عدد الطيور`
+                          : `(dagligt foder × foderpris) ÷ antal fåglar`}
+                      </p>
+                      {feedAnalysis.feedData.totalKgAllocated != null && (
+                        <p className="text-[9px] text-blue-200 mt-1 font-mono">
+                          {ar
+                            ? `= (${feedAnalysis.feedData.totalKgAllocated.toFixed(1)} كجم × تكلفة/كجم) ÷ ${feedAnalysis.count} طائر`
+                            : `= (${feedAnalysis.feedData.totalKgAllocated.toFixed(1)} kg × pris/kg) ÷ ${feedAnalysis.count} fåglar`}
+                        </p>
+                      )}
+                    </div>
+                    {feedAnalysis.feedData.dailyCostPerBird === 0 && (
+                      <p className="text-[10px] text-yellow-300 mt-2">
+                        ⚠️ {ar ? "أضف سجلات علف بسعر لحساب التكلفة" : "Lägg till foderanteckningar med pris för beräkning"}
+                      </p>
+                    )}
+                  </div>
+
                   {/* 4-metric grid */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-muted/50 rounded-xl p-3">
