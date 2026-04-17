@@ -1,12 +1,12 @@
 /**
  * MobileBottomNav — Native-style bottom tab bar for mobile.
- * Shown only on mobile (md:hidden). Provides instant access to the 5 most-used pages.
- * The hamburger menu in the top header remains for all other pages.
+ * Shown only on mobile (md:hidden). Tabs filtered by user role.
  */
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, MessageSquareText, Bird, Wallet, Layers, Menu } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, Bird, Wallet, Layers, Menu, Egg, Wheat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Tab {
   href: string;
@@ -14,13 +14,15 @@ interface Tab {
   labelAr: string;
   labelSv: string;
   exact?: boolean;
+  adminOnly?: boolean;
 }
 
 const TABS: Tab[] = [
   { href: "/",            icon: LayoutDashboard,  labelAr: "الرئيسية",  labelSv: "Hem",       exact: true },
   { href: "/smart-input", icon: MessageSquareText, labelAr: "إدخال",     labelSv: "Inmatning"  },
   { href: "/flocks",      icon: Bird,              labelAr: "القطعان",   labelSv: "Flockar"    },
-  { href: "/finance",     icon: Wallet,            labelAr: "المالية",   labelSv: "Ekonomi"    },
+  { href: "/feed",        icon: Wheat,             labelAr: "العلف",     labelSv: "Foder"      },
+  { href: "/finance",     icon: Wallet,            labelAr: "المالية",   labelSv: "Ekonomi",   adminOnly: true },
   { href: "/operations",  icon: Layers,            labelAr: "العمليات",  labelSv: "Drift"      },
 ];
 
@@ -31,7 +33,11 @@ interface Props {
 export default function MobileBottomNav({ onMenuOpen }: Props) {
   const [location] = useLocation();
   const { lang } = useLanguage();
+  const { isAdmin } = useAuth();
   const ar = lang === "ar";
+
+  // Filter tabs based on role — workers don't see admin-only tabs
+  const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin).slice(0, 5);
 
   const isActive = (tab: Tab) => {
     if (tab.exact) return location === tab.href;
@@ -48,7 +54,7 @@ export default function MobileBottomNav({ onMenuOpen }: Props) {
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-stretch h-[60px]">
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const active = isActive(tab);
           const Icon = tab.icon;
           return (
@@ -58,10 +64,9 @@ export default function MobileBottomNav({ onMenuOpen }: Props) {
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 relative",
                 "transition-all duration-200 active:scale-95",
-                "min-h-[44px] select-none",
+                "min-h-[44px] select-none touch-manipulation",
               )}
             >
-              {/* Active indicator pill */}
               {active && (
                 <span className="absolute top-1.5 w-8 h-1 rounded-full bg-primary" />
               )}
@@ -83,10 +88,11 @@ export default function MobileBottomNav({ onMenuOpen }: Props) {
           );
         })}
 
-        {/* Menu button — opens sidebar for all other pages */}
+        {/* More menu button */}
         <button
+          type="button"
           onClick={onMenuOpen}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] active:scale-95 transition-all duration-200"
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[44px] active:scale-95 transition-all duration-200 touch-manipulation"
         >
           <Menu className="w-5 h-5 text-muted-foreground/70" />
           <span className="text-[10px] font-medium text-muted-foreground/60 leading-none">

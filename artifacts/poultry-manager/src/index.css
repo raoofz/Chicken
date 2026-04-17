@@ -224,6 +224,13 @@ input, textarea, select,
 .slide-up   { animation: slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .scale-in   { animation: scale-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Alert detail drawer — slides up from bottom */
+@keyframes slide-up-drawer {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-slide-up-drawer { animation: slide-up-drawer 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Staggered animation utilities */
 .stagger-1 { animation-delay: 50ms; }
 .stagger-2 { animation-delay: 100ms; }

@@ -15,22 +15,32 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 
 const WHATSAPP_GROUP_URL = "https://wa.me";
 
-const NAV_KEYS = [
+interface NavItem {
+  href: string;
+  key: string;
+  descKey: string;
+  icon: React.ElementType;
+  adminOnly: boolean;
+}
+
+const NAV_KEYS: NavItem[] = [
   { href: "/",            key: "nav.dashboard",   descKey: "nav.dashboard.desc",   icon: LayoutDashboard, adminOnly: false },
   { href: "/smart-input", key: "nav.smartInput",  descKey: "nav.smartInput.desc",  icon: MessageSquareText, adminOnly: false },
   { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },
-  { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: false },
   { href: "/feed",        key: "nav.feed",         descKey: "nav.feed.desc",        icon: Wheat,           adminOnly: false },
-  { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: false },
-  { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: false },
-  { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: false },
-  { href: "/farm-lab",    key: "nav.farmLab",      descKey: "nav.farmLab.desc",     icon: Microscope,      adminOnly: false },
+  // ── Admin only ──
+  { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: true  },
+  { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: true  },
+  { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: true  },
+  { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: true  },
+  { href: "/farm-lab",    key: "nav.farmLab",      descKey: "nav.farmLab.desc",     icon: Microscope,      adminOnly: true  },
   { href: "/ai/advanced", key: "nav.aiAdvanced",   descKey: "nav.aiAdvanced.desc",  icon: FlaskConical,    adminOnly: true  },
   { href: "/ai/precision",key: "nav.aiPrecision",  descKey: "nav.aiPrecision.desc", icon: BrainCircuit,    adminOnly: true  },
-  { href: "/logs",        key: "nav.logs",         descKey: "nav.logs.desc",        icon: BookOpen,        adminOnly: false },
-  { href: "/settings",    key: "nav.settings",     descKey: "nav.settings.desc",    icon: Settings,        adminOnly: false },
+  { href: "/logs",        key: "nav.logs",         descKey: "nav.logs.desc",        icon: BookOpen,        adminOnly: true  },
+  { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: true  },
+  { href: "/settings",    key: "nav.settings",     descKey: "nav.settings.desc",    icon: Settings,        adminOnly: true  },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -42,6 +52,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const isRtl = dir === "rtl";
   const ar = lang === "ar";
+
+  // Workers only see non-admin pages
   const visibleNav = NAV_KEYS.filter(item => !item.adminOnly || isAdmin);
 
   const handleLogout = async () => {
@@ -65,7 +77,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         "bg-[#1A1208]",
         isRtl ? "right-0 border-l border-white/8" : "left-0 border-r border-white/8",
         "md:translate-x-0 md:static md:z-auto",
-        // On mobile, sidebar slides in/out. On desktop, always visible (collapsed to icon-only at w-[72px] if ever needed)
         sidebarOpen
           ? "translate-x-0"
           : isRtl ? "translate-x-full md:translate-x-0" : "-translate-x-full md:translate-x-0"
@@ -87,14 +98,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Role + Language */}
+        {/* Role badge + Language */}
         <div className="hidden md:flex px-4 py-3 border-b border-white/8 flex-col space-y-2 shrink-0">
           <div className={cn(
             "flex items-center gap-2 text-xs px-3 py-2 rounded-xl",
             isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
           )}>
-            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> : <Shield className="w-3.5 h-3.5 shrink-0" />}
-            <span className="font-medium">{isAdmin ? t("role.admin.account") : t("role.worker.account")}</span>
+            {isAdmin
+              ? <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              : <Shield className="w-3.5 h-3.5 shrink-0" />}
+            <span className="font-medium">
+              {isAdmin ? t("role.admin.account") : t("role.worker.account")}
+            </span>
           </div>
 
           <button
@@ -108,7 +123,63 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Nav items */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-hide">
-          {visibleNav.map(({ href, key, descKey, icon: Icon, adminOnly }) => {
+          {/* Section: General */}
+          {!isAdmin && (
+            <p className="hidden md:block text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
+              {ar ? "القائمة الرئيسية" : "Meny"}
+            </p>
+          )}
+          {isAdmin && (
+            <p className="hidden md:block text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
+              {ar ? "التشغيل" : "Drift"}
+            </p>
+          )}
+
+          {visibleNav.filter(n => !n.adminOnly).map(({ href, key, descKey, icon: Icon }) => {
+            const active = location === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => {
+                  setSidebarOpen(false);
+                  if (active) window.dispatchEvent(new CustomEvent("nav-reset", { detail: href }));
+                }}
+                className={cn(
+                  "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
+                  active
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
+                    : "text-white/65 hover:bg-white/8 hover:text-white"
+                )}
+              >
+                <Icon className={cn(
+                  "w-4 h-4 shrink-0 mt-0.5 transition-transform duration-200",
+                  active ? "text-white" : "text-white/50 group-hover:text-white/80",
+                )} />
+                <div className="flex-1 min-w-0 hidden md:block">
+                  <span className="text-sm font-semibold leading-tight">{t(key)}</span>
+                  <p className={cn(
+                    "text-[10px] leading-tight mt-0.5 truncate",
+                    active ? "text-white/70" : "text-white/35"
+                  )}>{t(descKey)}</p>
+                </div>
+              </Link>
+            );
+          })}
+
+          {/* Admin-only section */}
+          {isAdmin && visibleNav.some(n => n.adminOnly) && (
+            <>
+              <div className="hidden md:block pt-3 pb-1.5">
+                <p className="text-[10px] font-semibold text-amber-400/60 uppercase tracking-widest px-3">
+                  {ar ? "إدارة متقدمة" : "Administration"}
+                </p>
+              </div>
+              <div className="hidden md:block h-px bg-white/8 mx-3 mb-1.5" />
+            </>
+          )}
+
+          {isAdmin && visibleNav.filter(n => n.adminOnly).map(({ href, key, descKey, icon: Icon }) => {
             const active = location === href;
             return (
               <Link
@@ -123,7 +194,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   active
                     ? "bg-primary text-white shadow-lg shadow-primary/20"
                     : "text-white/65 hover:bg-white/8 hover:text-white",
-                  adminOnly && !active && "border border-amber-500/20"
+                  "border border-amber-500/10"
                 )}
               >
                 <Icon className={cn(
@@ -133,11 +204,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className="flex-1 min-w-0 hidden md:block">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold leading-tight">{t(key)}</span>
-                    {adminOnly && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded shrink-0">
-                        {t("role.admin.badge")}
-                      </span>
-                    )}
+                    <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded shrink-0">
+                      {ar ? "مدير" : "Admin"}
+                    </span>
                   </div>
                   <p className={cn(
                     "text-[10px] leading-tight mt-0.5 truncate",
@@ -215,7 +284,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Page content — extra bottom padding on mobile for bottom nav */}
+        {/* Page content */}
         <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-[84px] md:pb-8 ios-scroll">
           <div className="max-w-6xl mx-auto page-enter">
             {children}
