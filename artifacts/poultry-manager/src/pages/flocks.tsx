@@ -21,6 +21,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
 } from "recharts";
+import FlockIntelligencePanel from "@/components/FlockIntelligencePanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -363,7 +364,7 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
   const { toast } = useToast();
   const [prodLogs, setProdLogs]     = useState<ProductionLog[]>([]);
   const [healthLogs, setHealthLogs] = useState<HealthLog[]>([]);
-  const [tab, setTab]               = useState<"overview" | "production" | "health" | "feed">("overview");
+  const [tab, setTab]               = useState<"overview" | "production" | "health" | "feed" | "intelligence">("overview");
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [addProdOpen, setAddProdOpen]     = useState(false);
   const [addHealthOpen, setAddHealthOpen] = useState(false);
@@ -458,10 +459,11 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-muted rounded-lg">
             {[
-              { key: "overview",    labelAr: "نظرة عامة",  labelSv: "Översikt" },
-              { key: "production",  labelAr: "الإنتاج",    labelSv: "Produktion" },
-              { key: "health",      labelAr: "الصحة",      labelSv: "Hälsa" },
-              { key: "feed",        labelAr: "العلف",       labelSv: "Foder" },
+              { key: "overview",      labelAr: "عامة",       labelSv: "Översikt" },
+              { key: "production",   labelAr: "الإنتاج",   labelSv: "Produktion" },
+              { key: "health",       labelAr: "الصحة",     labelSv: "Hälsa" },
+              { key: "feed",         labelAr: "العلف",      labelSv: "Foder" },
+              { key: "intelligence", labelAr: "🧠 ذكاء",   labelSv: "🧠 AI" },
             ].map(t => (
               <button
                 key={t.key}
@@ -776,6 +778,15 @@ function FlockDetailModal({ flock, onClose, onRefresh, isAdmin, feedAnalysis }: 
                 </div>
               )}
             </div>
+          )}
+
+          {/* ── Intelligence Tab ───────────────────────────────────── */}
+          {tab === "intelligence" && (
+            <FlockIntelligencePanel
+              flockId={flock.id}
+              flockName={flock.name}
+              ar={ar}
+            />
           )}
         </DialogContent>
       </Dialog>

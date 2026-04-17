@@ -49,6 +49,39 @@ The system is structured as a pnpm monorepo, facilitating shared code and consis
 - **Brain Orchestrator Feed Integration:** The Brain Orchestrator (`/brain/analyze`) now runs `runFeedCostEngine` in parallel with all other engines, contributing feed-specific insights (efficiency score, cost ratio, per-flock warnings, missing-records alert) to the unified decision output.
 - **Operations Center Consolidated (`/operations`):** The `/notes` page is no longer a separate nav item. Daily Notes are now embedded as a 5th tab ("الملاحظات") inside the Operations Center alongside Overview, Tasks, Activity Log, and System tabs. The notes tab supports adding notes with AI smart-analyze extraction, color-coded categories, and delete. The KPI strip now shows 4 cards (tasks, overdue, today's activities, total notes). The "ملاحظة جديدة" button is always visible in the header.
 
+## Chickens AI Intelligence Engine (Module 15-21)
+
+An isolated, additive intelligence layer exclusively for the Chickens/Flocks module. Does NOT modify any other module.
+
+### Backend Engine (`artifacts/api-server/src/lib/chickens-ai-engine/index.ts`)
+Seven integrated sub-engines:
+1. **Semantic Parser** — Arabic NLP: detects mortality counts, health signals (bad/good), behavioral signals, interventions, environmental factors from free Arabic text
+2. **Confidence Engine** — scores data coverage 0-100 based on production logs, health history, feed data, recency. < 60 → clarification question; > 80 → auto-suggest
+3. **Health Engine** — computes `health_score` (100 minus penalties for mortality, sick status, production gaps), `risk_score` (sum of mortality rate risk, health status risk, age risk), `performance_index` (production vs target ratio)
+4. **Anomaly Engine** — detects: mortality spikes (>2% or >5%), production drops (>40% decline), recurring health deterioration, missing production data
+5. **Decision Engine** — generates prioritized actions: P1=critical/now, P2=important/today, P3=monitoring/this_week, each with confidence score
+6. **Predictive Engine** — forecasts mortality risk (24h/48h) and production decline (7d) based on trends and health status
+7. **Timeline Manager** — persists structured events to `flock_events` table; updates `health_score`, `risk_score`, `performance_index`, `last_analyzed_at` in `flocks` table
+
+### API Routes (`artifacts/api-server/src/routes/flock-intelligence.ts`)
+- `POST /api/flocks/:id/intelligence/analyze` — full analysis, returns all 7 engine outputs
+- `POST /api/flocks/:id/intelligence/parse-note` — parse Arabic text, return events + confidence, save to timeline
+- `GET /api/flocks/:id/intelligence/timeline` — event history (last 30)
+
+### DB Additions (via migrate.ts Fix 5 + Fix 6)
+- New table: `flock_events` (id, flock_id, event_type, subtype, severity, payload JSONB, confidence, created_at)
+- New columns on `flocks`: `health_score`, `risk_score`, `performance_index`, `last_analyzed_at`
+
+### Frontend (`artifacts/poultry-manager/src/components/FlockIntelligencePanel.tsx`)
+5th tab "🧠 ذكاء" in flock detail modal. Shows:
+- Health / Risk / Performance score gauges (SVG arc)
+- Confidence meter with threshold behavior + clarification request
+- Anomaly cards (color-coded by severity)
+- Expandable decisions list (P1 red, P2 orange, P3 blue)
+- Predictions with probability bars
+- Smart Arabic note parser (live events + confidence from free text)
+- Event timeline (collapsible, last 20 events)
+
 ## Security & Production Hardening
 
 - **Session Secret**: `SESSION_SECRET` env var required; app exits in production if missing. Dev fallback logs a warning.
