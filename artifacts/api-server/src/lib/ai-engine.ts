@@ -1416,7 +1416,7 @@ export function buildDailyPlan(data: RawFarmData, lang: EngineLang = "ar"): Dail
   const overdueTasks = data.tasks.filter(tk => tk.dueDate && tk.dueDate <= t && !tk.completed);
   const todayTasks = data.tasks.filter(tk => tk.dueDate === t && !tk.completed);
   const pendingTasks = data.tasks.filter(tk => !tk.completed);
-  const totalBirds = data.flocks.reduce((s, f) => s + (f.currentCount ?? 0), 0);
+  const totalBirds = data.flocks.reduce((s, f) => s + (f.count ?? 0), 0);
 
   slots.push({
     time: "05:30",

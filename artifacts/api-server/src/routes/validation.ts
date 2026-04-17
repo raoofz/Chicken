@@ -122,7 +122,7 @@ router.get("/validate/integrity", async (req, res) => {
     // ── 3. Transactions with null amount ─────────────────────────────────
     const nullAmountResult = await db.execute(sql`
       SELECT COUNT(*) as cnt FROM transactions
-      WHERE amount IS NULL OR char_length(COALESCE(amount, '')) = 0
+      WHERE amount IS NULL OR amount::numeric = 0
     `);
     const nullAmountCount = Number((nullAmountResult.rows[0] as any).cnt ?? 0);
     if (nullAmountCount > 0) {
@@ -307,6 +307,35 @@ router.post("/dev/seed-transactions", async (req, res) => {
     mode: "dry-run",
     note: "SANDBOX MODE — transaction was auto-rolled back. Zero rows written to DB. Performance metrics are real.",
   });
+});
+
+// ─── Auto-Repair: fix null domains ────────────────────────────────────────────
+router.post("/validate/repair", async (req, res) => {
+  if ((req as any).session?.role !== "admin") {
+    res.status(403).json({ success: false, error: "هذه العملية مقتصرة على المديرين" });
+    return;
+  }
+  try {
+    const nullDomainTx = await db.select({
+      id:       transactionsTable.id,
+      category: transactionsTable.category,
+    }).from(transactionsTable).where(sql`domain IS NULL`);
+
+    let fixed = 0;
+    for (const tx of nullDomainTx) {
+      const correctDomain = categoryToDomain(tx.category);
+      await db.update(transactionsTable)
+        .set({ domain: correctDomain })
+        .where(eq(transactionsTable.id, tx.id));
+      fixed++;
+    }
+
+    logger.info({ fixed }, "[validate/repair] null domains patched");
+    res.json({ success: true, fixed, message: fixed === 0 ? "No repairs needed" : `Fixed ${fixed} transaction(s)` });
+  } catch (e: any) {
+    logger.error({ err: e }, "[validate/repair] failed");
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // Purge any legacy seed data written before the dry-run mode was introduced
