@@ -1,0 +1,15 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "pnpm"]
+
+[phases.install]
+cmds = ["pnpm install --no-frozen-lockfile"]
+
+[phases.build]
+cmds = [
+  "NODE_ENV=production BASE_PATH=/ pnpm --filter @workspace/poultry-manager build",
+  "pnpm --filter @workspace/api-server build",
+  "cp -r artifacts/poultry-manager/dist/public artifacts/api-server/dist/public"
+]
+
+[start]
+cmd = "node --enable-source-maps ./artifacts/api-server/dist/index.mjs"

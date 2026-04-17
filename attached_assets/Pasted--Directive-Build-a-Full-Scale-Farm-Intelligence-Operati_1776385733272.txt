@@ -1,0 +1,281 @@
+🚀 **Directive: Build a Full-Scale Farm Intelligence Operating System (FIOS)**
+(Universal Smart Input + Real-Time AI + Device Integration + Modular Databases)
+
+This is NOT a feature.
+This is the CORE brain of the entire system.
+
+The system must understand ANY natural input from the user and convert it into structured, validated, and categorized farm data across ALL domains.
+
+---
+
+# 🧠 1. UNIVERSAL INPUT UNDERSTANDING (ANYTHING → DATA)
+
+The system must accept ANY input such as:
+
+* "اليوم نظفت المكان بالكامل"
+* "اشتريت ماكينة فقس"
+* "جبت بيض"
+* "فحصت البيض وشفت إذا مخصب"
+* "الساعة 6 وضعت العلف"
+* "في حرارة مرتفعة اليوم"
+* "في دجاج مريض"
+* "بدأت دورة فقس جديدة"
+
+👉 And automatically:
+
+✔ Detect intent
+✔ Extract entities
+✔ Assign correct category
+✔ Save to correct module/database
+
+---
+
+# 🧩 2. FULL DOMAIN COVERAGE (NO LIMITS)
+
+The parser must support ALL farm operations:
+
+### 🐔 Animals / Flocks
+
+* adding flocks
+* deaths
+* growth
+* observations
+
+### 🥚 Hatching / Incubation
+
+* egg intake
+* fertilization checks
+* incubation start/end
+* machine usage
+
+### 🌾 Feed
+
+* feeding times
+* quantities
+* feed type
+
+### 🧹 Operations / Tasks
+
+* cleaning
+* maintenance
+* inspections
+
+### 🏭 Equipment
+
+* buying machines
+* using devices
+* checking status
+
+### 💰 Financial
+
+* purchases
+* expenses
+* investments
+
+### 🌡 Environment
+
+* temperature
+* humidity
+* anomalies
+
+👉 ANY sentence must map to one of these domains automatically.
+
+---
+
+# 🧠 3. INTENT + ENTITY ENGINE (DEEP AI)
+
+For every input:
+
+Example:
+"اليوم نظفت المكان بالكامل"
+
+Output:
+
+* intent: maintenance_action
+* category: operations
+* action: cleaning
+* timestamp: today
+
+---
+
+Example:
+"جبت بيض"
+
+Output:
+
+* intent: inventory_add
+* category: eggs
+* quantity: inferred or requested
+
+---
+
+Example:
+"فحصت البيض إذا مخصب"
+
+Output:
+
+* intent: inspection
+* category: hatching
+* action: fertilization_check
+
+---
+
+# 🔗 4. CONTEXT-AWARE SYSTEM
+
+* Remembers last entity:
+
+  * last flock
+  * last machine
+  * last action
+
+Example:
+"حطيت العلف"
+→ automatically linked to last active flock
+
+---
+
+# 🧠 5. TIME INTELLIGENCE
+
+* Understand:
+
+  * اليوم
+  * الساعة 6
+  * أمس
+  * الآن
+
+* Convert to real timestamps
+
+---
+
+# 🧠 6. EVENT TIMELINE ENGINE
+
+Every input becomes:
+
+→ Event in a unified timeline
+
+Example:
+
+* cleaning event
+* feeding event
+* inspection event
+* purchase event
+
+---
+
+# 🧱 7. MULTI-DATABASE ARCHITECTURE (MANDATORY)
+
+Separate databases/modules:
+
+* animals_db
+* feed_db
+* hatching_db
+* operations_db
+* finance_db
+* equipment_db
+* environment_db
+
+👉 No mixed storage.
+
+---
+
+# 🧠 8. REAL DEVICE INTEGRATION (NOT THEORY)
+
+System must support:
+
+* sensors (temperature / humidity)
+* incubation machines
+* IoT inputs
+
+👉 Merge manual input + device data
+
+---
+
+# ⚠️ 9. ADVANCED VALIDATION ENGINE
+
+* Detect impossible values
+* Ask confirmation if unclear
+* Prevent wrong inserts
+
+---
+
+# 🧠 10. SELF-LEARNING ENGINE
+
+* Learn user habits
+* Improve mapping accuracy
+* Store custom vocabulary
+
+---
+
+# 🔍 11. EXPLAINABLE OUTPUT (CRITICAL)
+
+Before saving:
+
+Show:
+
+✔ what was understood
+✔ where it will be stored
+✔ allow correction
+
+---
+
+# ⚡ 12. REAL-TIME PARSING
+
+* Analyze while typing
+* Instant feedback
+* No delay
+
+---
+
+# 🧪 13. TESTING (STRICT)
+
+Must test:
+
+* Arabic inputs
+* mixed Arabic/English
+* edge cases
+* vague inputs
+
+---
+
+# 🔐 14. SECURITY
+
+* sanitize input
+* prevent injection
+* no raw unprocessed storage
+
+---
+
+# 🧠 15. SYSTEM BEHAVIOR
+
+The system must behave like:
+
+> 🧠 A real farm brain
+> NOT
+> 📝 a text box
+
+---
+
+# 🚨 16. FAILURE POLICY
+
+* NEVER guess silently
+* ALWAYS ask if unsure
+* FAIL SAFE
+
+---
+
+# 🎯 FINAL GOAL
+
+User writes ANYTHING → system understands EVERYTHING → data stored correctly → zero manual sorting.
+
+---
+
+# 🏁 DELIVERY REQUIREMENT
+
+* fully working
+* zero critical errors
+* production-ready
+* integrated with backend + databases + future AI
+
+---
+
+END

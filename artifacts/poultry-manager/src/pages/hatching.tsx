@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useListHatchingCycles, getListHatchingCyclesQueryKey,
   useCreateHatchingCycle, useDeleteHatchingCycle, useUpdateHatchingCycle
@@ -17,6 +17,122 @@ import { Plus, Egg, Pencil, Trash2, Thermometer, Droplets, Clock, ArrowLeftRight
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+// ── Real-Time Incubation Tracker ────────────────────────────────────────────
+// Updates every 60 seconds.
+// TIME SOURCE: server clock (fetched via /api/server-time on mount).
+//   clockOffset = serverTimestamp − deviceTimestamp (milliseconds).
+//   All "now" calculations use:  Date.now() + clockOffset
+//   If the server-time fetch fails, offset stays 0 (device time fallback).
+// Formula: Progress = (serverNow - startDateTime) / 21d × 100
+const BASE_URL_TRACKER = import.meta.env.BASE_URL ?? "/";
+
+function HatchingLiveTracker({ cycle, ar }: { cycle: any; ar: boolean }) {
+  const TOTAL_DAYS = 21;
+  const clockOffsetRef = useRef(0);    // server - device (ms), updated on mount
+  const [clockReady, setClockReady] = useState(false);
+
+  // Sync clock offset once on mount
+  useEffect(() => {
+    const before = Date.now();
+    fetch(`${BASE_URL_TRACKER}api/server-time`, { credentials: "include" })
+      .then(r => r.json())
+      .then((d: { timestamp: number }) => {
+        const after = Date.now();
+        const rtt = after - before;
+        // Estimate server time at response midpoint to minimise RTT error
+        clockOffsetRef.current = d.timestamp - (before + rtt / 2);
+      })
+      .catch(() => {
+        // Graceful fallback: device time (offset stays 0)
+        console.warn("[HatchingLiveTracker] server-time fetch failed — using device clock");
+      })
+      .finally(() => setClockReady(true));
+  }, []);
+
+  function computeState() {
+    const start = cycle.startDate
+      ? new Date(`${cycle.startDate}T${cycle.setTime ?? "00:00"}:00`)
+      : null;
+    if (!start) return null;
+
+    // Use server-adjusted "now" for all calculations
+    const nowMs    = Date.now() + clockOffsetRef.current;
+    const elapsedMs = nowMs - start.getTime();
+    if (elapsedMs < 0) return null;
+
+    const elapsedDays  = elapsedMs / 86400000;
+    const progress     = Math.min((elapsedDays / TOTAL_DAYS) * 100, 100);
+    const currentDay   = Math.floor(elapsedDays) + 1;
+    const hourInDay    = Math.floor((elapsedDays % 1) * 24);
+    const daysLeft     = Math.max(0, TOTAL_DAYS - Math.ceil(elapsedDays));
+
+    // Phase thresholds
+    let phase: "early" | "mid" | "lockdown" | "hatching";
+    if (cycle.status === "hatching") {
+      phase = "hatching";
+    } else if (elapsedDays >= 18) {
+      phase = "lockdown";
+    } else if (elapsedDays >= 4) {
+      phase = "mid";
+    } else {
+      phase = "early";
+    }
+
+    return { progress, currentDay, hourInDay, daysLeft, phase, elapsedDays };
+  }
+
+  const [state, setState] = useState<ReturnType<typeof computeState>>(null);
+
+  // Recompute once clock is ready, then every 60s
+  useEffect(() => {
+    if (!clockReady) return;
+    setState(computeState());
+    const id = setInterval(() => setState(computeState()), 60_000);
+    return () => clearInterval(id);
+  }, [clockReady, cycle.startDate, cycle.setTime, cycle.status]);
+
+  if (!state) return null;
+  if (cycle.status === "completed" || cycle.status === "failed") return null;
+
+  const PHASE_CONFIG = {
+    early:    { bar: "bg-emerald-500", bg: "bg-emerald-50",  border: "border-emerald-200", text: "text-emerald-700", label: ar ? "بداية الحضانة" : "Tidig inkubation",   dot: "bg-emerald-400" },
+    mid:      { bar: "bg-blue-500",    bg: "bg-blue-50",     border: "border-blue-200",    text: "text-blue-700",    label: ar ? "حضانة متأخرة" : "Sen inkubation",        dot: "bg-blue-400"    },
+    lockdown: { bar: "bg-amber-500",   bg: "bg-amber-50",    border: "border-amber-200",   text: "text-amber-700",   label: ar ? "إغلاق الهاتشر" : "Lockdown-fas",          dot: "bg-amber-400"   },
+    hatching: { bar: "bg-red-500",     bg: "bg-red-50",      border: "border-red-200",     text: "text-red-700",     label: ar ? "فقس نشط 🐣" : "Aktiv kläckning 🐣",      dot: "bg-red-400 animate-pulse" },
+  };
+
+  const cfg = PHASE_CONFIG[state.phase];
+
+  return (
+    <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-3 mt-2 space-y-2`}>
+      <div className={`flex items-center justify-between text-xs font-semibold ${cfg.text}`}>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+          {cfg.label}
+        </div>
+        <div className="flex items-center gap-3 font-normal text-muted-foreground">
+          <span className="font-bold">{state.progress.toFixed(1)}%</span>
+          <span>{ar ? `يوم ${state.currentDay}، ساعة ${state.hourInDay}` : `Dag ${state.currentDay}, tim ${state.hourInDay}`}</span>
+          <span>{ar ? `${state.daysLeft} يوم متبقي` : `${state.daysLeft} dag kvar`}</span>
+        </div>
+      </div>
+      <div className="h-3 bg-white/70 rounded-full overflow-hidden border border-white/40 shadow-inner relative">
+        <div
+          className={`h-full rounded-full transition-all duration-1000 ${cfg.bar}`}
+          style={{ width: `${state.progress}%` }}
+        />
+        {/* Phase markers at 18/21 */}
+        <div className="absolute top-0 h-full border-r border-dashed border-slate-300/80" style={{ left: "85.7%" }} />
+      </div>
+      <div className="flex justify-between text-[9px] text-muted-foreground/60">
+        <span>{ar ? "يوم ١" : "Dag 1"}</span>
+        <span className="text-[9px]">{ar ? "إغلاق ١٨" : "Lockdown 18"}</span>
+        <span>{ar ? "يوم ٢١ — فقس" : "Dag 21 — kläckning"}</span>
+      </div>
+    </div>
+  );
+}
 
 function HatchingAnalysis({ cycles }: { cycles: any[] }) {
   const [expanded, setExpanded] = useState(true);
@@ -303,7 +419,7 @@ export default function Hatching() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -458,6 +574,10 @@ export default function Hatching() {
                         <span className="text-xs text-muted-foreground">{t("hatching.expected")} {cycle.expectedHatchDate}</span>
                         {cycle.actualHatchDate && <span className="text-xs text-emerald-600">{t("hatching.actual")} {cycle.actualHatchDate}</span>}
                       </div>
+
+                      {(cycle.status === "incubating" || cycle.status === "hatching") && (
+                        <HatchingLiveTracker cycle={cycle} ar={lang === "ar"} />
+                      )}
 
                       {cycle.notes && (
                         <p className="text-xs text-muted-foreground bg-muted/30 rounded p-2">{cycle.notes}</p>

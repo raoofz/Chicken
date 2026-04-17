@@ -4,7 +4,7 @@
  * NO external AI calls — pure deterministic data engine.
  */
 
-import { db, transactionsTable, dailyNotesTable, tasksTable, flocksTable, hatchingCyclesTable } from "@workspace/db";
+import { db, transactionsTable, dailyNotesTable, tasksTable, flocksTable, hatchingCyclesTable, flockProductionLogsTable, flockHealthLogsTable } from "@workspace/db";
 import { sql, and, gte, lte, desc, eq } from "drizzle-orm";
 
 // ─── Exported Types ───────────────────────────────────────────────────────────
@@ -66,6 +66,31 @@ export interface FarmContextPayload {
     activeHatchingCycles: number;
     overallHatchRate: number;
   };
+  // Flock production (last windowDays)
+  production: {
+    totalEggs: number;
+    avgDailyEggs: number;
+    byFlock: Array<{
+      flockId: number;
+      flockName: string;
+      totalEggs: number;
+      avgDaily: number;
+      trend: "up" | "down" | "stable";
+      logCount: number;
+    }>;
+    trend: "up" | "down" | "stable";
+  };
+  // Flock health status
+  flockHealth: {
+    sickFlocks: number;
+    flockStatuses: Array<{
+      flockId: number;
+      flockName: string;
+      latestStatus: string;
+      eventCount: number;
+      lastDate: string | null;
+    }>;
+  };
   // Recent notes (last 20)
   recentNotes: {
     date: string;
@@ -106,7 +131,7 @@ export async function buildFarmContext(windowDays = 7): Promise<FarmContextPaylo
   const windowStartStr = windowStart.toISOString().split("T")[0];
 
   // ── Parallel DB fetches ────────────────────────────────────────────────────
-  const [txWindow, allTx, notesWindow, allTasks, flockRow, hatchActiveRow, completedCycles, recentNoteRows] =
+  const [txWindow, allTx, notesWindow, allTasks, flockRow, hatchActiveRow, completedCycles, recentNoteRows, prodLogsWindow, healthLogsAll, flocksList] =
     await Promise.all([
       // Transactions in window
       db.select().from(transactionsTable)
@@ -145,6 +170,18 @@ export async function buildFarmContext(windowDays = 7): Promise<FarmContextPaylo
       // Recent 20 notes
       db.select().from(dailyNotesTable)
         .orderBy(desc(dailyNotesTable.date)).limit(20),
+
+      // Production logs in window
+      db.select().from(flockProductionLogsTable)
+        .where(and(gte(flockProductionLogsTable.date, windowStartStr), lte(flockProductionLogsTable.date, todayStr)))
+        .orderBy(desc(flockProductionLogsTable.date)),
+
+      // Health logs — all recent (for latest status per flock)
+      db.select().from(flockHealthLogsTable)
+        .orderBy(desc(flockHealthLogsTable.date)).limit(200),
+
+      // All flocks (for name lookup)
+      db.select({ id: flocksTable.id, name: flocksTable.name }).from(flocksTable),
     ]);
 
   // ── Hatch rate ────────────────────────────────────────────────────────────
@@ -315,6 +352,83 @@ export async function buildFarmContext(windowDays = 7): Promise<FarmContextPaylo
   const allProfit = totalIncome - totalExpense;
   const margin = totalIncome > 0 ? Math.round((allProfit / totalIncome) * 100) : null;
 
+  // ── Production analysis ───────────────────────────────────────────────────
+  const flockNameMap: Record<number, string> = {};
+  for (const f of flocksList) flockNameMap[f.id] = f.name;
+
+  // Group production logs by flock
+  const prodByFlock: Record<number, { date: string; count: number }[]> = {};
+  for (const p of prodLogsWindow) {
+    const fid = p.flockId;
+    if (!prodByFlock[fid]) prodByFlock[fid] = [];
+    prodByFlock[fid].push({ date: p.date, count: p.eggCount });
+  }
+
+  const totalEggs = prodLogsWindow.reduce((s, p) => s + p.eggCount, 0);
+  const avgDailyEggs = windowDays > 0 ? Math.round((totalEggs / windowDays) * 10) / 10 : 0;
+
+  const prodByFlockSummary = Object.entries(prodByFlock).map(([fidStr, logs]) => {
+    const fid = Number(fidStr);
+    const sorted = logs.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const total = sorted.reduce((s, l) => s + l.count, 0);
+    const avg = sorted.length ? total / sorted.length : 0;
+    const mid = Math.floor(sorted.length / 2);
+    const firstHalf = sorted.slice(0, mid).reduce((s, l) => s + l.count, 0) / (mid || 1);
+    const secondHalf = sorted.slice(mid).reduce((s, l) => s + l.count, 0) / ((sorted.length - mid) || 1);
+    const trend: "up" | "down" | "stable" =
+      sorted.length < 2 ? "stable" :
+      secondHalf > firstHalf * 1.05 ? "up" :
+      secondHalf < firstHalf * 0.95 ? "down" : "stable";
+    return { flockId: fid, flockName: flockNameMap[fid] ?? `قطيع #${fid}`, totalEggs: total, avgDaily: Math.round(avg * 10) / 10, trend, logCount: sorted.length };
+  });
+
+  const decliningCount = prodByFlockSummary.filter(p => p.trend === "down").length;
+  const globalProdTrend: "up" | "down" | "stable" =
+    decliningCount > prodByFlockSummary.length / 2 ? "down" :
+    prodByFlockSummary.filter(p => p.trend === "up").length > prodByFlockSummary.length / 2 ? "up" : "stable";
+
+  // Add production alerts
+  for (const p of prodByFlockSummary) {
+    if (p.trend === "down" && p.logCount >= 3) {
+      alerts.push({
+        flag: "production_drop",
+        severity: "warning",
+        titleAr: `انخفاض إنتاج قطيع ${p.flockName}`,
+        titleSv: `Produktionsminskning för ${p.flockName}`,
+        detailAr: `متوسط ${p.avgDaily} بيضة/يوم — الاتجاه هابط`,
+        detailSv: `Genomsnitt ${p.avgDaily} ägg/dag — fallande trend`,
+      });
+    }
+  }
+
+  // ── Health analysis ────────────────────────────────────────────────────────
+  // Latest status per flock
+  const latestHealthByFlock: Record<number, { status: string; date: string }> = {};
+  const healthEventCount: Record<number, number> = {};
+  for (const h of healthLogsAll) {
+    const fid = h.flockId;
+    healthEventCount[fid] = (healthEventCount[fid] ?? 0) + 1;
+    if (!latestHealthByFlock[fid]) {
+      latestHealthByFlock[fid] = { status: h.status, date: h.date };
+    }
+  }
+
+  const flockStatuses = Object.entries(latestHealthByFlock).map(([fidStr, { status, date }]) => {
+    const fid = Number(fidStr);
+    return { flockId: fid, flockName: flockNameMap[fid] ?? `قطيع #${fid}`, latestStatus: status, eventCount: healthEventCount[fid] ?? 0, lastDate: date };
+  });
+
+  const sickFlocks = flockStatuses.filter(f => ["sick", "quarantine"].includes(f.latestStatus)).length;
+
+  // Add health alerts
+  for (const f of flockStatuses) {
+    if (f.latestStatus === "quarantine") {
+      alerts.push({ flag: "flock_quarantine", severity: "critical", titleAr: `قطيع ${f.flockName} في الحجر الصحي`, titleSv: `${f.flockName} i karantän`, detailAr: `تحتاج إجراء فوري — مراقبة وعزل`, detailSv: `Kräver omedelbar åtgärd — övervaka och isolera` });
+    } else if (f.latestStatus === "sick") {
+      alerts.push({ flag: "flock_sick", severity: "high", titleAr: `قطيع ${f.flockName} مريض`, titleSv: `${f.flockName} är sjuk`, detailAr: `آخر حالة صحية: مريض (${f.lastDate})`, detailSv: `Senaste hälsostatus: sjuk (${f.lastDate})` });
+    }
+  }
+
   return {
     generatedAt: new Date().toISOString(),
     windowDays,
@@ -330,6 +444,16 @@ export async function buildFarmContext(windowDays = 7): Promise<FarmContextPaylo
       totalFlocks:   (flockRow[0] as any)?.totalFlocks ?? 0,
       activeHatchingCycles: (hatchActiveRow[0] as any)?.cnt ?? 0,
       overallHatchRate,
+    },
+    production: {
+      totalEggs,
+      avgDailyEggs,
+      byFlock: prodByFlockSummary,
+      trend: globalProdTrend,
+    },
+    flockHealth: {
+      sickFlocks,
+      flockStatuses,
     },
     recentNotes: recentNoteRows.map(n => ({
       date: n.date,

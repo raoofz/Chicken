@@ -15,20 +15,61 @@ import noteImagesRouter from "./noteImages";
 import transactionsRouter from "./transactions";
 import analyticsRouter from "./analytics";
 import brainRouter from "./brain";
+import validationRouter from "./validation";
+import hatchingStreamRouter from "./hatchingStream";
+import feedIntelligenceRouter from "./feed-intelligence";
+import flockIntelligenceRouter from "./flock-intelligence";
+import financialEngineRouter from "./financial-engine";
+import intelligenceRouter from "./intelligence";
 
 const router: IRouter = Router();
 
-function requireAuth(req: Request, res: Response, next: NextFunction) {
+// ── Auth Middleware ────────────────────────────────────────────────────────────
+
+/**
+ * Ensure the request is authenticated.
+ * Returns 401 if the session has no userId.
+ */
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.session.userId) {
-    res.status(401).json({ error: "غير مسجل الدخول" });
+    res.status(401).json({ success: false, error: "غير مسجل الدخول" });
     return;
   }
   next();
 }
 
+/**
+ * Factory: return a middleware that enforces a specific role.
+ * Returns 401 if not logged in, 403 if logged in but insufficient role.
+ *
+ * Usage: router.post("/admin-route", requireRole("admin"), handler)
+ */
+export function requireRole(role: "admin" | "worker") {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.session.userId) {
+      res.status(401).json({ success: false, error: "غير مسجل الدخول" });
+      return;
+    }
+    if (req.session.role !== role) {
+      res.status(403).json({ success: false, error: "هذه العملية مقتصرة على المديرين" });
+      return;
+    }
+    next();
+  };
+}
+
+// ── Public Routes (no auth) ───────────────────────────────────────────────────
 router.use(authRouter);
 router.use(healthRouter);
+// Clock-sync endpoint — public, used by HatchingLiveTracker before login
+router.get("/server-time", (_req, res) => {
+  const now = new Date();
+  res.json({ serverTime: now.toISOString(), timestamp: now.getTime() });
+});
 
+// ── Authenticated Routes (all verified users) ─────────────────────────────────
+// All routes below require a valid session.
+// Further role restrictions (admin-only) are enforced per-route within each router.
 router.use(requireAuth);
 router.use(flocksRouter);
 router.use(hatchingCyclesRouter);
@@ -37,12 +78,18 @@ router.use(goalsRouter);
 router.use(activityLogsRouter);
 router.use(dashboardRouter);
 router.use(dailyNotesRouter);
-router.use(aiRouter);
-router.use(diagnosticsRouter);
+router.use(aiRouter);           // has its own requireAdmin guard on sensitive routes
+router.use(diagnosticsRouter);  // has its own requireAdmin guard
 router.use(storageRouter);
 router.use(noteImagesRouter);
 router.use(transactionsRouter);
 router.use(analyticsRouter);
 router.use(brainRouter);
+router.use(validationRouter);   // /validate/integrity + /dev/* protected inside the router
+router.use(hatchingStreamRouter);
+router.use(feedIntelligenceRouter);
+router.use(flockIntelligenceRouter);
+router.use(financialEngineRouter);
+router.use(intelligenceRouter);
 
 export default router;

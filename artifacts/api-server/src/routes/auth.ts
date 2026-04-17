@@ -57,8 +57,16 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
     req.session.userId = user.id;
     req.session.role = user.role;
     req.session.name = user.name;
-    logger.info({ username: user.username, userId: user.id, role: user.role }, "Successful login");
-    res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+    // ── Save session explicitly before responding to prevent race condition ──
+    req.session.save((err) => {
+      if (err) {
+        logger.error({ err }, "Session save failed on login");
+        res.status(500).json({ error: "خطأ في حفظ الجلسة" });
+        return;
+      }
+      logger.info({ username: user.username, userId: user.id, role: user.role }, "Successful login");
+      res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+    });
   } catch (err) {
     logger.error({ err }, "Login DB error");
     res.status(503).json({ error: "خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة بعد قليل" });
@@ -67,8 +75,10 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
 
 router.post("/auth/logout", (req, res) => {
   const userId = req.session.userId;
-  req.session.destroy(() => {
+  req.session.destroy((err) => {
+    if (err) logger.warn({ err, userId }, "Session destroy error");
     if (userId) logger.info({ userId }, "User logged out");
+    res.clearCookie("connect.sid");
     res.json({ ok: true });
   });
 });
@@ -117,6 +127,54 @@ router.post("/auth/change-password", async (req, res) => {
   }
 });
 
+// ── Update Profile (name + username) ─────────────────────────────────────────
+router.put("/auth/profile", async (req, res) => {
+  if (!req.session.userId) {
+    res.status(401).json({ error: "غير مسجل الدخول" });
+    return;
+  }
+  const { name, username } = req.body as { name?: string; username?: string };
+  if (!name && !username) {
+    res.status(400).json({ error: "يرجى إدخال البيانات المراد تغييرها" });
+    return;
+  }
+  if (name && (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100)) {
+    res.status(400).json({ error: "الاسم يجب أن يكون بين 2 و 100 حرف" });
+    return;
+  }
+  if (username && (typeof username !== "string" || username.trim().length < 3 || username.trim().length > 50)) {
+    res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرف" });
+    return;
+  }
+  if (username && !/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+    res.status(400).json({ error: "اسم المستخدم يجب أن يحتوي فقط على حروف إنجليزية وأرقام و _" });
+    return;
+  }
+  try {
+    if (username) {
+      const [existing] = await db.select().from(usersTable).where(eq(usersTable.username, username.trim().toLowerCase()));
+      if (existing && existing.id !== req.session.userId) {
+        res.status(400).json({ error: "اسم المستخدم مستخدم بالفعل" });
+        return;
+      }
+    }
+    const updateData: Partial<{ name: string; username: string }> = {};
+    if (name) updateData.name = name.trim();
+    if (username) updateData.username = username.trim().toLowerCase();
+
+    await db.update(usersTable).set(updateData).where(eq(usersTable.id, req.session.userId));
+
+    if (name) req.session.name = name.trim();
+
+    const [updated] = await db.select().from(usersTable).where(eq(usersTable.id, req.session.userId));
+    logger.info({ userId: req.session.userId, updateData }, "Profile updated");
+    res.json({ ok: true, user: { id: updated.id, username: updated.username, name: updated.name, role: updated.role } });
+  } catch (err) {
+    logger.error({ err }, "Profile update DB error");
+    res.status(503).json({ error: "خطأ في الاتصال بقاعدة البيانات. يرجى المحاولة بعد قليل" });
+  }
+});
+
 router.get("/auth/me", async (req, res) => {
   if (!req.session.userId) {
     res.status(401).json({ error: "غير مسجل الدخول" });
@@ -125,6 +183,7 @@ router.get("/auth/me", async (req, res) => {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.session.userId));
     if (!user) {
+      req.session.destroy(() => {});
       res.status(401).json({ error: "المستخدم غير موجود" });
       return;
     }
