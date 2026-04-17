@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState, useRef } from "react";
 import {
   useGetDashboardSummary, getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
+import IntelligenceHub from "@/components/IntelligenceHub";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1195,6 +1196,9 @@ export default function Dashboard() {
           {lang === "ar" ? "يحلل · يقرر · يتنبأ" : "Analyserar · Beslutar · Förutsäger"}
         </Badge>
       </div>
+
+      {/* ── Intelligence Hub — Cross-module alerts ───────────────────────── */}
+      <IntelligenceHub />
 
       {/* ── Live Hatching Monitor — TOP PRIORITY ───────────────────────────── */}
       <LiveHatchingMonitor lang={lang} />

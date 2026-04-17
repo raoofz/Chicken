@@ -3,15 +3,15 @@ import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet, Microscope,
-  Activity, Database, MessageSquareText, Layers, Wheat,
+  Activity, Database, MessageSquareText, Layers, Wheat, Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import MobileBottomNav from "@/components/MobileBottomNav";
 
 const WHATSAPP_GROUP_URL = "https://wa.me";
 
@@ -41,6 +41,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
 
   const isRtl = dir === "rtl";
+  const ar = lang === "ar";
   const visibleNav = NAV_KEYS.filter(item => !item.adminOnly || isAdmin);
 
   const handleLogout = async () => {
@@ -50,51 +51,63 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex" dir={dir}>
+      {/* ── Backdrop ──────────────────────────────────────────────────────────── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-20 md:hidden backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
+      {/* ── Sidebar ───────────────────────────────────────────────────────────── */}
       <aside className={cn(
-        "fixed top-0 h-full z-30 w-64 flex flex-col transition-transform duration-300",
+        "fixed top-0 h-full z-30 w-[72px] md:w-64 flex flex-col transition-all duration-300 ease-out",
         "bg-[#1A1208]",
         isRtl ? "right-0 border-l border-white/8" : "left-0 border-r border-white/8",
         "md:translate-x-0 md:static md:z-auto",
+        // On mobile, sidebar slides in/out. On desktop, always visible (collapsed to icon-only at w-[72px] if ever needed)
         sidebarOpen
           ? "translate-x-0"
           : isRtl ? "translate-x-full md:translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        <div className="h-16 flex items-center px-5 border-b border-white/8">
+        {/* Logo */}
+        <div className="h-16 flex items-center px-5 border-b border-white/8 shrink-0">
           <div className="flex items-center gap-3">
             <Logo size={38} />
-            <div>
+            <div className="hidden md:block">
               <h1 className="font-bold text-white text-sm leading-tight">{t("app.name")}</h1>
               <p className="text-xs text-white/50">{t("app.subtitle")}</p>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className={cn("md:hidden text-white/50 hover:text-white transition-colors p-1", isRtl ? "mr-auto" : "ml-auto") }>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className={cn("md:hidden text-white/50 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/8", isRtl ? "mr-auto" : "ml-auto")}
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-white/8 space-y-2">
+        {/* Role + Language */}
+        <div className="hidden md:flex px-4 py-3 border-b border-white/8 flex-col space-y-2 shrink-0">
           <div className={cn(
-            "flex items-center gap-2 text-xs px-3 py-2 rounded-lg",
+            "flex items-center gap-2 text-xs px-3 py-2 rounded-xl",
             isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
           )}>
-            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5" /> : <Shield className="w-3.5 h-3.5" />}
+            {isAdmin ? <ShieldCheck className="w-3.5 h-3.5 shrink-0" /> : <Shield className="w-3.5 h-3.5 shrink-0" />}
             <span className="font-medium">{isAdmin ? t("role.admin.account") : t("role.worker.account")}</span>
           </div>
 
           <button
             onClick={toggleLang}
-            className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200"
+            className="w-full flex items-center gap-2 text-xs px-3 py-2 rounded-xl bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200"
           >
-            <Languages className="w-3.5 h-3.5" />
+            <Languages className="w-3.5 h-3.5 shrink-0" />
             <span className="font-medium">{t("lang.switch")}</span>
           </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+        {/* Nav items */}
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-hide">
           {visibleNav.map(({ href, key, descKey, icon: Icon, adminOnly }) => {
             const active = location === href;
             return (
@@ -103,24 +116,27 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 href={href}
                 onClick={() => {
                   setSidebarOpen(false);
-                  if (active) {
-                    window.dispatchEvent(new CustomEvent("nav-reset", { detail: href }));
-                  }
+                  if (active) window.dispatchEvent(new CustomEvent("nav-reset", { detail: href }));
                 }}
                 className={cn(
-                  "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-200",
+                  "flex items-start gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
                   active
-                    ? "bg-primary text-white shadow-lg shadow-primary/25"
+                    ? "bg-primary text-white shadow-lg shadow-primary/20"
                     : "text-white/65 hover:bg-white/8 hover:text-white",
-                  adminOnly && "border border-amber-500/20"
+                  adminOnly && !active && "border border-amber-500/20"
                 )}
               >
-                <Icon className={cn("w-4 h-4 shrink-0 mt-0.5", active ? "text-white" : "text-white/50")} />
-                <div className="flex-1 min-w-0">
+                <Icon className={cn(
+                  "w-4 h-4 shrink-0 mt-0.5 transition-transform duration-200",
+                  active ? "text-white" : "text-white/50 group-hover:text-white/80",
+                )} />
+                <div className="flex-1 min-w-0 hidden md:block">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold leading-tight">{t(key)}</span>
                     {adminOnly && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded shrink-0">{t("role.admin.badge")}</span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded shrink-0">
+                        {t("role.admin.badge")}
+                      </span>
                     )}
                   </div>
                   <p className={cn(
@@ -133,8 +149,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-white/8 space-y-2">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
+        {/* User footer */}
+        <div className="p-3 border-t border-white/8 space-y-2 shrink-0">
+          <div className="hidden md:flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
             <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
               <User className="w-4 h-4 text-primary" />
             </div>
@@ -148,7 +165,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             href={WHATSAPP_GROUP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
+            className="hidden md:flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
           >
             <MessageCircle className="w-4 h-4" />
             {t("sidebar.whatsapp")}
@@ -159,34 +176,55 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
           >
             <LogOut className="w-4 h-4" />
-            {t("sidebar.logout")}
+            <span className="hidden md:inline">{t("sidebar.logout")}</span>
           </button>
         </div>
       </aside>
 
+      {/* ── Main Content ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 bg-card border-b border-border flex items-center px-4 gap-3 md:hidden sticky top-0 z-10 shadow-sm pt-[env(safe-area-inset-top,0px)]" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-accent transition-colors">
+        {/* Mobile Header */}
+        <header
+          className="h-14 bg-card/95 backdrop-blur-md border-b border-border/60 flex items-center px-4 gap-3 md:hidden sticky top-0 z-10 shadow-sm"
+          style={{ paddingTop: "env(safe-area-inset-top, 0px)", height: "calc(3.5rem + env(safe-area-inset-top, 0px))" }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-1 rounded-xl hover:bg-accent transition-colors active:scale-95"
+          >
             <Menu className="w-5 h-5" />
           </button>
+
           <div className="flex items-center gap-2">
-            <Logo size={28} />
-            <span className="font-bold text-sm">{t("app.name")}</span>
+            <Logo size={26} />
+            <span className="font-bold text-sm text-foreground">{t("app.name")}</span>
           </div>
-          <div className={cn("flex items-center gap-2", isRtl ? "mr-auto" : "ml-auto") }>
-            <button onClick={toggleLang} className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded bg-muted">
-              {t("lang.switch")}
+
+          <div className={cn("flex items-center gap-2", isRtl ? "mr-auto" : "ml-auto")}>
+            <button
+              onClick={toggleLang}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg bg-muted/60 hover:bg-muted active:scale-95"
+            >
+              <Languages className="w-3.5 h-3.5" />
+              {ar ? "SV" : "ع"}
             </button>
-            <span className="text-xs text-muted-foreground">{user?.name}</span>
+
+            <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-primary" />
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto">
-          <div className="max-w-6xl mx-auto">
+        {/* Page content — extra bottom padding on mobile for bottom nav */}
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-[84px] md:pb-8 ios-scroll">
+          <div className="max-w-6xl mx-auto page-enter">
             {children}
           </div>
         </main>
       </div>
+
+      {/* ── Mobile Bottom Nav ────────────────────────────────────────────────── */}
+      <MobileBottomNav onMenuOpen={() => setSidebarOpen(true)} />
     </div>
   );
 }

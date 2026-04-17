@@ -20,6 +20,7 @@ import hatchingStreamRouter from "./hatchingStream";
 import feedIntelligenceRouter from "./feed-intelligence";
 import flockIntelligenceRouter from "./flock-intelligence";
 import financialEngineRouter from "./financial-engine";
+import intelligenceRouter from "./intelligence";
 
 const router: IRouter = Router();
 
@@ -89,5 +90,6 @@ router.use(hatchingStreamRouter);
 router.use(feedIntelligenceRouter);
 router.use(flockIntelligenceRouter);
 router.use(financialEngineRouter);
+router.use(intelligenceRouter);
 
 export default router;
