@@ -72,21 +72,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── Sidebar ───────────────────────────────────────────────────────────── */}
       <aside className={cn(
-        "fixed top-0 h-full z-30 w-[72px] md:w-64 flex flex-col transition-all duration-300 ease-out",
+        "fixed top-0 h-full z-30 w-[82vw] max-w-[300px] md:w-64 flex flex-col transition-transform duration-300 ease-out",
         "bg-[#1A1208]",
         isRtl ? "right-0 border-l border-white/8" : "left-0 border-r border-white/8",
-        "md:translate-x-0 md:static md:z-auto",
+        "md:translate-x-0 md:static md:z-auto md:max-w-none",
         sidebarOpen
-          ? "translate-x-0"
+          ? "translate-x-0 shadow-2xl"
           : isRtl ? "translate-x-full md:translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
         {/* Logo */}
         <div className="h-16 flex items-center px-5 border-b border-white/8 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Logo size={38} />
-            <div className="hidden md:block">
-              <h1 className="font-bold text-white text-sm leading-tight">{t("app.name")}</h1>
-              <p className="text-xs text-white/50">{t("app.subtitle")}</p>
+            <div className="min-w-0">
+              <h1 className="font-bold text-white text-sm leading-tight truncate">{t("app.name")}</h1>
+              <p className="text-xs text-white/50 truncate">{t("app.subtitle")}</p>
             </div>
           </div>
           <button
@@ -98,7 +98,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Role badge + Language */}
-        <div className="hidden md:flex px-4 py-3 border-b border-white/8 flex-col space-y-2 shrink-0">
+        <div className="flex px-4 py-3 border-b border-white/8 flex-col space-y-2 shrink-0">
           <div className={cn(
             "flex items-center gap-2 text-xs px-3 py-2 rounded-xl",
             isAdmin ? "bg-amber-500/15 text-amber-400" : "bg-blue-500/15 text-blue-400"
@@ -124,12 +124,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto scrollbar-hide">
           {/* Section: General */}
           {!isAdmin && (
-            <p className="hidden md:block text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
+            <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
               {ar ? "القائمة الرئيسية" : "Meny"}
             </p>
           )}
           {isAdmin && (
-            <p className="hidden md:block text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
+            <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest px-3 pb-1.5">
               {ar ? "التشغيل" : "Drift"}
             </p>
           )}
@@ -155,7 +155,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   "w-4 h-4 shrink-0 mt-0.5 transition-transform duration-200",
                   active ? "text-white" : "text-white/50 group-hover:text-white/80",
                 )} />
-                <div className="flex-1 min-w-0 hidden md:block">
+                <div className="flex-1 min-w-0">
                   <span className="text-sm font-semibold leading-tight">{t(key)}</span>
                   <p className={cn(
                     "text-[10px] leading-tight mt-0.5 truncate",
@@ -169,12 +169,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {/* Admin-only section */}
           {isAdmin && visibleNav.some(n => n.adminOnly) && (
             <>
-              <div className="hidden md:block pt-3 pb-1.5">
+              <div className="pt-3 pb-1.5">
                 <p className="text-[10px] font-semibold text-amber-400/60 uppercase tracking-widest px-3">
                   {ar ? "إدارة متقدمة" : "Administration"}
                 </p>
               </div>
-              <div className="hidden md:block h-px bg-white/8 mx-3 mb-1.5" />
+              <div className="h-px bg-white/8 mx-3 mb-1.5" />
             </>
           )}
 
@@ -200,9 +200,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   "w-4 h-4 shrink-0 mt-0.5 transition-transform duration-200",
                   active ? "text-white" : "text-white/50 group-hover:text-white/80",
                 )} />
-                <div className="flex-1 min-w-0 hidden md:block">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold leading-tight">{t(key)}</span>
+                    <span className="text-sm font-semibold leading-tight truncate">{t(key)}</span>
                     <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded shrink-0">
                       {ar ? "مدير" : "Admin"}
                     </span>
@@ -219,7 +219,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* User footer */}
         <div className="p-3 border-t border-white/8 space-y-2 shrink-0">
-          <div className="hidden md:flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5">
             <div className="w-8 h-8 rounded-full bg-primary/30 flex items-center justify-center shrink-0">
               <User className="w-4 h-4 text-primary" />
             </div>
@@ -233,18 +233,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             href={WHATSAPP_GROUP_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden md:flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
+            className="flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-green-400/90 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
           >
-            <MessageCircle className="w-4 h-4" />
-            {t("sidebar.whatsapp")}
+            <MessageCircle className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("sidebar.whatsapp")}</span>
           </a>
 
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
           >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden md:inline">{t("sidebar.logout")}</span>
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t("sidebar.logout")}</span>
           </button>
         </div>
       </aside>
@@ -284,8 +284,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-[84px] md:pb-8 ios-scroll">
-          <div className="max-w-6xl mx-auto page-enter">
+        <main className="flex-1 p-3 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden pb-[84px] md:pb-8 ios-scroll">
+          <div className="max-w-6xl mx-auto page-enter min-w-0">
             {children}
           </div>
         </main>
