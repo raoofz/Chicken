@@ -39,7 +39,6 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.finance.desc":    { ar: "تسجيل الدخل والمصاريف ومراجعة الأرباح", sv: "Inkomster, kostnader och vinst" },
   "nav.analytics.desc":  { ar: "أرقام اليوم الحية — مبيعات وعلف وطيور", sv: "Dagens live-siffror — försäljning & foder" },
   "nav.brain.desc":      { ar: "تاريخ المزرعة الكامل والقرارات الذكية", sv: "Gårdshistorik och smarta beslut" },
-  "nav.farmLab.desc":    { ar: "تقرير صحة مزرعتك ومشورة الخبير", sv: "Gårdens hälsorapport & expertråd" },
   "nav.aiAdvanced.desc": { ar: "تحليل المخاطر المستقبلية والتوقعات الذكية", sv: "Framtida riskanalys och prognoser" },
   "nav.aiPrecision.desc":{ ar: "تقرير 7 نقاط شامل لكل مؤشرات المزرعة", sv: "7-punktsrapport för alla gårdsindikatorer" },
   "nav.logs.desc":       { ar: "سجل كل العمليات والتغييرات في النظام", sv: "Logg över alla systemändringar" },
@@ -55,7 +54,6 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.finance":    { ar: "المالية والإنتاج",  sv: "Ekonomi"        },
   "nav.analytics":  { ar: "التحليلات الفورية", sv: "Realtidsanalys"  },
   "nav.brain":      { ar: "ذاكرة المزرعة",     sv: "Gårdsminne"     },
-  "nav.farmLab":    { ar: "مختبر المزرعة",     sv: "Gårdslabb"      },
 
   "finance.title": { ar: "المالية والإنتاج", sv: "Ekonomi & Produktion" },
   "finance.desc": { ar: "تتبع الدخل والمصاريف وحلل أرباح مزرعتك", sv: "Spåra inkomster, kostnader och analysera gårdens vinst" },

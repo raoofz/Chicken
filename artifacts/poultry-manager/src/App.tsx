@@ -25,7 +25,6 @@ const AdvancedAnalysis  = lazy(() => import("@/pages/advanced-analysis"));
 const PrecisionAnalysis = lazy(() => import("@/pages/precision-analysis"));
 const Finance           = lazy(() => import("@/pages/finance"));
 const Analytics         = lazy(() => import("@/pages/analytics"));
-const FarmLab           = lazy(() => import("@/pages/farm-lab"));
 const Brain             = lazy(() => import("@/pages/brain"));
 const Operations        = lazy(() => import("@/pages/operations"));
 const FeedIntelligence  = lazy(() => import("@/pages/feed-intelligence"));
@@ -59,7 +58,7 @@ function PageLoader() {
 // Pages restricted to admins only. Workers are redirected to home.
 const ADMIN_ONLY_PATHS = new Set([
   "/finance", "/analytics", "/goals", "/logs", "/notes",
-  "/brain", "/farm-lab", "/ai", "/ai/advanced", "/ai/precision",
+  "/brain", "/ai", "/ai/advanced", "/ai/precision",
   "/settings", "/daily-plan",
 ]);
 
@@ -124,9 +123,6 @@ function AppRoutes() {
           </Route>
           <Route path="/brain">
             {() => <ProtectedRoute component={Brain} adminOnly />}
-          </Route>
-          <Route path="/farm-lab">
-            {() => <ProtectedRoute component={FarmLab} adminOnly />}
           </Route>
           <Route path="/ai">
             {() => <ProtectedRoute component={AiAnalysis} adminOnly />}
