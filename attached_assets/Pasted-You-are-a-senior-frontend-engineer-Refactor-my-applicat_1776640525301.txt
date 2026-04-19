@@ -1,0 +1,104 @@
+You are a senior frontend engineer.
+
+Refactor my application into a production-grade, mobile-first responsive AI dashboard.
+
+Context:
+
+* This is a farm management + AI decision system.
+* Desktop UI works fine.
+* Mobile UI is broken (overflow, bad layout, unusable navigation).
+
+---
+
+## CORE OBJECTIVE
+
+Transform the app into a clean, modern, fully responsive dashboard that works flawlessly on mobile and desktop.
+
+---
+
+## REQUIREMENTS
+
+1. MOBILE-FIRST DESIGN
+
+* Start from small screens, then scale up
+* Use Tailwind responsive classes (sm, md, lg, xl)
+* Remove ALL fixed widths/heights
+
+2. LAYOUT SYSTEM
+
+* Use Flexbox + CSS Grid properly
+* Convert main layout into:
+
+  * Top bar (mobile)
+  * Collapsible sidebar (desktop)
+* Sidebar must become a drawer (hamburger menu) on mobile
+
+3. DASHBOARD COMPONENTS
+
+* Cards → stack vertically on mobile
+* Tables → convert into scrollable or card-based layout
+* Charts → scale responsively without overflow
+* Metrics → display in 1-column (mobile), multi-column (desktop)
+
+4. NAVIGATION
+
+* Replace sidebar with:
+
+  * Hamburger menu (mobile)
+  * Slide-in drawer
+* Ensure touch-friendly spacing
+
+5. OVERFLOW & SCROLL FIXES
+
+* Eliminate horizontal scroll completely
+* Fix all overflow issues
+* Ensure content fits within viewport
+
+6. TYPOGRAPHY & SPACING
+
+* Use responsive font sizes
+* Increase padding for touch
+* Maintain clean hierarchy
+
+7. PERFORMANCE
+
+* Lazy load heavy components (charts, AI modules)
+* Avoid unnecessary re-renders
+
+8. AI MODULE UI
+
+* Chat / insights panel must:
+
+  * Be usable on mobile
+  * Sticky input at bottom
+  * Scrollable messages
+
+---
+
+## TECH STACK RULES
+
+* Use TailwindCSS (preferred)
+* Use clean reusable components
+* No inline hacks or quick fixes
+* Follow best practices
+
+---
+
+## DELIVERABLE
+
+* Fully responsive UI (mobile + desktop)
+* No broken layout anywhere
+* Clean, modern dashboard UX similar to:
+
+  * Notion
+  * Stripe Dashboard
+  * Vercel UI
+
+---
+
+## IMPORTANT
+
+Do NOT patch the UI.
+Do a proper structural refactor.
+
+The result must feel like a real SaaS product, not a prototype.
