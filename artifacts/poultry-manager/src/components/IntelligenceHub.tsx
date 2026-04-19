@@ -423,7 +423,7 @@ export default function IntelligenceHub({ className }: Props) {
 
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-foreground leading-none">
-              {ar ? "مركز الذكاء الزراعي" : "Gårdens Intelligenscentrum"}
+              {ar ? "أمور يجب الانتباه إليها بالمزرعة" : "Saker att uppmärksamma på gården"}
             </h3>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {ar ? "تحليل شامل · اضغط على أي تنبيه للتفاصيل" : "Fullständig analys · Tryck på en avisering för detaljer"}

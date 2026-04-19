@@ -1201,11 +1201,11 @@ export default function Dashboard() {
       {/* ── Daily Instructions — from manager notes ─────────────────────── */}
       <DailyInstructions />
 
-      {/* ── Intelligence Hub — Cross-module alerts ───────────────────────── */}
-      <IntelligenceHub />
-
       {/* ── Live Hatching Monitor — TOP PRIORITY ───────────────────────────── */}
       <LiveHatchingMonitor lang={lang} />
+
+      {/* ── Intelligence Hub — Cross-module alerts ───────────────────────── */}
+      <IntelligenceHub />
 
       {/* ── Intelligence Score + Pillars ────────────────────────────────────── */}
       <Card className="border-border/50 shadow-sm overflow-hidden">
