@@ -11,13 +11,15 @@ const router: IRouter = Router();
 
 router.get("/transactions", async (req, res) => {
   try {
-    const { type, from, to, category, domain } = req.query as Record<string, string>;
+    const { type, from, to, category, domain, flockId, batchId } = req.query as Record<string, string>;
     const conditions = [];
     if (type && (type === "income" || type === "expense")) conditions.push(eq(transactionsTable.type, type));
     if (from)     conditions.push(gte(transactionsTable.date, from));
     if (to)       conditions.push(lte(transactionsTable.date, to));
     if (category) conditions.push(eq(transactionsTable.category, category));
     if (domain)   conditions.push(eq(transactionsTable.domain, domain));
+    if (flockId)  conditions.push(eq(transactionsTable.flockId, Number(flockId)));
+    if (batchId)  conditions.push(eq(transactionsTable.batchId, Number(batchId)));
 
     const rows = await db.select().from(transactionsTable)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -52,7 +54,7 @@ router.get("/transactions/summary", async (req, res) => {
 
 router.post("/transactions", async (req, res) => {
   try {
-    const { date, type, category, description, amount, quantity, unit, notes } = req.body;
+    const { date, type, category, description, amount, quantity, unit, notes, flockId, batchId } = req.body;
     if (!date || !type || !category || !description || !amount) {
       res.status(400).json({ error: "Missing required fields" });
       return;
@@ -86,6 +88,8 @@ router.post("/transactions", async (req, res) => {
       notes:    notes || null,
       authorId:   req.session.userId,
       authorName,
+      flockId:    flockId ? Number(flockId) : null,
+      batchId:    batchId ? Number(batchId) : null,
     }).returning();
 
     logger.info(
@@ -102,7 +106,7 @@ router.post("/transactions", async (req, res) => {
 router.put("/transactions/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    const { date, type, category, description, amount, quantity, unit, notes } = req.body;
+    const { date, type, category, description, amount, quantity, unit, notes, flockId, batchId } = req.body;
 
     // If category is being updated, re-derive domain and re-validate
     const updateDomain = category ? categoryToDomain(category) : undefined;
@@ -124,6 +128,8 @@ router.put("/transactions/:id", async (req, res) => {
       ...(quantity    !== undefined && { quantity: quantity ? String(quantity) : null }),
       ...(unit        !== undefined && { unit }),
       ...(notes       !== undefined && { notes }),
+      ...(flockId     !== undefined && { flockId: flockId ? Number(flockId) : null }),
+      ...(batchId     !== undefined && { batchId: batchId ? Number(batchId) : null }),
     }).where(eq(transactionsTable.id, id)).returning();
 
     if (!row) {

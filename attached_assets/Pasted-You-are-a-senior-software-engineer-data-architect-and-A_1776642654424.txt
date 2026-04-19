@@ -1,0 +1,225 @@
+You are a senior software engineer, data architect, and AI systems designer.
+
+Your task is to build a REAL, production-grade financial accounting and analysis system for a poultry farm.
+
+This is NOT a UI task.
+This is NOT a simple dashboard.
+
+This is a strict, data-driven system that must track, calculate, and intelligently analyze all farm financial operations.
+
+---
+
+## CORE OBJECTIVE
+
+Build a system that:
+
+* Tracks all income and expenses
+* Calculates all financial metrics accurately
+* Computes real cost per chicken and per batch
+* Uses AI logic to analyze data and extract meaningful financial insights
+
+---
+
+1. DATA MODEL (STRICT AND COMPLETE)
+
+---
+
+Transactions:
+
+* id
+* type (income / expense)
+* amount (numeric, required)
+* category (feed, medicine, labor, utilities, equipment, sales, other)
+* flock_id (optional)
+* batch_id (optional)
+* note
+* date (required)
+
+Flocks:
+
+* id
+* name
+* total_chickens
+
+Batches:
+
+* id
+* flock_id
+* start_date
+* chicken_count
+
+FeedRecords:
+
+* id
+* batch_id
+* quantity
+* cost
+* date
+
+MedicineRecords:
+
+* id
+* batch_id
+* cost
+* note
+* date
+
+---
+
+2. CORE ACCOUNTING ENGINE
+
+---
+
+The system must calculate:
+
+* Total income
+* Total expenses
+* Net profit
+
+Time-based:
+
+* Daily totals
+* Monthly totals
+
+---
+
+3. COST ANALYSIS (CRITICAL)
+
+---
+
+Compute:
+
+* Cost per chicken:
+  total_expenses / total_chickens
+
+* Cost per batch:
+  expenses per batch / chickens in batch
+
+* Feed cost:
+  total feed expenses
+  feed cost per chicken
+  feed percentage of total expenses
+
+* Medicine cost per chicken
+
+---
+
+4. PRODUCTION LINKING
+
+---
+
+All financial data must be linked to:
+
+* specific flock
+* specific batch
+
+This allows precise cost tracking.
+
+---
+
+5. INVOICE & PAYMENT SYSTEM
+
+---
+
+Invoices:
+
+* id
+* customer_name
+* total_amount
+* paid_amount
+* remaining_amount
+* status
+* created_at
+
+Payments:
+
+* id
+* invoice_id
+* amount
+* date
+
+Auto-update:
+remaining_amount and status
+
+---
+
+6. AI ANALYSIS ENGINE (MANDATORY)
+
+---
+
+Implement a data analysis layer that:
+
+* Analyzes financial data patterns
+* Detects inefficiencies
+* Identifies main cost drivers
+* Evaluates profitability per batch
+
+---
+
+The AI must:
+
+* Process structured financial data
+* Filter unnecessary information
+* Output only high-value insights
+
+---
+
+7. AI OUTPUT STRUCTURE
+
+---
+
+Each insight must include:
+
+* Issue (what is wrong)
+* Cause (why it happened)
+* Impact (financial effect)
+* Recommendation (what to do)
+
+---
+
+Example:
+
+Issue: High feed cost in Batch A
+Cause: Feed represents 68% of total expenses
+Impact: Reduces profit margin significantly
+Recommendation: Optimize feed usage or adjust pricing
+
+---
+
+8. API (REQUIRED)
+
+---
+
+* POST /transactions
+* GET /transactions
+* POST /batches
+* GET /batches
+* POST /invoices
+* POST /payments
+
+---
+
+9. SYSTEM RULES
+
+---
+
+* All calculations must be accurate and automatic
+* No manual calculations
+* No fake data
+* No unnecessary UI complexity
+
+---
+
+10. FINAL RESULT
+
+---
+
+A complete poultry financial intelligence system that:
+
+* Tracks every cost (feed, medicine, labor, etc.)
+* Calculates exact cost per chicken
+* Tracks profitability per batch
+* Provides intelligent financial insights
+* Supports real farm decision-making
+
+---

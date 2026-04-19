@@ -22,6 +22,10 @@ import flockIntelligenceRouter from "./flock-intelligence";
 import financialEngineRouter from "./financial-engine";
 import intelligenceRouter from "./intelligence";
 import workspaceRouter from "./workspace";
+import batchesRouter from "./batches";
+import medicineRecordsRouter from "./medicineRecords";
+import invoicesRouter from "./invoices";
+import financeCostRouter from "./finance-cost";
 
 const router: IRouter = Router();
 
@@ -93,5 +97,16 @@ router.use(flockIntelligenceRouter);
 router.use(financialEngineRouter);
 router.use(intelligenceRouter);
 router.use(workspaceRouter);
+// Accounting surface — financial data is admin-only (workers should never see
+// invoices, batches, cost analysis, or insights).
+router.use("/batches",          requireRole("admin"));
+router.use("/medicine-records", requireRole("admin"));
+router.use("/invoices",         requireRole("admin"));
+router.use("/payments",         requireRole("admin"));
+router.use("/finance",          requireRole("admin"));
+router.use(batchesRouter);
+router.use(medicineRecordsRouter);
+router.use(invoicesRouter);
+router.use(financeCostRouter);
 
 export default router;

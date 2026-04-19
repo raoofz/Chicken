@@ -17,6 +17,7 @@ const Flocks            = lazy(() => import("@/pages/flocks"));
 const Hatching          = lazy(() => import("@/pages/hatching"));
 const Tasks             = lazy(() => import("@/pages/tasks"));
 const Workspace         = lazy(() => import("@/pages/workspace"));
+const Accounting        = lazy(() => import("@/pages/accounting"));
 const AiAnalysis        = lazy(() => import("@/pages/ai-analysis"));
 const AdvancedAnalysis  = lazy(() => import("@/pages/advanced-analysis"));
 const PrecisionAnalysis = lazy(() => import("@/pages/precision-analysis"));
@@ -54,7 +55,7 @@ function PageLoader() {
 // ── Worker Access Control ─────────────────────────────────────────────────────
 // Pages restricted to admins only. Workers are redirected to home.
 const ADMIN_ONLY_PATHS = new Set([
-  "/finance", "/analytics", "/workspace",
+  "/finance", "/analytics", "/workspace", "/accounting",
   "/brain", "/ai", "/ai/advanced", "/ai/precision",
   "/settings", "/daily-plan",
 ]);
@@ -110,6 +111,9 @@ function AppRoutes() {
           </Route>
           <Route path="/workspace">
             {() => <ProtectedRoute component={Workspace} adminOnly />}
+          </Route>
+          <Route path="/accounting">
+            {() => <ProtectedRoute component={Accounting} adminOnly />}
           </Route>
           {/* Legacy paths — redirect to the unified workspace */}
           <Route path="/goals"><Redirect to="/workspace?tab=goals" /></Route>

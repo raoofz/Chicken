@@ -19,6 +19,8 @@ export const transactionsTable = pgTable("transactions", {
   notes:       text("notes"),
   authorId:    integer("author_id"),
   authorName:  text("author_name"),
+  flockId:     integer("flock_id"),    // optional production link → cost-per-flock analysis
+  batchId:     integer("batch_id"),    // optional batch link → cost-per-batch analysis
   createdAt:   timestamp("created_at").defaultNow().notNull(),
 });
 

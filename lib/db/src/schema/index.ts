@@ -12,3 +12,6 @@ export * from "./predictionLogs";
 export * from "./noteImages";
 export * from "./transactions";
 export * from "./feedRecords";
+export * from "./batches";
+export * from "./medicineRecords";
+export * from "./invoices";
