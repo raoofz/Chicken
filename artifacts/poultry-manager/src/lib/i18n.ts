@@ -22,7 +22,9 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.notes": { ar: "ملاحظات يومية", sv: "Dagliga anteckningar" },
   "nav.logs": { ar: "سجل النشاط", sv: "Aktivitetslogg" },
   "nav.ai": { ar: "مراقبة بالصور", sv: "Fotoövervakning" },
-  "nav.aiAdvanced": { ar: "مستشار المخاطر", sv: "Riskrådgivare" },
+  "nav.aiAdvanced": { ar: "خطة العمل الذكية", sv: "Smart handlingsplan" },
+  "nav.workspace":  { ar: "مساحة العمل اليومية", sv: "Daglig arbetsyta" },
+  "nav.workspace.desc": { ar: "نشاط، ملاحظات، وأهداف في مكان واحد", sv: "Aktivitet, anteckningar och mål på ett ställe" },
   "nav.aiPrecision": { ar: "تقرير الأداء", sv: "Prestationsrapport" },
   "nav.dailyPlan": { ar: "الخطة اليومية", sv: "Dagsplan" },
 
@@ -37,7 +39,7 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.finance.desc":    { ar: "تسجيل الدخل والمصاريف ومراجعة الأرباح", sv: "Inkomster, kostnader och vinst" },
   "nav.analytics.desc":  { ar: "أرقام اليوم الحية — مبيعات وعلف وطيور", sv: "Dagens live-siffror — försäljning & foder" },
   "nav.brain.desc":      { ar: "تاريخ المزرعة الكامل والقرارات الذكية", sv: "Gårdshistorik och smarta beslut" },
-  "nav.aiAdvanced.desc": { ar: "تحليل المخاطر المستقبلية والتوقعات الذكية", sv: "Framtida riskanalys och prognoser" },
+  "nav.aiAdvanced.desc": { ar: "خطوات عملية مرتبة حسب الأولوية لما يجب فعله اليوم وهذا الأسبوع", sv: "Praktiska steg sorterade efter prioritet för vad som ska göras idag och denna vecka" },
   "nav.aiPrecision.desc":{ ar: "تقرير 7 نقاط شامل لكل مؤشرات المزرعة", sv: "7-punktsrapport för alla gårdsindikatorer" },
   "nav.logs.desc":       { ar: "سجل كل العمليات والتغييرات في النظام", sv: "Logg över alla systemändringar" },
   "nav.settings.desc":   { ar: "إعدادات النظام وإدارة المستخدمين", sv: "Systeminställningar och användare" },
@@ -781,8 +783,8 @@ const translations: Record<string, Record<Lang, string>> = {
 
   /* ── Advanced Analysis ──────────────────────────────────────────── */
   "adv.adminOnly":    { ar: "للمديرين فقط",                                       sv: "Endast för administratörer" },
-  "adv.title":        { ar: "الذكاء الاصطناعي المتقدم",                          sv: "Avancerad AI" },
-  "adv.subtitle":     { ar: "تحليل مبني على بياناتك الفعلية — بلغة الفلاح",     sv: "Analys baserad på dina faktiska data — på lantbrukarens språk" },
+  "adv.title":        { ar: "خطة العمل الذكية",                                  sv: "Smart handlingsplan" },
+  "adv.subtitle":     { ar: "ماذا تفعل اليوم وهذا الأسبوع — خطوات واضحة من بياناتك الفعلية", sv: "Vad du gör idag och denna vecka — tydliga steg från din faktiska data" },
   "adv.back":         { ar: "رجوع",                                               sv: "Tillbaka" },
   "adv.pick.title":   { ar: "اختر نوع التحليل",                                  sv: "Välj analystyp" },
   "adv.pick.desc":    { ar: "يقرأ كل بيانات مزرعتك ويعطيك إجابات واضحة — كأنك تسأل خبير بجانبك", sv: "Läser all din gårdsdata och ger tydliga svar — som att ha en expert bredvid dig" },

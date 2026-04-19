@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, activityLogsTable, tasksTable } from "@workspace/db";
+import { db, activityLogsTable, tasksTable, goalsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 
@@ -23,12 +23,14 @@ router.get("/activity-logs", async (_req, res) => {
 
 router.post("/activity-logs", async (req, res) => {
   try {
-    const { title, description, category, date, taskId } = req.body as {
+    const { title, description, category, date, taskId, goalId, progressDelta } = req.body as {
       title: string;
       description?: string | null;
       category?: string;
       date: string;
       taskId?: number | null;
+      goalId?: number | null;
+      progressDelta?: number | null;   // optional: amount to add to linked goal's currentValue
     };
 
     if (!title || !date) {
@@ -36,8 +38,8 @@ router.post("/activity-logs", async (req, res) => {
       return;
     }
 
-    // ── ATOMIC: insert activity log + complete linked task in one transaction ──
-    // If either operation fails the entire transaction rolls back — no partial writes.
+    // ── ATOMIC: insert activity log + complete linked task + bump linked goal ──
+    // If any step fails the entire transaction rolls back — no partial writes.
     let log: typeof activityLogsTable.$inferSelect;
 
     await db.transaction(async (tx) => {
@@ -47,6 +49,7 @@ router.post("/activity-logs", async (req, res) => {
         category:    category ?? "other",
         date,
         taskId:      taskId ?? null,
+        goalId:      goalId ?? null,
       }).returning();
       log = inserted;
 
@@ -57,15 +60,31 @@ router.post("/activity-logs", async (req, res) => {
           .where(eq(tasksTable.id, taskId))
           .returning();
         if (!updated) {
-          // Task not found — roll back the activity log insert too
           throw new Error(`Task ${taskId} not found; rolling back activity insert`);
         }
+      }
+
+      // If activity is tied to a goal AND has a progress delta, advance the goal.
+      // Auto-mark complete when current_value crosses target_value.
+      if (goalId && progressDelta && Number(progressDelta) !== 0) {
+        const [goal] = await tx.select().from(goalsTable).where(eq(goalsTable.id, goalId));
+        if (!goal) throw new Error(`Goal ${goalId} not found; rolling back`);
+
+        const newCurrent = Number(goal.currentValue) + Number(progressDelta);
+        const completed  = newCurrent >= Number(goal.targetValue);
+        await tx.update(goalsTable)
+          .set({ currentValue: String(newCurrent), completed })
+          .where(eq(goalsTable.id, goalId));
+
         logger.info(
-          { activityId: inserted.id, taskId },
-          "[activity-logs] activity created + task auto-completed (atomic)",
+          { activityId: inserted.id, goalId, progressDelta, newCurrent, completed },
+          "[activity-logs] activity created + goal progress advanced (atomic)",
         );
       } else {
-        logger.info({ activityId: inserted.id }, "[activity-logs] activity created");
+        logger.info(
+          { activityId: inserted.id, taskId: taskId ?? null, goalId: goalId ?? null },
+          "[activity-logs] activity created",
+        );
       }
     });
 

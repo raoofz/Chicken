@@ -14,6 +14,7 @@ export const activityLogsTable = pgTable("activity_logs", {
   category:    text("category").notNull().default("other"),
   date:        date("date").notNull(),
   taskId:      integer("task_id"),   // FK → tasks.id (nullable — not all activities relate to a task)
+  goalId:      integer("goal_id"),   // FK → goals.id (nullable — links activity to a goal it advances)
   createdAt:   timestamp("created_at").defaultNow().notNull(),
 });
 

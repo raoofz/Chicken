@@ -21,6 +21,7 @@ import feedIntelligenceRouter from "./feed-intelligence";
 import flockIntelligenceRouter from "./flock-intelligence";
 import financialEngineRouter from "./financial-engine";
 import intelligenceRouter from "./intelligence";
+import workspaceRouter from "./workspace";
 
 const router: IRouter = Router();
 
@@ -91,5 +92,6 @@ router.use(feedIntelligenceRouter);
 router.use(flockIntelligenceRouter);
 router.use(financialEngineRouter);
 router.use(intelligenceRouter);
+router.use(workspaceRouter);
 
 export default router;

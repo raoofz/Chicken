@@ -32,11 +32,12 @@ router.get("/notes", requireAdmin, async (req, res) => {
 });
 
 router.post("/notes", requireAdmin, async (req, res) => {
-  const { content, date, category, authorName } = req.body as {
+  const { content, date, category, authorName, goalId } = req.body as {
     content: string;
     date: string;
     category?: string;
     authorName?: string;
+    goalId?: number | null;
   };
   if (!content || !date) {
     res.status(400).json({ error: "المحتوى والتاريخ مطلوبان" });
@@ -48,6 +49,7 @@ router.post("/notes", requireAdmin, async (req, res) => {
     category: category ?? "general",
     authorName: authorName ?? req.session.name ?? "مجهول",
     authorId: req.session.userId,
+    goalId: goalId ?? null,
   }).returning();
   res.status(201).json({ ...note, createdAt: note.createdAt.toISOString() });
 });

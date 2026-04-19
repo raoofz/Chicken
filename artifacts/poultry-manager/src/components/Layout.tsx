@@ -31,13 +31,11 @@ const NAV_KEYS: NavItem[] = [
   { href: "/feed",        key: "nav.feed",         descKey: "nav.feed.desc",        icon: Wheat,           adminOnly: false },
   // ── Admin only ──
   { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: true  },
-  { href: "/goals",       key: "nav.goals",        descKey: "nav.goals.desc",       icon: Target,          adminOnly: true  },
+  { href: "/workspace",   key: "nav.workspace",    descKey: "nav.workspace.desc",   icon: NotebookPen,     adminOnly: true  },
   { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: true  },
   { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: true  },
   { href: "/ai/advanced", key: "nav.aiAdvanced",   descKey: "nav.aiAdvanced.desc",  icon: FlaskConical,    adminOnly: true  },
   { href: "/ai/precision",key: "nav.aiPrecision",  descKey: "nav.aiPrecision.desc", icon: BrainCircuit,    adminOnly: true  },
-  { href: "/logs",        key: "nav.logs",         descKey: "nav.logs.desc",        icon: BookOpen,        adminOnly: true  },
-  { href: "/notes",       key: "nav.notes",        descKey: "nav.notes.desc",       icon: NotebookPen,     adminOnly: true  },
   { href: "/settings",    key: "nav.settings",     descKey: "nav.settings.desc",    icon: Settings,        adminOnly: true  },
 ];
 

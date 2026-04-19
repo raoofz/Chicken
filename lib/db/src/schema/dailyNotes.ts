@@ -8,6 +8,7 @@ export const dailyNotesTable = pgTable("daily_notes", {
   authorId: integer("author_id"),
   authorName: text("author_name"),
   category: text("category").notNull().default("general"),
+  goalId: integer("goal_id"),      // FK → goals.id (nullable — links note to a related goal)
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

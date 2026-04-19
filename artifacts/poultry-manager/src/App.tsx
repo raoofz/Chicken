@@ -16,9 +16,7 @@ import Dashboard from "@/pages/dashboard";
 const Flocks            = lazy(() => import("@/pages/flocks"));
 const Hatching          = lazy(() => import("@/pages/hatching"));
 const Tasks             = lazy(() => import("@/pages/tasks"));
-const Goals             = lazy(() => import("@/pages/goals"));
-const Logs              = lazy(() => import("@/pages/logs"));
-const Notes             = lazy(() => import("@/pages/notes"));
+const Workspace         = lazy(() => import("@/pages/workspace"));
 const AiAnalysis        = lazy(() => import("@/pages/ai-analysis"));
 const AdvancedAnalysis  = lazy(() => import("@/pages/advanced-analysis"));
 const PrecisionAnalysis = lazy(() => import("@/pages/precision-analysis"));
@@ -56,7 +54,7 @@ function PageLoader() {
 // ── Worker Access Control ─────────────────────────────────────────────────────
 // Pages restricted to admins only. Workers are redirected to home.
 const ADMIN_ONLY_PATHS = new Set([
-  "/finance", "/analytics", "/goals", "/logs", "/notes",
+  "/finance", "/analytics", "/workspace",
   "/brain", "/ai", "/ai/advanced", "/ai/precision",
   "/settings", "/daily-plan",
 ]);
@@ -110,15 +108,13 @@ function AppRoutes() {
           <Route path="/analytics">
             {() => <ProtectedRoute component={Analytics} adminOnly />}
           </Route>
-          <Route path="/goals">
-            {() => <ProtectedRoute component={Goals} adminOnly />}
+          <Route path="/workspace">
+            {() => <ProtectedRoute component={Workspace} adminOnly />}
           </Route>
-          <Route path="/logs">
-            {() => <ProtectedRoute component={Logs} adminOnly />}
-          </Route>
-          <Route path="/notes">
-            {() => <ProtectedRoute component={Notes} adminOnly />}
-          </Route>
+          {/* Legacy paths — redirect to the unified workspace */}
+          <Route path="/goals"><Redirect to="/workspace?tab=goals" /></Route>
+          <Route path="/logs"><Redirect to="/workspace?tab=timeline" /></Route>
+          <Route path="/notes"><Redirect to="/workspace?tab=timeline" /></Route>
           <Route path="/brain">
             {() => <ProtectedRoute component={Brain} adminOnly />}
           </Route>
