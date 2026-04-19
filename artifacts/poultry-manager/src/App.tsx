@@ -19,7 +19,6 @@ const Tasks             = lazy(() => import("@/pages/tasks"));
 const Goals             = lazy(() => import("@/pages/goals"));
 const Logs              = lazy(() => import("@/pages/logs"));
 const Notes             = lazy(() => import("@/pages/notes"));
-const SmartInput        = lazy(() => import("@/pages/smart-input"));
 const AiAnalysis        = lazy(() => import("@/pages/ai-analysis"));
 const AdvancedAnalysis  = lazy(() => import("@/pages/advanced-analysis"));
 const PrecisionAnalysis = lazy(() => import("@/pages/precision-analysis"));
@@ -102,7 +101,6 @@ function AppRoutes() {
           <Route path="/tasks"       component={Tasks} />
           <Route path="/operations"  component={Operations} />
           <Route path="/feed"        component={FeedIntelligence} />
-          <Route path="/smart-input" component={SmartInput} />
           <Route path="/offline"     component={OfflinePage} />
 
           {/* ── Admin only ── */}

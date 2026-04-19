@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Bird, Egg, CheckSquare, Target, BookOpen,
   Menu, X, LogOut, User, ShieldCheck, Shield, MessageCircle, Settings,
   Languages, BrainCircuit, FileText, FlaskConical, NotebookPen, Wallet,
-  Activity, Database, MessageSquareText, Layers, Wheat, Bell,
+  Activity, Database, Layers, Wheat, Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,6 @@ interface NavItem {
 
 const NAV_KEYS: NavItem[] = [
   { href: "/",            key: "nav.dashboard",   descKey: "nav.dashboard.desc",   icon: LayoutDashboard, adminOnly: false },
-  { href: "/smart-input", key: "nav.smartInput",  descKey: "nav.smartInput.desc",  icon: MessageSquareText, adminOnly: false },
   { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },

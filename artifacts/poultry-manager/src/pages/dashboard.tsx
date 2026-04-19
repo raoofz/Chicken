@@ -1132,8 +1132,6 @@ export default function Dashboard() {
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
-        {/* Show hatching monitor even while intelligence is loading */}
-        <LiveHatchingMonitor lang={lang} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>)}
         </div>
@@ -1200,9 +1198,6 @@ export default function Dashboard() {
 
       {/* ── Daily Instructions — from manager notes ─────────────────────── */}
       <DailyInstructions />
-
-      {/* ── Live Hatching Monitor — TOP PRIORITY ───────────────────────────── */}
-      <LiveHatchingMonitor lang={lang} />
 
       {/* ── Intelligence Hub — Cross-module alerts ───────────────────────── */}
       <IntelligenceHub />

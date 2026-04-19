@@ -3,7 +3,7 @@
  * Shown only on mobile (md:hidden). Tabs filtered by user role.
  */
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, MessageSquareText, Bird, Wallet, Layers, Menu, Egg, Wheat } from "lucide-react";
+import { LayoutDashboard, Bird, Wallet, Layers, Menu, Egg, Wheat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,8 +19,8 @@ interface Tab {
 
 const TABS: Tab[] = [
   { href: "/",            icon: LayoutDashboard,  labelAr: "الرئيسية",  labelSv: "Hem",       exact: true },
-  { href: "/smart-input", icon: MessageSquareText, labelAr: "إدخال",     labelSv: "Inmatning"  },
   { href: "/flocks",      icon: Bird,              labelAr: "القطعان",   labelSv: "Flockar"    },
+  { href: "/hatching",    icon: Egg,               labelAr: "التفقيس",   labelSv: "Kläckning"  },
   { href: "/feed",        icon: Wheat,             labelAr: "العلف",     labelSv: "Foder"      },
   { href: "/finance",     icon: Wallet,            labelAr: "المالية",   labelSv: "Ekonomi",   adminOnly: true },
   { href: "/operations",  icon: Layers,            labelAr: "العمليات",  labelSv: "Drift"      },

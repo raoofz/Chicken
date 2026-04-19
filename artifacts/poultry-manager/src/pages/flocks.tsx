@@ -174,6 +174,165 @@ const PURPOSE_META: Record<string, { labelAr: string; labelSv: string; emoji: st
 };
 const getPurpose = (p: string) => PURPOSE_META[p] ?? PURPOSE_META.mixed;
 
+// ══ ACTIVE HATCHING CYCLES (read-only summary) ═══════════════════════════════
+// Shows all non-terminal hatching cycles with: status, eggs set, eggs hatched,
+// and progress %. Reuses /api/hatching-cycles — no direct DB coupling.
+
+interface HatchingCycleSummary {
+  id: number;
+  batchName: string;
+  status: string;       // incubating | hatching | completed | failed
+  eggsSet: number;
+  eggsHatched: number | null;
+  startDate: string | null;
+  setTime: string | null;
+}
+
+const HATCH_STATUS_META: Record<string, { ar: string; sv: string; color: string; bg: string; border: string; dot: string }> = {
+  incubating: { ar: "حضانة",       sv: "Inkuberar",   color: "text-blue-700 dark:text-blue-300",       bg: "bg-blue-50 dark:bg-blue-950/30",       border: "border-blue-200 dark:border-blue-800",       dot: "bg-blue-500" },
+  hatching:   { ar: "فقس نشط",     sv: "Kläcker",     color: "text-amber-700 dark:text-amber-300",     bg: "bg-amber-50 dark:bg-amber-950/30",     border: "border-amber-200 dark:border-amber-800",     dot: "bg-amber-500 animate-pulse" },
+  completed:  { ar: "مكتمل",       sv: "Avslutad",    color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50 dark:bg-emerald-950/30", border: "border-emerald-200 dark:border-emerald-800", dot: "bg-emerald-500" },
+  failed:     { ar: "فشل",         sv: "Misslyckad",  color: "text-red-700 dark:text-red-300",         bg: "bg-red-50 dark:bg-red-950/30",         border: "border-red-200 dark:border-red-800",         dot: "bg-red-500" },
+};
+
+function ActiveHatchingCycles() {
+  const { lang } = useLanguage();
+  const ar = lang === "ar";
+  const [cycles, setCycles] = useState<HatchingCycleSummary[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<HatchingCycleSummary[]>("hatching-cycles")
+      .then(data => { if (!cancelled) setCycles(data); })
+      .catch(() => { if (!cancelled) setCycles([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Show all non-terminal first, completed last; hide failed entirely
+  const visible = useMemo(() => {
+    if (!cycles) return null;
+    const order = { incubating: 0, hatching: 1, completed: 2 } as Record<string, number>;
+    return cycles
+      .filter(c => c.status !== "failed")
+      .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+  }, [cycles]);
+
+  if (visible === null) {
+    return (
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Egg className="w-4 h-4 text-amber-500" />
+            {ar ? "دورات التفقيس النشطة" : "Aktiva kläckningscykler"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (visible.length === 0) {
+    return (
+      <Card className="border-dashed border-border/60">
+        <CardContent className="py-6 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+          <Egg className="w-4 h-4 opacity-50" />
+          {ar ? "لا توجد دورة تفقيس نشطة حالياً" : "Inga aktiva kläckningscykler"}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-border/50">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Egg className="w-4 h-4 text-amber-500" />
+            {ar ? "دورات التفقيس النشطة" : "Aktiva kläckningscykler"}
+          </CardTitle>
+          <span className="text-xs text-muted-foreground">{visible.length} {ar ? "دورة" : "cykler"}</span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {visible.map(c => {
+          const meta = HATCH_STATUS_META[c.status] ?? HATCH_STATUS_META.incubating;
+          const hatched = c.eggsHatched ?? 0;
+
+          // Progress: completed → hatched/set; otherwise → days elapsed / 21
+          let progress = 0;
+          let progressLabel = "";
+          if (c.status === "completed") {
+            progress = c.eggsSet > 0 ? Math.round((hatched / c.eggsSet) * 100) : 0;
+            progressLabel = ar ? `${hatched}/${c.eggsSet} بيضة فقست` : `${hatched}/${c.eggsSet} ägg kläckta`;
+          } else if (c.startDate) {
+            const start = new Date(`${c.startDate}T${c.setTime ?? "00:00"}:00`).getTime();
+            const days = Math.max(0, (Date.now() - start) / 86_400_000);
+            progress = Math.min(Math.round((days / 21) * 100), 100);
+            progressLabel = ar ? `اليوم ${Math.floor(days) + 1} من 21` : `Dag ${Math.floor(days) + 1} av 21`;
+          }
+
+          const barColor =
+            c.status === "completed" ? "bg-emerald-500"
+              : c.status === "hatching" ? "bg-amber-500"
+                : "bg-blue-500";
+
+          return (
+            <div key={c.id} className={`rounded-xl border ${meta.border} ${meta.bg} p-3 sm:p-4`}>
+              {/* Row 1: Name + status badge */}
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground text-sm truncate">
+                    {c.batchName || (ar ? `دورة #${c.id}` : `Cykel #${c.id}`)}
+                  </p>
+                </div>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 ${meta.color} bg-background/60 border ${meta.border}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                  {ar ? meta.ar : meta.sv}
+                </div>
+              </div>
+
+              {/* Row 2: Egg counts */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="rounded-lg bg-background/60 border border-border/40 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {ar ? "بيض موضوع" : "Ägg insatta"}
+                  </p>
+                  <p className="text-lg font-bold text-foreground leading-none mt-1">{c.eggsSet}</p>
+                </div>
+                <div className="rounded-lg bg-background/60 border border-border/40 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground font-medium">
+                    {ar ? "بيض فقس" : "Ägg kläckta"}
+                  </p>
+                  <p className="text-lg font-bold text-foreground leading-none mt-1">
+                    {c.eggsHatched ?? <span className="text-muted-foreground">—</span>}
+                  </p>
+                </div>
+              </div>
+
+              {/* Row 3: Progress bar */}
+              <div>
+                <div className="flex items-center justify-between text-[11px] font-medium mb-1">
+                  <span className="text-muted-foreground">{progressLabel}</span>
+                  <span className={meta.color}>{progress}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-background/60 overflow-hidden border border-border/30">
+                  <div
+                    className={`h-full ${barColor} transition-all duration-700`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ══ FORMS ════════════════════════════════════════════════════════════════════
 
 function FlockForm({ initial, onSubmit, onClose, loading, isEdit }: {
@@ -1440,6 +1599,9 @@ export default function Flocks() {
           ))}
         </div>
       )}
+
+      {/* ── Active Hatching Cycles ──────────────────────────────────────── */}
+      <ActiveHatchingCycles />
 
       {/* ── Dialogs ──────────────────────────────────────────────────────── */}
 
