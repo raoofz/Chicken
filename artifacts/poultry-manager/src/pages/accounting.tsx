@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useTranslation } from "@/lib/i18n";
-import { Layers, Receipt, Sparkles, AlertTriangle, TrendingDown, CheckCircle2, Plus, Trash2, DollarSign, Wallet } from "lucide-react";
+import { useLanguage as useTranslation } from "@/contexts/LanguageContext";
+import { Layers, Receipt, Sparkles, AlertTriangle, TrendingDown, CheckCircle2, Plus, Trash2, DollarSign, Wallet, Package, ShoppingCart, Egg, Pill, Wheat } from "lucide-react";
 
 const fmtMoney = (n: number | null | undefined, locale = "ar-IQ") =>
   n === null || n === undefined ? "—" : Number(n).toLocaleString(locale, { maximumFractionDigits: 0 });
@@ -34,6 +34,8 @@ interface Invoice { id:number; customerName:string; totalAmount:string; paidAmou
 interface Payment { id:number; invoiceId:number; amount:string; date:string; method:string|null; notes:string|null }
 interface Insight { id:string; severity:"low"|"medium"|"high"|"critical"; issue:string; cause:string; impact:string; recommendation:string }
 interface InsightsResponse { generatedAt:string; summary:{totalIncome:number;totalExpenses:number;netProfit:number;feedPct:number}; insights: Insight[] }
+interface InventoryItem { id:number; sku:string|null; name:string; category:"feed"|"medicine"|"equipment"|"other"; unit:string; quantityOnHand:string; unitCost:string; reorderLevel:string; notes:string|null }
+interface InventoryMovement { id:number; itemId:number; type:"in"|"out"|"adjustment"; quantity:string; unitCost:string|null; totalCost:string|null; date:string; batchId:number|null; transactionId:number|null; referenceType:string|null; notes:string|null }
 
 const SEVERITY_STYLE: Record<string,{badge:string;icon:typeof AlertTriangle}> = {
   critical: { badge: "bg-red-600 text-white",     icon: AlertTriangle },
@@ -60,18 +62,20 @@ export default function AccountingPage() {
       </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-1">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 gap-1">
           <TabsTrigger value="overview">{t("accounting.tab.overview")}</TabsTrigger>
           <TabsTrigger value="costs">{t("accounting.tab.costs")}</TabsTrigger>
+          <TabsTrigger value="inventory">{t("accounting.tab.inventory")}</TabsTrigger>
           <TabsTrigger value="batches">{t("accounting.tab.batches")}</TabsTrigger>
           <TabsTrigger value="invoices">{t("accounting.tab.invoices")}</TabsTrigger>
           <TabsTrigger value="insights">{t("accounting.tab.insights")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="overview" className="mt-4"><OverviewTab /></TabsContent>
-        <TabsContent value="costs"    className="mt-4"><CostsTab /></TabsContent>
-        <TabsContent value="batches"  className="mt-4"><BatchesTab /></TabsContent>
-        <TabsContent value="invoices" className="mt-4"><InvoicesTab /></TabsContent>
-        <TabsContent value="insights" className="mt-4"><InsightsTab /></TabsContent>
+        <TabsContent value="overview"  className="mt-4"><OverviewTab /></TabsContent>
+        <TabsContent value="costs"     className="mt-4"><CostsTab /></TabsContent>
+        <TabsContent value="inventory" className="mt-4"><InventoryTab /></TabsContent>
+        <TabsContent value="batches"   className="mt-4"><BatchesTab /></TabsContent>
+        <TabsContent value="invoices"  className="mt-4"><InvoicesTab /></TabsContent>
+        <TabsContent value="insights"  className="mt-4"><InsightsTab /></TabsContent>
       </Tabs>
     </div>
   );
@@ -480,5 +484,350 @@ function Field({ label, text, highlight }: { label: string; text: string; highli
       <span className="text-xs font-semibold text-muted-foreground">{label}: </span>
       <span className="text-sm">{text}</span>
     </div>
+  );
+}
+
+// ── Inventory & Operations ───────────────────────────────────────────────────
+function InventoryTab() {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  const { data: items = [] }     = useQuery<InventoryItem[]>({ queryKey: ["inv/items"],     queryFn: () => api("/api/inventory/items") });
+  const { data: movements = [] } = useQuery<InventoryMovement[]>({ queryKey: ["inv/movements"], queryFn: () => api("/api/inventory/movements") });
+  const { data: batches = [] }   = useQuery<Batch[]>({ queryKey: ["batches"],     queryFn: () => api("/api/batches") });
+  const { data: invoices = [] }  = useQuery<Invoice[]>({ queryKey: ["invoices"],  queryFn: () => api("/api/invoices") });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["inv/items"] });
+    qc.invalidateQueries({ queryKey: ["inv/movements"] });
+    qc.invalidateQueries({ queryKey: ["finance/cost-analysis"] });
+    qc.invalidateQueries({ queryKey: ["finance/daily-totals"] });
+    qc.invalidateQueries({ queryKey: ["finance/insights"] });
+    qc.invalidateQueries({ queryKey: ["invoices"] });
+  };
+
+  // Dialogs
+  const [itemOpen, setItemOpen]     = useState(false);
+  const [purchaseOf, setPurchaseOf] = useState<InventoryItem | null>(null);
+  const [useOf, setUseOf]           = useState<InventoryItem | null>(null);
+  const [eggOpen, setEggOpen]       = useState(false);
+
+  const [itemForm, setItemForm] = useState({ name:"", category:"feed", unit:"kg", quantityOnHand:"0", unitCost:"0", reorderLevel:"0" });
+  const addItemMut = useMutation({
+    mutationFn: () => api<InventoryItem>("/api/inventory/items", { method:"POST", body: JSON.stringify({ ...itemForm, quantityOnHand:Number(itemForm.quantityOnHand), unitCost:Number(itemForm.unitCost), reorderLevel:Number(itemForm.reorderLevel) }) }),
+    onSuccess: () => { toast({ title: t("accounting.op.success") }); setItemOpen(false); setItemForm({ name:"", category:"feed", unit:"kg", quantityOnHand:"0", unitCost:"0", reorderLevel:"0" }); refresh(); },
+    onError: (e:any) => toast({ title: e.message, variant: "destructive" }),
+  });
+  const delItemMut = useMutation({ mutationFn: (id:number) => api(`/api/inventory/items/${id}`, { method:"DELETE" }), onSuccess: refresh });
+
+  const lowStock = (it: InventoryItem) =>
+    Number(it.reorderLevel) > 0 && Number(it.quantityOnHand) <= Number(it.reorderLevel);
+
+  const catLabel = (c: string) => t(`accounting.inv.cat.${c}`);
+  const catIcon = (c: string) => c === "feed" ? Wheat : c === "medicine" ? Pill : Package;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="font-semibold flex items-center gap-2"><Package className="w-5 h-5 text-primary" />{t("accounting.inv.title")}</h3>
+          <p className="text-xs text-muted-foreground">{t("accounting.inv.subtitle")}</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => setEggOpen(true)}><Egg className="w-4 h-4 me-1" />{t("accounting.inv.actions.eggSale")}</Button>
+          <Button size="sm" onClick={() => setItemOpen(true)}><Plus className="w-4 h-4 me-1" />{t("accounting.inv.addItem")}</Button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <Card><CardContent className="p-6 text-center text-muted-foreground">{t("accounting.inv.empty")}</CardContent></Card>
+      ) : (
+        <div className="grid gap-2">
+          {items.map(it => {
+            const Icon = catIcon(it.category);
+            const low = lowStock(it);
+            return (
+              <Card key={it.id}><CardContent className="p-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Icon className="w-4 h-4 text-muted-foreground" />
+                      <span className="font-semibold">{it.name}</span>
+                      <Badge variant="outline">{catLabel(it.category)}</Badge>
+                      {low && <Badge className="bg-amber-500 text-white">{t("accounting.inv.lowStock")}</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+                      {t("accounting.inv.qtyOnHand")}: <strong>{Number(it.quantityOnHand)} {it.unit}</strong> •{" "}
+                      {t("accounting.inv.unitCost")}: {fmtMoney(Number(it.unitCost))}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={() => setPurchaseOf(it)}>
+                      <ShoppingCart className="w-4 h-4 me-1" />{t("accounting.inv.actions.purchase")}
+                    </Button>
+                    {(it.category === "feed" || it.category === "medicine") && (
+                      <Button size="sm" variant="outline" onClick={() => setUseOf(it)}>
+                        {it.category === "feed"
+                          ? <><Wheat className="w-4 h-4 me-1" />{t("accounting.inv.actions.useFeed")}</>
+                          : <><Pill  className="w-4 h-4 me-1" />{t("accounting.inv.actions.useMed")}</>}
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" onClick={() => { if (confirm(t("common.confirmDelete"))) delItemMut.mutate(it.id); }}>
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent></Card>
+            );
+          })}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">{t("accounting.movements.title")}</CardTitle></CardHeader>
+        <CardContent>
+          {movements.length === 0 ? (
+            <p className="text-muted-foreground text-sm">{t("accounting.movements.empty")}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-muted-foreground">
+                  <tr><th className="text-start py-1">{t("accounting.col.date")}</th>
+                      <th className="text-start py-1">{t("accounting.inv.itemName")}</th>
+                      <th className="text-start py-1">—</th>
+                      <th className="text-end py-1">{t("accounting.op.qty")}</th>
+                      <th className="text-end py-1">{t("accounting.invoice.total")}</th></tr>
+                </thead>
+                <tbody>
+                  {movements.slice(0, 30).map(m => {
+                    const item = items.find(i => i.id === m.itemId);
+                    return (
+                      <tr key={m.id} className="border-t">
+                        <td className="py-1">{m.date}</td>
+                        <td className="py-1">{item?.name ?? `#${m.itemId}`}</td>
+                        <td className="py-1">
+                          <Badge variant="outline" className={
+                            m.type === "in" ? "bg-emerald-50 text-emerald-700" :
+                            m.type === "out" ? "bg-red-50 text-red-700" : ""
+                          }>
+                            {t(`accounting.movements.${m.type}`)}
+                            {m.referenceType ? ` · ${m.referenceType}` : ""}
+                          </Badge>
+                        </td>
+                        <td className="py-1 text-end tabular-nums">{Number(m.quantity)} {item?.unit ?? ""}</td>
+                        <td className="py-1 text-end tabular-nums">{m.totalCost ? fmtMoney(Number(m.totalCost)) : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Add Item dialog */}
+      <Dialog open={itemOpen} onOpenChange={setItemOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("accounting.inv.addItem")}</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <div><Label>{t("accounting.inv.itemName")}</Label><Input value={itemForm.name} onChange={e => setItemForm({ ...itemForm, name: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><Label>{t("accounting.inv.category")}</Label>
+                <Select value={itemForm.category} onValueChange={v => setItemForm({ ...itemForm, category: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="feed">{t("accounting.inv.cat.feed")}</SelectItem>
+                    <SelectItem value="medicine">{t("accounting.inv.cat.medicine")}</SelectItem>
+                    <SelectItem value="equipment">{t("accounting.inv.cat.equipment")}</SelectItem>
+                    <SelectItem value="other">{t("accounting.inv.cat.other")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>{t("accounting.inv.unit")}</Label><Input value={itemForm.unit} onChange={e => setItemForm({ ...itemForm, unit: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div><Label>{t("accounting.inv.qtyOnHand")}</Label><Input type="number" min="0" step="0.01" value={itemForm.quantityOnHand} onChange={e => setItemForm({ ...itemForm, quantityOnHand: e.target.value })} /></div>
+              <div><Label>{t("accounting.inv.unitCost")}</Label><Input type="number" min="0" step="0.01" value={itemForm.unitCost} onChange={e => setItemForm({ ...itemForm, unitCost: e.target.value })} /></div>
+              <div><Label>{t("accounting.inv.reorder")}</Label><Input type="number" min="0" step="0.01" value={itemForm.reorderLevel} onChange={e => setItemForm({ ...itemForm, reorderLevel: e.target.value })} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setItemOpen(false)}>{t("common.cancel")}</Button>
+            <Button onClick={() => addItemMut.mutate()} disabled={!itemForm.name || !itemForm.unit || addItemMut.isPending}>{t("common.save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <PurchaseDialog item={purchaseOf} onClose={() => setPurchaseOf(null)} onDone={refresh} today={today} />
+      <UseDialog     item={useOf}      onClose={() => setUseOf(null)}      onDone={refresh} today={today} batches={batches} />
+      <EggSaleDialog open={eggOpen}    onClose={() => setEggOpen(false)}   onDone={refresh} today={today} batches={batches} invoices={invoices} />
+    </div>
+  );
+}
+
+function PurchaseDialog({ item, onClose, onDone, today }: { item: InventoryItem | null; onClose: () => void; onDone: () => void; today: () => string }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ quantity:"", unitCost:"", date:today(), supplier:"" });
+  useEffect(() => { if (item) setForm({ quantity:"", unitCost:String(item.unitCost ?? 0), date:today(), supplier:"" }); /* eslint-disable-next-line */ }, [item?.id]);
+
+  const mut = useMutation({
+    mutationFn: () => api("/api/operations/inventory-purchase", {
+      method:"POST",
+      body: JSON.stringify({ itemId:item!.id, quantity:Number(form.quantity), unitCost:Number(form.unitCost), date:form.date, supplier:form.supplier || null }),
+    }),
+    onSuccess: () => { toast({ title: t("accounting.op.success") }); onDone(); onClose(); },
+    onError: (e:any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={!!item} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t("accounting.op.purchase.title")}: {item?.name}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">{t("accounting.op.purchase.help")}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div><Label>{t("accounting.op.qty")} ({item?.unit})</Label><Input type="number" min="0.01" step="0.01" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
+          <div><Label>{t("accounting.inv.unitCost")}</Label><Input type="number" min="0" step="0.01" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.date")}</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.supplier")}</Label><Input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={() => mut.mutate()} disabled={!form.quantity || !form.unitCost || mut.isPending}>{t("common.save")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function UseDialog({ item, onClose, onDone, today, batches }: { item: InventoryItem | null; onClose: () => void; onDone: () => void; today: () => string; batches: Batch[] }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const isFeed = item?.category === "feed";
+  const [form, setForm] = useState<{quantity:string; date:string; batchId:string; dosage:string; notes:string}>({ quantity:"", date:today(), batchId:"", dosage:"", notes:"" });
+  useEffect(() => { if (item) setForm({ quantity:"", date:today(), batchId:"", dosage:"", notes:"" }); /* eslint-disable-next-line */ }, [item?.id]);
+
+  const mut = useMutation({
+    mutationFn: () => api(isFeed ? "/api/operations/feed-usage" : "/api/operations/medicine-usage", {
+      method:"POST",
+      body: JSON.stringify({
+        itemId:item!.id,
+        quantity:Number(form.quantity),
+        date:form.date,
+        batchId: form.batchId ? Number(form.batchId) : null,
+        ...(isFeed ? {} : { dosage: form.dosage || null }),
+        notes: form.notes || null,
+      }),
+    }),
+    onSuccess: () => { toast({ title: t("accounting.op.success") }); onDone(); onClose(); },
+    onError: (e:any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const estCost = item && form.quantity ? Number(form.quantity) * Number(item.unitCost) : 0;
+
+  return (
+    <Dialog open={!!item} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{isFeed ? t("accounting.op.feedUsage.title") : t("accounting.op.medUsage.title")}: {item?.name}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">{isFeed ? t("accounting.op.feedUsage.help") : t("accounting.op.medUsage.help")}</p>
+        <div className="text-xs text-muted-foreground">
+          {t("accounting.inv.qtyOnHand")}: <strong>{item ? Number(item.quantityOnHand) : 0} {item?.unit}</strong>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><Label>{t("accounting.op.qty")} ({item?.unit})</Label><Input type="number" min="0.01" step="0.01" max={item?.quantityOnHand} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.date")}</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+        </div>
+        <div><Label>{t("accounting.op.batch")}</Label>
+          <Select value={form.batchId || "none"} onValueChange={v => setForm({ ...form, batchId: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue placeholder={t("accounting.op.batch.none")} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("accounting.op.batch.none")}</SelectItem>
+              {batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {!isFeed && (
+          <div><Label>{t("accounting.op.dosage")}</Label><Input value={form.dosage} onChange={e => setForm({ ...form, dosage: e.target.value })} /></div>
+        )}
+        <div><Label>{t("common.notes")}</Label><Textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+        <div className="text-sm">≈ <strong>{fmtMoney(estCost)}</strong></div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={() => mut.mutate()} disabled={!form.quantity || mut.isPending}>{t("common.save")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EggSaleDialog({ open, onClose, onDone, today, batches, invoices }: { open: boolean; onClose: () => void; onDone: () => void; today: () => string; batches: Batch[]; invoices: Invoice[] }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [form, setForm] = useState({ eggCount:"", unitPrice:"", date:today(), batchId:"", customer:"", invoiceId:"", notes:"" });
+  useEffect(() => { if (open) setForm({ eggCount:"", unitPrice:"", date:today(), batchId:"", customer:"", invoiceId:"", notes:"" }); }, [open]);
+
+  const mut = useMutation({
+    mutationFn: () => api("/api/operations/egg-sale", {
+      method:"POST",
+      body: JSON.stringify({
+        date:form.date,
+        eggCount:Number(form.eggCount),
+        unitPrice:Number(form.unitPrice),
+        batchId: form.batchId  ? Number(form.batchId)  : null,
+        invoiceId: form.invoiceId ? Number(form.invoiceId) : null,
+        customer: form.customer || null,
+        notes: form.notes || null,
+      }),
+    }),
+    onSuccess: () => { toast({ title: t("accounting.op.success") }); onDone(); onClose(); },
+    onError: (e:any) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const total = form.eggCount && form.unitPrice ? Number(form.eggCount) * Number(form.unitPrice) : 0;
+  const openInvoices = invoices.filter(i => i.status !== "paid");
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{t("accounting.op.eggSale.title")}</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">{t("accounting.op.eggSale.help")}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div><Label>{t("accounting.op.eggCount")}</Label><Input type="number" min="1" value={form.eggCount} onChange={e => setForm({ ...form, eggCount: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.unitPrice")}</Label><Input type="number" min="0" step="0.01" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.date")}</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div><Label>{t("accounting.op.customer")}</Label><Input value={form.customer} onChange={e => setForm({ ...form, customer: e.target.value })} /></div>
+        </div>
+        <div><Label>{t("accounting.op.batch")}</Label>
+          <Select value={form.batchId || "none"} onValueChange={v => setForm({ ...form, batchId: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("accounting.op.batch.none")}</SelectItem>
+              {batches.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label>{t("accounting.op.invoice")}</Label>
+          <Select value={form.invoiceId || "none"} onValueChange={v => setForm({ ...form, invoiceId: v === "none" ? "" : v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("accounting.op.invoice.none")}</SelectItem>
+              {openInvoices.map(i => (
+                <SelectItem key={i.id} value={String(i.id)}>
+                  #{i.id} — {i.customerName} ({fmtMoney(Number(i.remainingAmount))})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="text-sm">{t("accounting.invoice.total")}: <strong>{fmtMoney(total)}</strong></div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={() => mut.mutate()} disabled={!form.eggCount || !form.unitPrice || mut.isPending}>{t("common.save")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

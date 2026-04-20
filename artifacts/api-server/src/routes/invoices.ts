@@ -24,7 +24,7 @@ function computeStatus(paid: number, total: number): "unpaid" | "partial" | "pai
  * for the same invoice serialize and never overwrite each other's totals.
  * Caller MUST be inside a db.transaction.
  */
-async function recomputeInvoice(tx: any, invoiceId: number) {
+export async function recomputeInvoice(tx: any, invoiceId: number) {
   // Acquire row lock first → blocks until any concurrent recompute on this
   // invoice has committed.
   const invRow = await tx.execute(
