@@ -161,8 +161,10 @@ const translations: Record<string, Record<Lang, string>> = {
   "nav.finance.desc":    { ar: "تسجيل الدخل والمصاريف ومراجعة الأرباح", sv: "Inkomster, kostnader och vinst" },
   "nav.analytics.desc":  { ar: "أرقام اليوم الحية — مبيعات وعلف وطيور", sv: "Dagens live-siffror — försäljning & foder" },
   "nav.brain.desc":      { ar: "تاريخ المزرعة الكامل والقرارات الذكية", sv: "Gårdshistorik och smarta beslut" },
+  "nav.ai.desc":         { ar: "مراقبة المزرعة بالصور وتحليل الذكاء الاصطناعي", sv: "Fotoövervakning och AI-analys" },
   "nav.aiAdvanced.desc": { ar: "خطوات عملية مرتبة حسب الأولوية لما يجب فعله اليوم وهذا الأسبوع", sv: "Praktiska steg sorterade efter prioritet för vad som ska göras idag och denna vecka" },
   "nav.aiPrecision.desc":{ ar: "تقرير 7 نقاط شامل لكل مؤشرات المزرعة", sv: "7-punktsrapport för alla gårdsindikatorer" },
+  "nav.dailyPlan.desc":  { ar: "جدول اليوم الذكي حسب المهام والمخاطر", sv: "Smart dagschema baserat på uppgifter och risker" },
   "nav.logs.desc":       { ar: "سجل كل العمليات والتغييرات في النظام", sv: "Logg över alla systemändringar" },
   "nav.settings.desc":   { ar: "إعدادات النظام وإدارة المستخدمين", sv: "Systeminställningar och användare" },
 

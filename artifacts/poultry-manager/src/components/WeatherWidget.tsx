@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Thermometer, Droplets, Wind, AlertTriangle, CheckCircle2, RefreshCw, MapPin, Clock, FlaskConical, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiPath } from "@/lib/api";
 
 const MOSUL_LAT = 36.3354;
 const MOSUL_LON = 43.1188;
@@ -149,7 +150,7 @@ export function WeatherWidget() {
 
   const fetchCycles = useCallback(async () => {
     try {
-      const resp = await fetch("/api/hatching-cycles", { credentials: "include" });
+      const resp = await fetch(apiPath("/hatching-cycles"), { credentials: "include" });
       if (resp.ok) {
         const data = await resp.json();
         setCycles(Array.isArray(data) ? data : []);

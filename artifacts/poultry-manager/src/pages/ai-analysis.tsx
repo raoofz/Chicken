@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { apiPath } from "@/lib/api";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,7 +40,7 @@ const IMAGE_CAT_KEYS = ["all","general","health","production","feeding","incubat
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchImages(): Promise<NoteImage[]> {
-  const r = await fetch("/api/notes/images", { credentials: "include" });
+  const r = await fetch(apiPath("/notes/images"), { credentials: "include" });
   if (!r.ok) throw new Error("fetch_error");
   return r.json();
 }
@@ -53,7 +54,7 @@ async function reanalyzeImage(id: number) {
   return r.json();
 }
 async function uploadFarmPhoto(file: File, date: string, category: string, errUrlMsg: string, errFileMsg: string, errSaveMsg: string): Promise<{ id: number }> {
-  const urlRes = await fetch("/api/notes/images/upload-url", {
+  const urlRes = await fetch(apiPath("/notes/images/upload-url"), {
     method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
     body: JSON.stringify({ contentType: file.type, name: file.name }),
   });
@@ -61,7 +62,7 @@ async function uploadFarmPhoto(file: File, date: string, category: string, errUr
   const { uploadURL, objectPath } = await urlRes.json();
   const uploadRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
   if (!uploadRes.ok) throw new Error(errFileMsg);
-  const saveRes = await fetch("/api/notes/images/save", {
+  const saveRes = await fetch(apiPath("/notes/images/save"), {
     method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
     body: JSON.stringify({ objectPath, originalName: file.name, mimeType: file.type, date, category, caption: "" }),
   });

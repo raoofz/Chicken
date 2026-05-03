@@ -26,6 +26,7 @@ const Analytics         = lazy(() => import("@/pages/analytics"));
 const Brain             = lazy(() => import("@/pages/brain"));
 const Operations        = lazy(() => import("@/pages/operations"));
 const FeedIntelligence  = lazy(() => import("@/pages/feed-intelligence"));
+const DailyPlan         = lazy(() => import("@/pages/daily-plan"));
 const SettingsPage      = lazy(() => import("@/pages/settings"));
 const OfflinePage       = lazy(() => import("@/pages/offline"));
 const NotFound          = lazy(() => import("@/pages/not-found"));
@@ -121,6 +122,9 @@ function AppRoutes() {
           <Route path="/notes"><Redirect to="/workspace?tab=timeline" /></Route>
           <Route path="/brain">
             {() => <ProtectedRoute component={Brain} adminOnly />}
+          </Route>
+          <Route path="/daily-plan">
+            {() => <ProtectedRoute component={DailyPlan} adminOnly />}
           </Route>
           <Route path="/ai">
             {() => <ProtectedRoute component={AiAnalysis} adminOnly />}

@@ -4,7 +4,7 @@ import { sql, eq, desc } from "drizzle-orm";
 import { parseNote } from "../lib/noteSmartParser";
 import { validateActions } from "../lib/actionValidator";
 import { categoryToDomain } from "../lib/farmDomains.js";
-import { runFullAnalysis, buildQuickSolve } from "../lib/ai-engine";
+import { runFullAnalysis, buildQuickSolve, buildDailyPlan } from "../lib/ai-engine";
 import {
   runPredictiveAnalysis,
   runCausalAnalysis,
@@ -77,6 +77,17 @@ router.post("/ai/quick-solve", requireAdmin, async (req: Request, res: Response)
     res.json({ result });
   } catch {
     res.status(500).json({ error: "فشل الحل السريع" });
+  }
+});
+
+router.post("/ai/daily-plan", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const rawData = await getRawFarmData();
+    const lang = getLang(req);
+    const plan = buildDailyPlan(rawData as any, lang);
+    res.json({ plan });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "فشل إنشاء الخطة اليومية" });
   }
 });
 

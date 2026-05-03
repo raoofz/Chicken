@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Lock, User, Shield, LogOut, Pencil, Check, X } from "lucide-react";
+import { apiPath } from "@/lib/api";
 
 export default function Settings() {
   const { user, logout, refreshUser } = useAuth();
@@ -35,7 +36,7 @@ export default function Settings() {
     }
     setPwLoading(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const res = await fetch(apiPath("/auth/change-password"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -61,7 +62,7 @@ export default function Settings() {
     if (!editName.trim() && !editUsername.trim()) return;
     setProfileLoading(true);
     try {
-      const res = await fetch("/api/auth/profile", {
+      const res = await fetch(apiPath("/auth/profile"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

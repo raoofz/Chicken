@@ -137,7 +137,7 @@ function CreateActivityForm({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? ar ? "خطأ في الحفظ" : "Fel vid sparning");
+        throw new Error(err.error ?? (ar ? "خطأ في الحفظ" : "Fel vid sparning"));
       }
       toast({ title: ar ? "✅ تم تسجيل النشاط" : "✅ Aktivitet registrerad" });
       onSuccess();

@@ -21,9 +21,9 @@ const TABS: Tab[] = [
   { href: "/",            icon: LayoutDashboard,  labelAr: "الرئيسية",  labelSv: "Hem",       exact: true },
   { href: "/flocks",      icon: Bird,              labelAr: "القطعان",   labelSv: "Flockar"    },
   { href: "/hatching",    icon: Egg,               labelAr: "التفقيس",   labelSv: "Kläckning"  },
+  { href: "/operations",  icon: Layers,            labelAr: "العمليات",  labelSv: "Drift"      },
   { href: "/feed",        icon: Wheat,             labelAr: "العلف",     labelSv: "Foder"      },
   { href: "/finance",     icon: Wallet,            labelAr: "المالية",   labelSv: "Ekonomi",   adminOnly: true },
-  { href: "/operations",  icon: Layers,            labelAr: "العمليات",  labelSv: "Drift"      },
 ];
 
 interface Props {

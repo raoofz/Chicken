@@ -87,6 +87,23 @@ export async function runMigrations() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS image_feedback (
+        id SERIAL PRIMARY KEY,
+        image_id INTEGER NOT NULL REFERENCES note_images(id) ON DELETE CASCADE,
+        user_id INTEGER,
+        user_name TEXT,
+        corrected_bird_count INTEGER,
+        corrected_health_score INTEGER,
+        corrected_risk_level TEXT,
+        confidence_rating INTEGER,
+        notes TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_image_feedback_image_id ON image_feedback (image_id);
+      CREATE INDEX IF NOT EXISTS idx_image_feedback_created_at ON image_feedback (created_at DESC);
+    `);
+
     // Fix 5: Chickens AI Engine — flock_events table (event timeline)
     await client.query(`
       CREATE TABLE IF NOT EXISTS flock_events (
