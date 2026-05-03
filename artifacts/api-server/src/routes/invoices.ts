@@ -9,6 +9,8 @@ import { Router, type IRouter } from "express";
 import { eq, desc, sql } from "drizzle-orm";
 import { db, invoicesTable, paymentsTable } from "@workspace/db";
 import { logger } from "../lib/logger.js";
+import { withAccountingTransaction } from "../modules/accounting/accounting.repository.js";
+import { postInvoicePaymentJournal } from "../modules/accounting/accounting.service.js";
 
 const router: IRouter = Router();
 
@@ -147,6 +149,19 @@ router.post("/payments", async (req, res) => {
       const totals = await recomputeInvoice(tx, Number(invoiceId));
       return { payment, ...totals };
     });
+
+    try {
+      await withAccountingTransaction((tx) =>
+        postInvoicePaymentJournal(tx, {
+          date,
+          amount: Number(amount),
+          sourceId: result.payment.id,
+          description: `Invoice payment #${result.payment.id}`,
+        }),
+      );
+    } catch (accountingErr) {
+      console.error("Accounting failed", accountingErr);
+    }
 
     logger.info({ invoiceId, amount, status: result.status }, "[payments] recorded");
     res.status(201).json(result);

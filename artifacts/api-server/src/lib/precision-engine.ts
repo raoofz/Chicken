@@ -290,7 +290,7 @@ function detectAnomalies(series: TimedValue[], zThreshold = 2.5): AnomalyPoint[]
   const vals = series.map(d => d.value);
   const zs = zScores(vals);
   return series
-    .map((d, i) => {
+    .map((d, i): AnomalyPoint | null => {
       const z = zs[i];
       if (Math.abs(z) <= zThreshold) return null;
       const absZ = Math.abs(z);

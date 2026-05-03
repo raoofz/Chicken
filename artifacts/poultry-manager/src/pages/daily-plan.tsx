@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldAlert, Loader2, CalendarClock, AlertTriangle, CheckCircle2, Clock, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiPath } from "@/lib/api";
 
 interface PlanSlot {
   time: string;
@@ -33,20 +34,10 @@ export default function DailyPlanPage() {
   const [loading, setLoading] = useState(false);
   const [checkedSlots, setCheckedSlots] = useState<Set<number>>(new Set());
 
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-        <ShieldAlert className="w-16 h-16 text-muted-foreground/40" />
-        <h2 className="text-xl font-bold">{t("ai.restricted")}</h2>
-        <p className="text-muted-foreground">{t("ai.adminOnly")}</p>
-      </div>
-    );
-  }
-
   const fetchPlan = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/ai/daily-plan", {
+      const res = await fetch(apiPath("/ai/daily-plan"), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -67,8 +58,8 @@ export default function DailyPlanPage() {
   };
 
   useEffect(() => {
-    fetchPlan();
-  }, [lang]);
+    if (isAdmin) void fetchPlan();
+  }, [isAdmin, lang]);
 
   const toggleSlot = (idx: number) => {
     setCheckedSlots(prev => {
@@ -112,6 +103,16 @@ export default function DailyPlanPage() {
   const completedCount = checkedSlots.size;
   const totalSlots = plan?.slots.length ?? 0;
   const progress = totalSlots > 0 ? Math.round((completedCount / totalSlots) * 100) : 0;
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+        <ShieldAlert className="w-16 h-16 text-muted-foreground/40" />
+        <h2 className="text-xl font-bold">{t("ai.restricted")}</h2>
+        <p className="text-muted-foreground">{t("ai.adminOnly")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] md:h-[calc(100vh-5rem)]">

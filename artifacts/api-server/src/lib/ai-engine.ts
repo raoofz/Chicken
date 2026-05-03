@@ -1110,7 +1110,8 @@ export function buildQuickSolve(
     });
     activeCycles.forEach(c => {
       const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
-      relatedFacts.push(L(`جارية — ${c.batchName}: اليوم ${daysIn}/${c.incubationDays}`, `Pågående — ${c.batchName}: Dag ${daysIn}/${c.incubationDays}`));
+      const incubationDays = Math.max(1, Math.round((new Date(c.expectedHatchDate).getTime() - new Date(c.startDate).getTime()) / 86400000));
+      relatedFacts.push(L(`جارية — ${c.batchName}: اليوم ${daysIn}/${incubationDays}`, `Pågående — ${c.batchName}: Dag ${daysIn}/${incubationDays}`));
     });
     const avgRate = lastCompleted.length > 0 ? lastCompleted.reduce((a, c) => a + (c.eggsSet > 0 ? (c.eggsHatched! / c.eggsSet * 100) : 0), 0) / lastCompleted.length : 0;
 
@@ -1130,7 +1131,8 @@ export function buildQuickSolve(
     activeCycles.forEach(c => {
       const temp = c.temperature ? `${Number(c.temperature)}°م` : L("غير مسجلة", "ej registrerad");
       const daysIn = Math.floor((new Date(t).getTime() - new Date(c.startDate).getTime()) / 86400000);
-      relatedFacts.push(L(`${c.batchName}: حرارة ${temp} — اليوم ${daysIn}/${c.incubationDays}`, `${c.batchName}: Temp ${temp} — dag ${daysIn}/${c.incubationDays}`));
+      const incubationDays = Math.max(1, Math.round((new Date(c.expectedHatchDate).getTime() - new Date(c.startDate).getTime()) / 86400000));
+      relatedFacts.push(L(`${c.batchName}: حرارة ${temp} — اليوم ${daysIn}/${incubationDays}`, `${c.batchName}: Temp ${temp} — dag ${daysIn}/${incubationDays}`));
     });
     const isHigh = has("مرتفعة", "خطيرة", "تتجاوز", "hög", "farlig", "överstiger");
     const isMissing = has("تسجيل الحرارة", "مفقودة", "saknad");
@@ -1203,7 +1205,7 @@ export function buildQuickSolve(
 
   /* ── 6. CHICK HEALTH / BIOLOGICAL (صيصان، أعراض) ── */
   } else if (has("صيصان", "كتاكيت", "طيور", "خمول", "أعراض", "مرض", "kyckling", "fågel", "symptom", "sjuk") || issue.category === "biological") {
-    data.flocks.slice(0, 3).forEach(f => relatedFacts.push(L(`${f.name}: ${f.count} طير — ${f.type ?? "دجاج"}`, `${f.name}: ${f.count} fåglar — ${f.type ?? "höns"}`)));
+    data.flocks.slice(0, 3).forEach(f => relatedFacts.push(L(`${f.name}: ${f.count} طير — ${f.breed ?? "دجاج"}`, `${f.name}: ${f.count} fåglar — ${f.breed ?? "höns"}`)));
     if (totalBirds === 0) relatedFacts.push(L("لا توجد قطعان مسجلة في النظام", "Inga flockar registrerade i systemet"));
 
     steps.push(
@@ -1416,7 +1418,7 @@ export function buildDailyPlan(data: RawFarmData, lang: EngineLang = "ar"): Dail
   const overdueTasks = data.tasks.filter(tk => tk.dueDate && tk.dueDate <= t && !tk.completed);
   const todayTasks = data.tasks.filter(tk => tk.dueDate === t && !tk.completed);
   const pendingTasks = data.tasks.filter(tk => !tk.completed);
-  const totalBirds = data.flocks.reduce((s, f) => s + (f.currentCount ?? 0), 0);
+  const totalBirds = data.flocks.reduce((s, f) => s + f.count, 0);
 
   slots.push({
     time: "05:30",

@@ -262,6 +262,10 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = await response.json();
+  const data = (await response.json()) as { signed_url?: unknown };
+  const signedURL = data.signed_url;
+  if (typeof signedURL !== "string" || signedURL.length === 0) {
+    throw new Error("Signed URL missing from sidecar response");
+  }
   return signedURL;
 }

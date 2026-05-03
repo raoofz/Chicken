@@ -58,6 +58,8 @@ export interface Evidence {
   source: string;
 }
 
+const evidenceRelevance = (value: Evidence["relevance"]) => value;
+
 export interface ActionStep {
   priority: number;
   action: string;
@@ -111,7 +113,7 @@ export interface SimulationResult {
   distribution: { bucket: string; count: number; pct: number }[];
   currentBenchmark: number;
   improvement: number;
-  scenarios: { label: string; probability: number; outcome: string; hatchRate: number }[];
+  scenarios: PredictiveScenario[];
   sensitivity: { factor: string; impact: number; direction: "positive" | "negative" }[];
   evidence: Evidence[];
   confidenceScore: number;
@@ -305,7 +307,7 @@ export function runPredictiveAnalysis(data: RawFarmData, lang: EngineLang = "ar"
       value: `${avgHatch.toFixed(1)}%`,
       benchmark: `${PS.hatch.good}%`,
       deviation: `${(avgHatch - PS.hatch.good).toFixed(1)}%`,
-      relevance: avgHatch >= PS.hatch.good ? "medium" : avgHatch >= PS.hatch.acceptable ? "high" : "critical" as const,
+      relevance: evidenceRelevance(avgHatch >= PS.hatch.good ? "medium" : avgHatch >= PS.hatch.acceptable ? "high" : "critical"),
       source: L(lang, `${completed.length} دورة مكتملة`, `${completed.length} avslutade cykler`),
     }] : []),
     ...(temps.length > 0 ? [{
@@ -313,7 +315,7 @@ export function runPredictiveAnalysis(data: RawFarmData, lang: EngineLang = "ar"
       value: `${avgTemp.toFixed(1)}°C`,
       benchmark: `${PS.temp.optimal.min}-${PS.temp.optimal.max}°C`,
       deviation: `${(avgTemp - 37.65).toFixed(2)}°C`,
-      relevance: tempOk ? "low" : Math.abs(avgTemp - 37.65) > 0.5 ? "critical" : "high" as const,
+      relevance: evidenceRelevance(tempOk ? "low" : Math.abs(avgTemp - 37.65) > 0.5 ? "critical" : "high"),
       source: L(lang, `${active.length} دورة نشطة`, `${active.length} aktiva cykler`),
     }] : []),
     {
@@ -321,7 +323,7 @@ export function runPredictiveAnalysis(data: RawFarmData, lang: EngineLang = "ar"
       value: String(overdue.length),
       benchmark: "0",
       deviation: `+${overdue.length}`,
-      relevance: overdue.length === 0 ? "low" : overdue.length <= 2 ? "medium" : "high" as const,
+      relevance: evidenceRelevance(overdue.length === 0 ? "low" : overdue.length <= 2 ? "medium" : "high"),
       source: L(lang, "قاعدة المهام", "Uppgiftsdatabasen"),
     },
     ...(hatchRates.length >= 3 ? [{
@@ -329,7 +331,7 @@ export function runPredictiveAnalysis(data: RawFarmData, lang: EngineLang = "ar"
       value: `${(reg.r2 * 100).toFixed(0)}%`,
       benchmark: ">60%",
       deviation: trend >= 0 ? `+${trend.toFixed(1)}% لكل دورة` : `${trend.toFixed(1)}% لكل دورة`,
-      relevance: reg.r2 > 0.6 ? "high" : "medium" as const,
+      relevance: evidenceRelevance(reg.r2 > 0.6 ? "high" : "medium"),
       source: L(lang, "انحدار خطي على بيانات تاريخية", "Linjär regression på historik"),
     }] : []),
   ];
@@ -577,7 +579,7 @@ export function runCausalAnalysis(data: RawFarmData, lang: EngineLang = "ar"): A
     deviation: p.effect > 0
       ? L(lang, `تأثير سلبي محتمل: -${p.effect.toFixed(1)}% فقس`, `Potentiell negativ effekt: -${p.effect.toFixed(1)}% kläckning`)
       : L(lang, "لا تأثير سلبي محدد", "Ingen negativ effekt identifierad"),
-    relevance: p.effect >= 15 ? "critical" : p.effect >= 8 ? "high" : p.effect > 0 ? "medium" : "low" as const,
+    relevance: evidenceRelevance(p.effect >= 15 ? "critical" : p.effect >= 8 ? "high" : p.effect > 0 ? "medium" : "low"),
     source: L(lang, "تحليل سببي مبني على علم الدواجن", "Kausal analys baserad på fjäderfävetenskap"),
   }));
 
@@ -762,7 +764,7 @@ export function runMonteCarloSimulation(
       value: `${tempBase}°C`,
       benchmark: `${PS.temp.optimal.min}-${PS.temp.optimal.max}°C`,
       deviation: `${(tempBase - 37.65).toFixed(2)}°C`,
-      relevance: Math.abs(tempBase - 37.65) < 0.15 ? "low" : Math.abs(tempBase - 37.65) < 0.35 ? "medium" : "critical" as const,
+      relevance: evidenceRelevance(Math.abs(tempBase - 37.65) < 0.15 ? "low" : Math.abs(tempBase - 37.65) < 0.35 ? "medium" : "critical"),
       source: L(lang, "إدخال المستخدم", "Användarinmatning"),
     },
     {
@@ -786,7 +788,7 @@ export function runMonteCarloSimulation(
       value: `±${simStd.toFixed(1)}%`,
       benchmark: "<10%",
       deviation: simStd > 10 ? L(lang, "تقلب مرتفع", "Hög volatilitet") : L(lang, "تقلب مقبول", "Acceptabel volatilitet"),
-      relevance: simStd > 12 ? "high" : "low" as const,
+      relevance: evidenceRelevance(simStd > 12 ? "high" : "low"),
       source: "Monte Carlo output",
     },
   ];

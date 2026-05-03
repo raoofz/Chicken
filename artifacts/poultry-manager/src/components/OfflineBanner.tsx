@@ -23,6 +23,7 @@ export default function OfflineBanner() {
       const t = setTimeout(() => setShowRestored(false), 3000);
       return () => clearTimeout(t);
     }
+    return;
   }, [isOnline, wasOffline]);
 
   if (isOnline && !showRestored) return null;

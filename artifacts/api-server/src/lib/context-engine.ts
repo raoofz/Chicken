@@ -23,7 +23,7 @@ export interface DaySnapshot {
 
 export interface ContextAlert {
   flag: string;
-  severity: "critical" | "warning" | "info";
+  severity: "critical" | "high" | "warning" | "info";
   titleAr: string;
   titleSv: string;
   detailAr: string;

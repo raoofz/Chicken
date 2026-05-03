@@ -4,7 +4,7 @@ import { sql, eq, desc } from "drizzle-orm";
 import { parseNote } from "../lib/noteSmartParser";
 import { validateActions } from "../lib/actionValidator";
 import { categoryToDomain } from "../lib/farmDomains.js";
-import { runFullAnalysis, buildQuickSolve } from "../lib/ai-engine";
+import { runFullAnalysis, buildQuickSolve, buildDailyPlan } from "../lib/ai-engine";
 import {
   runPredictiveAnalysis,
   runCausalAnalysis,
@@ -77,6 +77,17 @@ router.post("/ai/quick-solve", requireAdmin, async (req: Request, res: Response)
     res.json({ result });
   } catch {
     res.status(500).json({ error: "فشل الحل السريع" });
+  }
+});
+
+router.post("/ai/daily-plan", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const rawData = await getRawFarmData();
+    const lang = getLang(req);
+    const plan = buildDailyPlan(rawData as any, lang);
+    res.json({ plan });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? "فشل إنشاء الخطة اليومية" });
   }
 });
 
@@ -597,7 +608,7 @@ router.post("/ai/resolve", requireAdmin, async (req: Request, res: Response) => 
 // ─────────────────────────────────────────────────────────────────────────────
 // SMART NOTE ANALYZER — parses Arabic notes and auto-creates structured records
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/ai/smart-analyze", async (req: Request, res: Response) => {
+router.post("/ai/smart-analyze", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { text, date, lang } = req.body ?? {};
     if (!text || typeof text !== "string" || text.trim().length < 5) {
@@ -751,7 +762,7 @@ router.post("/ai/parse", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/ai/commit", async (req: Request, res: Response) => {
+router.post("/ai/commit", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { actions, date, lang, originalText } = req.body ?? {};
     if (!Array.isArray(actions) || actions.length === 0) {
@@ -941,7 +952,7 @@ router.post("/ai/intelligence/feedback", requireAdmin, async (req: Request, res:
     await db.insert(dailyNotesTable).values({
       date: new Date().toISOString().split("T")[0],
       content,
-      authorName: (req.session as any)?.username ?? "system",
+      authorName: req.session.name ?? "system",
       category: "health",
     });
     res.json({ ok: true });

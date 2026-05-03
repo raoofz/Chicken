@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { apiPath } from "@/lib/api";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ export function DailyInstructions() {
   const loadData = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const res = await fetch("/api/intelligence/daily-instructions");
+      const res = await fetch(apiPath("/intelligence/daily-instructions"), { credentials: "include" });
       if (res.ok) {
         const json: DailyInstructionsData = await res.json();
         setData(json);
@@ -286,7 +287,7 @@ export function DailyInstructions() {
           <p className="text-xs text-muted-foreground">
             {ar ? "يتحدث تلقائياً كل دقيقة" : "Uppdateras automatiskt varje minut"}
           </p>
-          <Link href="/notes">
+          <Link href="/operations">
             <button className={`text-xs text-primary hover:underline font-medium flex items-center gap-1 ${ar ? "flex-row-reverse" : ""}`}>
               {ar ? "عرض الملاحظات" : "Visa anteckningar"}
               <ExternalLink className="w-3 h-3" />

@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiPath } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle, CheckCircle2, Info, ChevronRight, RefreshCw, Brain,
@@ -140,7 +141,7 @@ function useIntelligenceAlerts() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/intelligence/alerts");
+      const r = await fetch(apiPath("/intelligence/alerts"), { credentials: "include" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const json = await r.json();
       setData(json);

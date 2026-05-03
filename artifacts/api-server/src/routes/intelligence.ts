@@ -353,7 +353,7 @@ async function runAnalysis(): Promise<IntelligenceReport> {
 
   // ── 6. GOALS ANALYSIS ────────────────────────────────────────────────────────
   if (goals.length > 0) {
-    const completed = goals.filter((g: any) => g.status === "completed").length;
+    const completed = goals.filter((g: any) => g.completed === true).length;
     const completionPct = Math.round((completed / goals.length) * 100);
     if (completionPct >= 80) {
       alerts.push({

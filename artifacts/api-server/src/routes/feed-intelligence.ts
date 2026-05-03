@@ -11,7 +11,7 @@
 
 import { Router, type Request, type Response } from "express";
 import { db, flocksTable, transactionsTable, flockProductionLogsTable, feedRecordsTable, feedRecordAllocationsTable } from "@workspace/db";
-import { desc, gte, lte, and, eq, sql } from "drizzle-orm";
+import { desc, gte, lte, and, eq, inArray, sql } from "drizzle-orm";
 import { runFeedCostEngine } from "../lib/feed-cost-engine.js";
 import { BREED_PROFILES, getBreedProfile, getExpectedProductionPct, getExpectedDailyFeedGrams, classifyGrowthStage, GLOBAL_BENCHMARKS } from "../lib/breed-benchmarks.js";
 const router = Router();
@@ -50,7 +50,7 @@ router.get("/feed-intelligence/summary", async (req: Request, res: Response) => 
     const recordIds = feedRecords.map(r => r.id);
     const allocations = recordIds.length > 0
       ? await db.select().from(feedRecordAllocationsTable)
-          .where(sql`feed_record_id = ANY(${sql.raw(`ARRAY[${recordIds.join(",")}]`)})`)
+          .where(inArray(feedRecordAllocationsTable.feedRecordId, recordIds))
       : [];
 
     const allocationsByRecord: Record<number, Array<{ flockId: number; quantityKg: number }>> = {};

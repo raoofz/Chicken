@@ -10,7 +10,15 @@ import {
   paymentsTable,
 } from "@workspace/db";
 import { logger } from "../lib/logger.js";
+import { categoryToDomain } from "../lib/farmDomains.js";
 import { recomputeInvoice } from "./invoices.js";
+import { withAccountingTransaction } from "../modules/accounting/accounting.repository.js";
+import {
+  postChickSaleJournal,
+  postFeedPurchaseJournal,
+  postInvoicePaymentJournal,
+  postMedicinePurchaseJournal,
+} from "../modules/accounting/accounting.service.js";
 
 /**
  * OPERATIONS LAYER — event-driven, atomic.
@@ -79,7 +87,7 @@ router.post("/operations/inventory-purchase", async (req, res) => {
         date,
         type: "expense",
         category,
-        domain: "operations",
+        domain: categoryToDomain(category),
         description: `شراء ${item.name} × ${qty} ${item.unit}${supplier ? ` — ${supplier}` : ""}`,
         amount: String(total),
         authorId: req.session.userId,
@@ -108,6 +116,26 @@ router.post("/operations/inventory-purchase", async (req, res) => {
 
       return { transaction: txRow, movement: mv, newQuantity: newQty };
     });
+
+    try {
+      if (result.transaction.category === "feed_purchase") {
+        await withAccountingTransaction(tx => postFeedPurchaseJournal(tx, {
+          date,
+          amount: total,
+          sourceId: result.transaction.id,
+          description: result.transaction.description,
+        }));
+      } else if (result.transaction.category === "medicine_purchase") {
+        await withAccountingTransaction(tx => postMedicinePurchaseJournal(tx, {
+          date,
+          amount: total,
+          sourceId: result.transaction.id,
+          description: result.transaction.description,
+        }));
+      }
+    } catch (e) {
+      console.error("Accounting failed", e);
+    }
 
     res.status(201).json(result);
   } catch (e: any) {
@@ -143,7 +171,7 @@ router.post("/operations/feed-usage", async (req, res) => {
         date,
         type: "expense",
         category: "feed",
-        domain: "operations",
+        domain: categoryToDomain("feed"),
         description: `استهلاك علف: ${item.name} × ${qty} ${item.unit}`,
         amount: String(total),
         authorId: req.session.userId,
@@ -213,7 +241,7 @@ router.post("/operations/medicine-usage", async (req, res) => {
         date,
         type: "expense",
         category: "medicine",
-        domain: "health",
+        domain: categoryToDomain("medicine"),
         description: `دواء: ${item.name} × ${qty} ${item.unit}`,
         amount: String(total),
         authorId: req.session.userId,
@@ -256,6 +284,17 @@ router.post("/operations/medicine-usage", async (req, res) => {
       return { transaction: txRow, medicineRecord: med, movement: mv, newQuantity: newQty, cost: total };
     });
 
+    try {
+      await withAccountingTransaction(tx => postMedicinePurchaseJournal(tx, {
+        date,
+        amount: result.cost,
+        sourceId: result.transaction.id,
+        description: result.transaction.description,
+      }));
+    } catch (e) {
+      console.error("Accounting failed", e);
+    }
+
     res.status(201).json(result);
   } catch (e: any) {
     logger.error({ err: e }, "[ops/medicine-usage] failed");
@@ -290,8 +329,8 @@ router.post("/operations/egg-sale", async (req, res) => {
       const [txRow] = await tx.insert(transactionsTable).values({
         date,
         type: "income",
-        category: "egg_sales",
-        domain: "production",
+        category: "egg_sale",
+        domain: categoryToDomain("egg_sale"),
         description: `بيع بيض: ${count}${customer ? ` — ${customer}` : ""}${notes ? ` — ${notes}` : ""}`,
         amount: String(total),
         authorId: req.session.userId,
@@ -330,6 +369,25 @@ router.post("/operations/egg-sale", async (req, res) => {
 
       return { transaction: txRow, total, invoicePayment };
     });
+
+    try {
+      await withAccountingTransaction(tx => postChickSaleJournal(tx, {
+        date,
+        amount: result.total,
+        sourceId: result.transaction.id,
+        description: result.transaction.description,
+      }));
+      if (result.invoicePayment?.payment?.id) {
+        await withAccountingTransaction(tx => postInvoicePaymentJournal(tx, {
+          date,
+          amount: result.total,
+          sourceId: result.invoicePayment.payment.id,
+          description: result.invoicePayment.payment.notes ?? result.transaction.description,
+        }));
+      }
+    } catch (e) {
+      console.error("Accounting failed", e);
+    }
 
     res.status(201).json(result);
   } catch (e: any) {

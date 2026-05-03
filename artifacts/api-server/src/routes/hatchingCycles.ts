@@ -75,7 +75,7 @@ router.put("/hatching-cycles/:id", async (req, res) => {
     let isActive: boolean | undefined;
     if (goingTerminal) {
       isActive = false;
-    } else if (body.isActive === true) {
+    } else if ((req.body as { isActive?: unknown }).isActive === true) {
       // Explicit activation: deactivate all others first
       await tx.update(hatchingCyclesTable)
         .set({ isActive: false })

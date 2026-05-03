@@ -13,7 +13,8 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import MobileBottomNav from "@/components/MobileBottomNav";
 
-const WHATSAPP_GROUP_URL = "https://wa.me";
+const WHATSAPP_GROUP_URL =
+  import.meta.env.VITE_WHATSAPP_GROUP_URL?.trim() || "https://web.whatsapp.com/";
 
 interface NavItem {
   href: string;
@@ -28,13 +29,16 @@ const NAV_KEYS: NavItem[] = [
   { href: "/flocks",      key: "nav.flocks",       descKey: "nav.flocks.desc",      icon: Bird,            adminOnly: false },
   { href: "/hatching",    key: "nav.hatching",     descKey: "nav.hatching.desc",    icon: Egg,             adminOnly: false },
   { href: "/operations",  key: "nav.operations",   descKey: "nav.operations.desc",  icon: Layers,          adminOnly: false },
+  { href: "/tasks",       key: "nav.tasks",        descKey: "nav.tasks.desc",       icon: CheckSquare,     adminOnly: false },
   { href: "/feed",        key: "nav.feed",         descKey: "nav.feed.desc",        icon: Wheat,           adminOnly: false },
   // ── Admin only ──
   { href: "/finance",     key: "nav.finance",      descKey: "nav.finance.desc",     icon: Wallet,          adminOnly: true  },
   { href: "/accounting",  key: "nav.accounting",   descKey: "nav.accounting.desc",  icon: Calculator,      adminOnly: true  },
   { href: "/workspace",   key: "nav.workspace",    descKey: "nav.workspace.desc",   icon: NotebookPen,     adminOnly: true  },
+  { href: "/daily-plan",  key: "nav.dailyPlan",    descKey: "nav.dailyPlan.desc",   icon: Bell,            adminOnly: true  },
   { href: "/analytics",   key: "nav.analytics",    descKey: "nav.analytics.desc",   icon: Activity,        adminOnly: true  },
   { href: "/brain",       key: "nav.brain",        descKey: "nav.brain.desc",       icon: Database,        adminOnly: true  },
+  { href: "/ai",          key: "nav.ai",           descKey: "nav.ai.desc",          icon: FileText,        adminOnly: true  },
   { href: "/ai/advanced", key: "nav.aiAdvanced",   descKey: "nav.aiAdvanced.desc",  icon: FlaskConical,    adminOnly: true  },
   { href: "/ai/precision",key: "nav.aiPrecision",  descKey: "nav.aiPrecision.desc", icon: BrainCircuit,    adminOnly: true  },
   { href: "/settings",    key: "nav.settings",     descKey: "nav.settings.desc",    icon: Settings,        adminOnly: true  },

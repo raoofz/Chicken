@@ -560,9 +560,13 @@ export default function FlockIntelligencePanel({ flockId, flockName, ar }: Props
                       )}
                       <Badge variant="outline" className="text-[9px] px-1 py-0 h-4">{evt.confidence}%</Badge>
                     </div>
-                    {evt.payload?.signalAr && (
+                    {typeof evt.payload?.signalAr === "string" && (
                       <p className="text-muted-foreground mt-0.5 truncate">
-                        {ar ? String(evt.payload.signalAr) : String((evt.payload as any).signalSv ?? evt.payload.signalAr)}
+                        {ar
+                          ? evt.payload.signalAr
+                          : typeof evt.payload.signalSv === "string"
+                            ? evt.payload.signalSv
+                            : evt.payload.signalAr}
                       </p>
                     )}
                     <p className="text-[10px] text-muted-foreground/60 mt-0.5">

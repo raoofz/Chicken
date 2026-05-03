@@ -28,11 +28,14 @@ export type Domain = typeof DOMAINS[keyof typeof DOMAINS];
 // ── Expense categories ───────────────────────────────────────────────────────
 export const EXPENSE_CATEGORIES = {
   FEED:                 "feed",
+  FEED_PURCHASE:        "feed_purchase",
   EGGS_PURCHASE:        "eggs_purchase",
   INCUBATION_SUPPLIES:  "incubation_supplies",
   MEDICINE:             "medicine",
+  MEDICINE_PURCHASE:    "medicine_purchase",
   VACCINES:             "vaccines",
   DISINFECTION:         "disinfection",
+  SUPPLIES_PURCHASE:    "supplies_purchase",
   ELECTRICITY:          "electricity",
   WATER:                "water",
   FUEL:                 "fuel",
@@ -61,6 +64,7 @@ export type TransactionCategory = ExpenseCategory | IncomeCategory;
 export const CATEGORY_DOMAIN_MAP: Record<string, Domain> = {
   // Feed domain
   feed:                DOMAINS.FEED,
+  feed_purchase:       DOMAINS.FEED,
 
   // Egg domain — strictly separate from feed
   eggs_purchase:       DOMAINS.EGG,
@@ -68,10 +72,12 @@ export const CATEGORY_DOMAIN_MAP: Record<string, Domain> = {
 
   // Health domain
   medicine:            DOMAINS.HEALTH,
+  medicine_purchase:   DOMAINS.HEALTH,
   vaccines:            DOMAINS.HEALTH,
   disinfection:        DOMAINS.HEALTH,
 
   // Operational domain
+  supplies_purchase:   DOMAINS.OPERATIONAL,
   electricity:         DOMAINS.OPERATIONAL,
   water:               DOMAINS.OPERATIONAL,
   fuel:                DOMAINS.OPERATIONAL,
@@ -100,11 +106,14 @@ export function categoryToDomain(category: string): Domain {
 export const CATEGORY_LABELS: Record<string, { ar: string; sv: string; icon: string }> = {
   // Expense
   feed:                { ar: "علف",                    sv: "Foder",                   icon: "🌾" },
+  feed_purchase:       { ar: "شراء علف",               sv: "Foderinköp",              icon: "🌾" },
   eggs_purchase:       { ar: "شراء بيض",               sv: "Inköp av ägg",            icon: "🥚" },
   incubation_supplies: { ar: "مستلزمات تفقيس",         sv: "Kläckningsförnödenheter", icon: "🔧" },
   medicine:            { ar: "أدوية وعلاج",             sv: "Medicin & behandling",    icon: "💊" },
+  medicine_purchase:   { ar: "شراء أدوية",             sv: "Medicininköp",            icon: "💊" },
   vaccines:            { ar: "لقاحات",                  sv: "Vacciner",                icon: "💉" },
   disinfection:        { ar: "مطهرات ومعقمات",          sv: "Desinfektion",            icon: "🧴" },
+  supplies_purchase:   { ar: "شراء مستلزمات",          sv: "Inköp av förnödenheter",  icon: "📦" },
   electricity:         { ar: "كهرباء",                  sv: "Elektricitet",            icon: "⚡" },
   water:               { ar: "ماء",                     sv: "Vatten",                  icon: "💧" },
   fuel:                { ar: "وقود ومولد",              sv: "Bränsle & generator",     icon: "⛽" },

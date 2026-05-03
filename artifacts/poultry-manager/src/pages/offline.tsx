@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiPath } from "@/lib/api";
 import { WifiOff, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ export default function OfflinePage() {
   const retry = async () => {
     setChecking(true);
     try {
-      const r = await fetch("/api/health", { cache: "no-store" });
+      const r = await fetch(apiPath("/healthz"), { cache: "no-store" });
       if (r.ok) window.location.href = "/";
     } catch {
       // still offline

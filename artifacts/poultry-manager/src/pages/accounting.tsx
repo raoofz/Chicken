@@ -29,6 +29,13 @@ interface CostAnalysis {
   byBatch: Array<{ batchId:number; name:string; chickenCount:number; status:string; income:number; expenses:number; netProfit:number; costPerChicken:number|null; profitPerChicken:number|null; profitable:boolean }>;
   byCategory: Array<{ category: string; total: number; pct: number }>;
 }
+interface ReceivablesSummary {
+  totalOutstanding: number;
+  overdueAmount: number;
+  unpaidCount: number;
+  partialCount: number;
+  overdueCount: number;
+}
 interface Batch { id:number; name:string; flockId:number|null; startDate:string; endDate:string|null; chickenCount:number; status:string; notes:string|null }
 interface Invoice { id:number; customerName:string; totalAmount:string; paidAmount:string; remainingAmount:string; status:string; issueDate:string; dueDate:string|null; notes:string|null }
 interface Payment { id:number; invoiceId:number; amount:string; date:string; method:string|null; notes:string|null }
@@ -92,6 +99,10 @@ function OverviewTab() {
     queryKey: ["finance/daily-totals"],
     queryFn: () => api("/api/finance/daily-totals?days=30"),
   });
+  const { data: receivables } = useQuery<ReceivablesSummary>({
+    queryKey: ["finance/receivables-summary"],
+    queryFn: () => api("/api/finance/receivables-summary"),
+  });
 
   if (isLoading || !cost) return <div className="p-8 text-center text-muted-foreground">{t("common.loading")}</div>;
 
@@ -104,6 +115,14 @@ function OverviewTab() {
         <Kpi label={t("accounting.kpi.netProfit")}   value={fmtMoney(cost.netProfit)}     icon={TrendingDown} tone={cost.netProfit>=0?"emerald":"red"} />
         <Kpi label={t("accounting.kpi.chickens")}    value={String(cost.totalChickens)}   icon={Layers}     tone="blue" />
       </div>
+      {receivables && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Kpi label={t("accounting.receivables.outstanding")} value={fmtMoney(receivables.totalOutstanding)} icon={Receipt} tone={receivables.totalOutstanding > 0 ? "amber" : "emerald"} />
+          <Kpi label={t("accounting.receivables.overdue")} value={fmtMoney(receivables.overdueAmount)} icon={AlertTriangle} tone={receivables.overdueAmount > 0 ? "red" : "emerald"} />
+          <Kpi label={t("accounting.receivables.unpaid")} value={String(receivables.unpaidCount)} icon={Receipt} tone="blue" />
+          <Kpi label={t("accounting.receivables.partial")} value={String(receivables.partialCount)} icon={Wallet} tone="amber" />
+        </div>
+      )}
 
       <Card>
         <CardHeader><CardTitle>{t("accounting.daily.title")}</CardTitle></CardHeader>
@@ -144,8 +163,8 @@ function OverviewTab() {
   );
 }
 
-function Kpi({ label, value, icon: Icon, tone }: { label: string; value: string; icon: any; tone: "emerald"|"red"|"blue" }) {
-  const toneCls = { emerald: "text-emerald-600 bg-emerald-50", red: "text-red-600 bg-red-50", blue: "text-blue-600 bg-blue-50" }[tone];
+function Kpi({ label, value, icon: Icon, tone }: { label: string; value: string; icon: any; tone: "emerald"|"red"|"blue"|"amber" }) {
+  const toneCls = { emerald: "text-emerald-600 bg-emerald-50", red: "text-red-600 bg-red-50", blue: "text-blue-600 bg-blue-50", amber: "text-amber-600 bg-amber-50" }[tone];
   return (
     <Card><CardContent className="p-3 flex items-center gap-3">
       <div className={`p-2 rounded-lg ${toneCls}`}><Icon className="w-5 h-5" /></div>
@@ -316,12 +335,18 @@ function InvoicesTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: invoices = [] } = useQuery<Invoice[]>({ queryKey: ["invoices"], queryFn: () => api("/api/invoices") });
+  const { data: receivables } = useQuery<ReceivablesSummary>({ queryKey: ["finance/receivables-summary"], queryFn: () => api("/api/finance/receivables-summary") });
   const [open, setOpen] = useState(false);
   const [payOpen, setPayOpen] = useState<Invoice | null>(null);
   const [form, setForm] = useState({ customerName: "", totalAmount: "", issueDate: new Date().toISOString().slice(0,10), dueDate: "", notes: "" });
   const [payForm, setPayForm] = useState({ amount: "", date: new Date().toISOString().slice(0,10), method: "cash", notes: "" });
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["invoices"] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["invoices"] });
+    qc.invalidateQueries({ queryKey: ["finance/receivables-summary"] });
+    qc.invalidateQueries({ queryKey: ["finance/insights"] });
+    qc.invalidateQueries({ queryKey: ["finance/cost-analysis"] });
+  };
 
   const createMut = useMutation({
     mutationFn: () => api<Invoice>("/api/invoices", { method: "POST", body: JSON.stringify({ ...form, totalAmount: Number(form.totalAmount), dueDate: form.dueDate || null }) }),
@@ -343,6 +368,14 @@ function InvoicesTab() {
         <h3 className="font-semibold">{t("accounting.invoices.title")}</h3>
         <Button size="sm" onClick={() => setOpen(true)}><Plus className="w-4 h-4 me-1" />{t("accounting.invoice.add")}</Button>
       </div>
+      {receivables && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Kpi label={t("accounting.receivables.outstanding")} value={fmtMoney(receivables.totalOutstanding)} icon={Receipt} tone={receivables.totalOutstanding > 0 ? "amber" : "emerald"} />
+          <Kpi label={t("accounting.receivables.overdue")} value={fmtMoney(receivables.overdueAmount)} icon={AlertTriangle} tone={receivables.overdueAmount > 0 ? "red" : "emerald"} />
+          <Kpi label={t("accounting.receivables.unpaid")} value={String(receivables.unpaidCount)} icon={Receipt} tone="blue" />
+          <Kpi label={t("accounting.receivables.partial")} value={String(receivables.partialCount)} icon={Wallet} tone="amber" />
+        </div>
+      )}
 
       {invoices.length === 0 ? (
         <Card><CardContent className="p-6 text-center text-muted-foreground">{t("accounting.invoices.empty")}</CardContent></Card>

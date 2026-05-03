@@ -88,25 +88,43 @@ const WEATHER_CODES: Record<number, { ar: string; sv: string; icon: string }> = 
 const LAT = 36.3354;
 const LON = 43.1188;
 
-export async function fetchCurrentWeather(): Promise<WeatherSnapshot> {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,weather_code,apparent_temperature,wind_speed_10m&timezone=Asia%2FBaghdad&wind_speed_unit=ms`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!resp.ok) throw new Error(`Open-Meteo error: ${resp.status}`);
-  const data = await resp.json() as any;
-  const c = data.current;
-  const wc = c.weather_code as number;
-  const label = WEATHER_CODES[wc] ?? { ar: "غير معروف", sv: "Okänt", icon: "🌡️" };
+function fallbackWeatherSnapshot(): WeatherSnapshot {
   return {
-    temperature: c.temperature_2m,
-    humidity: c.relative_humidity_2m,
-    windSpeed: c.wind_speed_10m,
-    apparentTemp: c.apparent_temperature,
-    weatherCode: wc,
-    weatherLabelAr: label.ar,
-    weatherLabelSv: label.sv,
-    weatherIcon: label.icon,
+    temperature: 25,
+    humidity: 55,
+    windSpeed: 0,
+    apparentTemp: 25,
+    weatherCode: -1,
+    weatherLabelAr: "غير متاح",
+    weatherLabelSv: "Ej tillgängligt",
+    weatherIcon: "🌡️",
     fetchedAt: new Date().toISOString(),
   };
+}
+
+export async function fetchCurrentWeather(): Promise<WeatherSnapshot> {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,weather_code,apparent_temperature,wind_speed_10m&timezone=Asia%2FBaghdad&wind_speed_unit=ms`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`Open-Meteo error: ${resp.status}`);
+    const data = await resp.json() as any;
+    const c = data.current;
+    const wc = c.weather_code as number;
+    const label = WEATHER_CODES[wc] ?? { ar: "غير معروف", sv: "Okänt", icon: "🌡️" };
+    return {
+      temperature: c.temperature_2m,
+      humidity: c.relative_humidity_2m,
+      windSpeed: c.wind_speed_10m,
+      apparentTemp: c.apparent_temperature,
+      weatherCode: wc,
+      weatherLabelAr: label.ar,
+      weatherLabelSv: label.sv,
+      weatherIcon: label.icon,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch {
+    return fallbackWeatherSnapshot();
+  }
 }
 
 // ─── Farm Data Fetcher ────────────────────────────────────────────────────────

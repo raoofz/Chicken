@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { apiPath } from "@/lib/api";
 
 export type UserRole = "admin" | "worker";
 
@@ -26,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = useCallback(async () => {
     try {
-      const r = await fetch("/api/auth/me", { credentials: "include" });
+      const r = await fetch(apiPath("/auth/me"), { credentials: "include" });
       const data = r.ok ? await r.json() : null;
       setUser(data);
     } catch {
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe]);
 
   const login = async (username: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
+    const res = await fetch(apiPath("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    await fetch(apiPath("/auth/logout"), { method: "POST", credentials: "include" });
     setUser(null);
   };
 
