@@ -86,6 +86,8 @@ const translations: Record<string, Record<Lang, string>> = {
   "accounting.kpi.expenses":      { ar: "إجمالي المصاريف", sv: "Totala kostnader" },
   "accounting.kpi.netProfit":     { ar: "صافي الربح", sv: "Nettovinst" },
   "accounting.kpi.chickens":      { ar: "إجمالي الدجاج", sv: "Antal kycklingar" },
+  "accounting.kpi.outstanding":   { ar: "ذمم غير محصلة", sv: "Utestående" },
+  "accounting.kpi.overdue":       { ar: "متأخر التحصيل", sv: "Förfallet" },
   "accounting.daily.title":       { ar: "المجاميع اليومية (آخر 30 يوم)", sv: "Dagliga summor (30 dagar)" },
   "accounting.daily.empty":       { ar: "لا توجد عمليات في هذه الفترة", sv: "Inga transaktioner i perioden" },
   "accounting.col.date":          { ar: "التاريخ", sv: "Datum" },

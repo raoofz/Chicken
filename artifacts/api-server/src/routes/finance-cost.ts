@@ -35,6 +35,19 @@ interface CostAnalysis {
   byCategory: Array<{ category: string; total: number; pct: number }>;
 }
 
+interface ReceivablesSummary {
+  totalOutstanding: number;
+  overdueAmount: number;
+  unpaidAmount: number;
+  partialAmount: number;
+  overdueCount: number;
+  openCount: number;
+  paidCount: number;
+  totalInvoiced: number;
+  totalCollected: number;
+  collectionRate: number | null;
+}
+
 router.get("/finance/cost-analysis", async (_req, res) => {
   try {
     // Totals
@@ -52,7 +65,8 @@ router.get("/finance/cost-analysis", async (_req, res) => {
     const flocksRow = await db.execute(sql`SELECT COALESCE(SUM(count),0) AS c FROM flocks`);
     const totalChickens = Number((flocksRow.rows[0] as any).c);
 
-    // Feed cost = sum of expenses where category='feed' OR domain='feed'
+    // Feed cost = sum of expenses where category='feed' OR domain='feed'.
+    // Operations-backed feed purchases use domain='feed', so they are included.
     const feedRow = await db.execute(sql`
       SELECT COALESCE(SUM(amount::numeric),0) AS total
       FROM transactions
@@ -152,6 +166,43 @@ router.get("/finance/daily-totals", async (req, res) => {
     res.json({ days, series });
   } catch (e: any) {
     logger.error({ err: e }, "[finance/daily-totals] failed");
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get("/finance/receivables-summary", async (_req, res) => {
+  try {
+    const row = await db.execute(sql`
+      SELECT
+        COALESCE(SUM(total_amount::numeric), 0) AS total_invoiced,
+        COALESCE(SUM(paid_amount::numeric), 0) AS total_collected,
+        COALESCE(SUM(CASE WHEN status IN ('unpaid','partial') THEN remaining_amount::numeric END), 0) AS total_outstanding,
+        COALESCE(SUM(CASE WHEN status = 'unpaid' THEN remaining_amount::numeric END), 0) AS unpaid_amount,
+        COALESCE(SUM(CASE WHEN status = 'partial' THEN remaining_amount::numeric END), 0) AS partial_amount,
+        COALESCE(SUM(CASE WHEN status IN ('unpaid','partial') AND due_date IS NOT NULL AND due_date < CURRENT_DATE THEN remaining_amount::numeric END), 0) AS overdue_amount,
+        COUNT(*) FILTER (WHERE status IN ('unpaid','partial')) AS open_count,
+        COUNT(*) FILTER (WHERE status = 'paid') AS paid_count,
+        COUNT(*) FILTER (WHERE status IN ('unpaid','partial') AND due_date IS NOT NULL AND due_date < CURRENT_DATE) AS overdue_count
+      FROM invoices
+    `);
+    const r = row.rows[0] as any;
+    const totalInvoiced = Number(r.total_invoiced);
+    const totalCollected = Number(r.total_collected);
+    const out: ReceivablesSummary = {
+      totalOutstanding: Number(r.total_outstanding),
+      overdueAmount: Number(r.overdue_amount),
+      unpaidAmount: Number(r.unpaid_amount),
+      partialAmount: Number(r.partial_amount),
+      overdueCount: Number(r.overdue_count),
+      openCount: Number(r.open_count),
+      paidCount: Number(r.paid_count),
+      totalInvoiced,
+      totalCollected,
+      collectionRate: totalInvoiced > 0 ? (totalCollected / totalInvoiced) * 100 : null,
+    };
+    res.json(out);
+  } catch (e: any) {
+    logger.error({ err: e }, "[finance/receivables-summary] failed");
     res.status(500).json({ error: e.message });
   }
 });
