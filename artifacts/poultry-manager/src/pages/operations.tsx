@@ -270,7 +270,6 @@ function CreateTaskForm({ ar, onSuccess, onClose }: { ar: boolean; onSuccess: ()
           description: form.description.trim() || undefined,
           category:    form.category as any,
           priority:    form.priority as any,
-          completed:   false,
           dueDate:     form.dueDate || undefined,
         },
       });
