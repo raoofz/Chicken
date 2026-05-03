@@ -74,14 +74,15 @@ router.get("/finance/cost-analysis", async (_req, res) => {
     `);
     const feedCost = Number((feedRow.rows[0] as any).total);
 
-    // Medicine cost — from medicine_records (authoritative) PLUS expense rows
-    // categorized as 'medicine' that have NO matching record (avoid double count).
+    // Medicine cost — from medicine_records (authoritative) PLUS health-domain
+    // expense rows that have NO matching record (avoid double count).
     const medRow = await db.execute(sql`
       SELECT
         COALESCE((SELECT SUM(cost::numeric) FROM medicine_records),0) +
         COALESCE((SELECT SUM(amount::numeric) FROM transactions
-                  WHERE type='expense' AND category='medicine'
-                  AND id NOT IN (SELECT transaction_id FROM medicine_records WHERE transaction_id IS NOT NULL)),0)
+                  WHERE type='expense'
+                    AND (category IN ('medicine','medicine_purchase') OR domain='health')
+                    AND id NOT IN (SELECT transaction_id FROM medicine_records WHERE transaction_id IS NOT NULL)),0)
         AS total
     `);
     const medicineCost = Number((medRow.rows[0] as any).total);
