@@ -99,20 +99,28 @@ ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 9+
+- Node.js 22+
+- pnpm 10+
 - PostgreSQL 14+
 
 ### Install
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ### Database Setup
 
 ```bash
-pnpm --filter @workspace/db run db:push
+DATABASE_URL=postgresql://user:password@host:5432/dbname pnpm --filter @workspace/db run push
+```
+
+### Health Check
+
+Run the same checks used to catch recurring setup, codegen, type, and build issues:
+
+```bash
+pnpm run verify
 ```
 
 ### Development
