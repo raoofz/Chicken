@@ -6,7 +6,9 @@ import {
   type DbTransaction,
 } from "./accounting.repository.js";
 
-const ACCOUNTING_ENABLED = process.env.ENABLE_ACCOUNTING === "true";
+const ACCOUNTING_ENABLED =
+  process.env.FINANCE_V2_ENABLED === "true" ||
+  process.env.ENABLE_ACCOUNTING === "true";
 
 const DEFAULT_ACCOUNTS = {
   cash: "1000",
