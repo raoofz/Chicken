@@ -74,3 +74,19 @@ logs/
 # ── Replit ─────────────────────────────────────────────────────────────────────
 .cache/
 .local/
+# Environment
+.env
+
+# Docker
+.docker
+Dockerfile.prod
+
+# Production
+dist
+build
+*.log
+logs/
+
+# Temporary
+.tmp
+temp/
