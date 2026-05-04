@@ -28,6 +28,7 @@ import invoicesRouter from "./invoices";
 import financeCostRouter from "./finance-cost";
 import inventoryRouter from "./inventory";
 import operationsRouter from "./operations";
+import accountingReportsRouter from "./accounting-reports";
 
 const router: IRouter = Router();
 
@@ -106,6 +107,7 @@ router.use("/medicine-records", requireRole("admin"));
 router.use("/invoices",         requireRole("admin"));
 router.use("/payments",         requireRole("admin"));
 router.use("/finance",          requireRole("admin"));
+router.use("/accounting-reports", requireRole("admin"));
 router.use("/inventory",        requireRole("admin"));
 router.use("/production",       requireRole("admin"));
 router.use("/operations",       requireRole("admin"));
@@ -113,6 +115,7 @@ router.use(batchesRouter);
 router.use(medicineRecordsRouter);
 router.use(invoicesRouter);
 router.use(financeCostRouter);
+router.use(accountingReportsRouter);
 router.use(inventoryRouter);
 router.use(operationsRouter);
 
