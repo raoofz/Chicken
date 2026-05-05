@@ -8,6 +8,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, noteImagesTable, flocksTable } from "@workspace/db";
 import { desc, eq, and, gte, lte, sql } from "drizzle-orm";
+import { logger } from "../lib/logger.js";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { analyzeImage } from "../lib/visionEngine";
 import { Readable } from "stream";
@@ -155,7 +156,7 @@ router.post("/notes/images/save", requireAuth, async (req: Request, res: Respons
     }).returning();
 
     const lang = (req.body?.lang === "sv" ? "sv" : "ar") as "ar" | "sv";
-    runVisionAnalysis(row.id, objectPath, { mimeType: mimeType ?? "image/jpeg", date, category, caption: caption ?? "", lang }).catch(console.error);
+    runVisionAnalysis(row.id, objectPath, { mimeType: mimeType ?? "image/jpeg", date, category, caption: caption ?? "", lang }).catch((err) => logger.error({ err }, "[noteImages] vision analysis failed"));
     res.json({ id: row.id, message: lang === "sv" ? "Bild sparad och analyseras..." : "تم حفظ الصورة وجارٍ تحليلها..." });
   } catch (err: any) { res.status(500).json({ error: "فشل حفظ الصورة: " + err.message }); }
 });
@@ -262,10 +263,10 @@ async function runVisionAnalysis(imageId: number, objectPath: string, ctx: Image
       analysisStatus: "done",
     }).where(eq(noteImagesTable.id, imageId));
 
-    console.log(`[CV-AI] ✓ image ${imageId} | risk=${result.metrics.riskScore} activity=${result.metrics.activityLevel} crowding=${result.metrics.crowdingScore} confidence=${result.confidence}%`);
+    logger.info({ imageId, risk: result.metrics.riskScore, activity: result.metrics.activityLevel, crowding: result.metrics.crowdingScore, confidence: result.confidence }, "[CV-AI] analysis complete");
 
   } catch (err: any) {
-    console.error(`[CV-AI] ✗ image ${imageId}:`, err.message);
+    logger.error({ imageId, err: err.message }, "[CV-AI] analysis failed");
     await db.update(noteImagesTable).set({
       aiAnalysis: lang === "sv" ? `Analysen misslyckades: ${err.message}` : `فشل التحليل: ${err.message}`,
       analysisStatus: "failed",

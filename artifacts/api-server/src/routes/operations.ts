@@ -134,7 +134,7 @@ router.post("/operations/inventory-purchase", async (req, res) => {
         }));
       }
     } catch (e) {
-      console.error("Accounting failed", e);
+      logger.error({ err: e }, "[operations] accounting journal entry failed");
     }
 
     res.status(201).json(result);
@@ -292,7 +292,7 @@ router.post("/operations/medicine-usage", async (req, res) => {
         description: result.transaction.description,
       }));
     } catch (e) {
-      console.error("Accounting failed", e);
+      logger.error({ err: e }, "[operations] accounting journal entry failed");
     }
 
     res.status(201).json(result);
@@ -386,7 +386,7 @@ router.post("/operations/egg-sale", async (req, res) => {
         }));
       }
     } catch (e) {
-      console.error("Accounting failed", e);
+      logger.error({ err: e }, "[operations] accounting journal entry failed");
     }
 
     res.status(201).json(result);

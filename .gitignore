@@ -63,9 +63,7 @@ dumps/
 # ── Downloads / uploads ────────────────────────────────────────────────────────
 downloads/
 uploads/
-attached_assets/*.tar.gz
-attached_assets/*.zip
-attached_assets/*.gz
+attached_assets/
 
 # ── Logs ───────────────────────────────────────────────────────────────────────
 *.log
