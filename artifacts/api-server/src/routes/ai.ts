@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db, flocksTable, hatchingCyclesTable, tasksTable, goalsTable, dailyNotesTable, transactionsTable, flockProductionLogsTable, flockHealthLogsTable } from "@workspace/db";
 import { sql, eq, desc } from "drizzle-orm";
+import { logger } from "../lib/logger.js";
 import { parseNote } from "../lib/noteSmartParser";
 import { validateActions } from "../lib/actionValidator";
 import { categoryToDomain } from "../lib/farmDomains.js";
@@ -435,7 +436,7 @@ router.get("/ai/farm-scan", requireAdmin, async (_req: Request, res: Response) =
         primaryCause: p.causal.primaryCause,
         dataQualityScore: p.dataQuality.score,
       };
-    } catch (precErr: any) { console.error("[farm-scan] precision failed:", precErr?.message ?? precErr); }
+    } catch (precErr: any) { logger.error({ err: precErr?.message ?? precErr }, "[farm-scan] precision failed"); }
 
     // ── HEALTH SCORE ─────────────────────────────────────────────
     let healthScore = 100;
@@ -709,7 +710,7 @@ router.post("/ai/smart-analyze", requireAdmin, async (req: Request, res: Respons
         }
       } catch (actionErr: any) {
         // Skip failed actions but log them
-        console.error("[smart-analyze] action failed:", action.type, actionErr?.message);
+        logger.error({ actionType: action.type, err: actionErr?.message }, "[smart-analyze] action failed");
       }
     }
 
@@ -757,7 +758,7 @@ router.post("/ai/parse", async (req: Request, res: Response) => {
       validation,
     });
   } catch (err: any) {
-    console.error("[ai/parse]", err);
+    logger.error({ err }, "[ai/parse] failed");
     res.status(500).json({ error: err?.message ?? "فشل التحليل" });
   }
 });
@@ -868,7 +869,7 @@ router.post("/ai/commit", requireAdmin, async (req: Request, res: Response) => {
           saved.push({ type: "task", id: row.id, description: action.description });
         }
       } catch (actionErr: any) {
-        console.error("[ai/commit] action failed:", action.type, actionErr?.message);
+        logger.error({ actionType: action.type, err: actionErr?.message }, "[ai/commit] action failed");
         failed.push({ index: i, type: action.type, error: actionErr?.message ?? "unknown" });
         // Abort the whole transaction on any insert failure — atomicity guarantee
         throw actionErr;
@@ -915,7 +916,7 @@ router.post("/ai/commit", requireAdmin, async (req: Request, res: Response) => {
       committedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error("[ai/commit]", err);
+    logger.error({ err }, "[ai/commit] failed");
     res.status(500).json({ error: err?.message ?? "فشل الحفظ" });
   }
 });
@@ -934,7 +935,7 @@ router.get("/ai/intelligence", requireAdmin, async (req: Request, res: Response)
     const report = buildIntelligenceReport(ctx, lang);
     res.json({ context: ctx, report });
   } catch (err: any) {
-    console.error("[intelligence]", err);
+    logger.error({ err }, "[intelligence] failed");
     res.status(500).json({ error: err?.message ?? "فشل التحليل الذكي" });
   }
 });
@@ -973,7 +974,7 @@ router.get("/ai/decision", async (req: Request, res: Response) => {
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.json(report);
   } catch (err: any) {
-    console.error("[decision]", err);
+    logger.error({ err }, "[decision] failed");
     res.status(500).json({ error: err?.message ?? "فشل نظام القرار الذكي" });
   }
 });

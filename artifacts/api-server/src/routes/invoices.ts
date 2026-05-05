@@ -160,7 +160,7 @@ router.post("/payments", async (req, res) => {
         }),
       );
     } catch (accountingErr) {
-      console.error("Accounting failed", accountingErr);
+      logger.error({ err: accountingErr }, "[payments] accounting journal entry failed");
     }
 
     logger.info({ invoiceId, amount, status: result.status }, "[payments] recorded");
