@@ -141,6 +141,7 @@ export async function runMigrations() {
     logger.info("Migrations complete");
   } catch (err) {
     logger.error({ err }, "Migration failed");
+    throw err;
   } finally {
     client.release();
   }

@@ -15,6 +15,7 @@
     "check:generated": "pnpm --filter @workspace/scripts run check:generated-api",
     "codegen": "pnpm --filter @workspace/api-spec run codegen",
     "db:push": "pnpm --filter @workspace/db run push-force",
+    "db:up": "docker compose up -d db",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"

@@ -1,6 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { createServer } from "node:net";
+import { sql } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { runMigrations } from "./lib/migrate";
+import { seedUsers } from "./lib/seed";
 
 const rawPort = process.env["PORT"];
 
@@ -35,13 +39,20 @@ function checkPort(p: number): Promise<void> {
   });
 }
 
+async function prepareDatabase(): Promise<void> {
+  await db.execute(sql`SELECT 1`);
+  await runMigrations();
+  await seedUsers();
+}
+
 checkPort(port)
+  .then(() => prepareDatabase())
   .then(() => {
     app.listen(port, () => {
       logger.info({ port }, "Server listening");
     });
   })
   .catch((err) => {
-    logger.error({ err }, "Could not start server — port check failed");
+    logger.error({ err }, "Could not start server — database preparation or port check failed");
     process.exit(1);
   });

@@ -9,10 +9,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { runMigrations } from "./lib/migrate";
-import { seedUsers } from "./lib/seed";
-import { db, pool } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { pool } from "@workspace/db";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -93,7 +90,7 @@ app.use(express.urlencoded({ extended: true }));
 const PgStore = connectPgSimple(session);
 app.use(
   session({
-    store: new PgStore({ pool, createTableIfMissing: false, tableName: "session" }),
+    store: new PgStore({ pool, createTableIfMissing: true, tableName: "session" }),
     secret: resolvedSecret,
     resave: false,
     saveUninitialized: false,
@@ -105,27 +102,6 @@ app.use(
     },
   }),
 );
-
-// ── DB Init ───────────────────────────────────────────────────────────────────
-async function ensureDbConnection() {
-  try {
-    await db.execute(sql`SELECT 1`);
-  } catch (err) {
-    logger.warn({ err }, "DB wake-up ping failed, retrying...");
-    await new Promise(r => setTimeout(r, 2000));
-    try {
-      await db.execute(sql`SELECT 1`);
-      logger.info("DB wake-up retry succeeded");
-    } catch (err2) {
-      logger.error({ err: err2 }, "DB wake-up retry also failed");
-    }
-  }
-}
-
-ensureDbConnection()
-  .then(() => runMigrations())
-  .then(() => seedUsers())
-  .catch(err => logger.error({ err }, "DB init failed"));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", router);
