@@ -6,6 +6,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+if [ -f "$ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$ROOT/.env"
+  set +a
+fi
+
 if command -v docker >/dev/null 2>&1; then
   if ! docker info >/dev/null 2>&1; then
     echo "Docker is not running; using existing PostgreSQL on localhost if any."
