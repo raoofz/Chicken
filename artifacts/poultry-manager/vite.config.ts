@@ -7,18 +7,25 @@ import { VitePWA } from "vite-plugin-pwa";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const rawPort = process.env.PORT;
-const port = rawPort ? Number(rawPort) : 3000;
+// API uses PORT=8080 from workspace `.env`. Never bind Vite to that same variable —
+// otherwise the client steals the API port or crashes when PORT is unset.
+const rawPort = process.env.DEV_CLIENT_PORT;
+const port = rawPort
+  ? Number(rawPort)
+  : isProduction
+    ? 3000
+    : 5173;
 if (rawPort && (Number.isNaN(port) || port <= 0)) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+  throw new Error(`Invalid DEV_CLIENT_PORT value: "${rawPort}"`);
 }
-if (!rawPort && !isProduction) {
-  throw new Error("PORT environment variable is required but was not provided.");
-}
+
+/** Load shared `.env` from monorepo root (SESSION_SECRET, etc. for build tooling). */
+const envDir = path.resolve(import.meta.dirname, "../..");
 
 const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
+  envDir,
   base: basePath,
   plugins: [
     react(),

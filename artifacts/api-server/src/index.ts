@@ -1,3 +1,4 @@
+import "./env-bootstrap";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { createServer } from "node:net";
