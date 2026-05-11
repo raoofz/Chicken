@@ -107,7 +107,7 @@ router.use("/medicine-records", requireRole("admin"));
 router.use("/invoices",         requireRole("admin"));
 router.use("/payments",         requireRole("admin"));
 router.use("/finance",          requireRole("admin"));
-router.use("/accounting-reports", requireRole("admin"));
+router.use("/accounting/reports", requireRole("admin"));
 router.use("/inventory",        requireRole("admin"));
 router.use("/production",       requireRole("admin"));
 router.use("/operations",       requireRole("admin"));
